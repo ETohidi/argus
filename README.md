@@ -25,3 +25,13 @@ docker run -p 7860:7860 argus            # open http://localhost:7860
 # optional LLM reports: add -e LLM_BASE_URL=... -e LLM_API_KEY=... -e LLM_MODEL=...
 ```
 Port 7860 matches Hugging Face Spaces (Docker SDK). Secrets are never baked into the image.
+
+## Deploy on Render
+1. Push this repo to GitHub (done: `ETohidi/argus`).
+2. In Render: **New → Blueprint**, pick the repo. Render reads `render.yaml` and creates one free web service
+   (Docker runtime, root `Dockerfile`, health check `/api/health`).
+3. When prompted, paste `LLM_API_KEY` (marked `sync: false`, so it lives only in Render). `LLM_BASE_URL` and `LLM_MODEL`
+   are preset; leave the key empty to run with template reports.
+4. Open the service URL: the globe is served at `/`, the API at `/api`. Render sets `$PORT`; uvicorn listens on it.
+
+Free instances sleep when idle; the first request after a pause takes ~30–60 s (the world is rebuilt per session).
