@@ -8,6 +8,7 @@ import type {
   IncidentDetail,
   IncidentSummary,
   InjectType,
+  MetricGraph,
   MetricResponse,
   PotentialResponse,
   WorldState,
@@ -86,6 +87,7 @@ export const api = {
   incident: (id: string) => request<IncidentDetail>('GET', `/incidents/${id}`),
   country: (iso: string) => request<CountryDetail>('GET', `/country/${iso}`),
   potential: () => request<PotentialResponse>('GET', '/potential'),
+  graph: () => request<MetricGraph>('GET', '/graph'),
   step: (hours: number) => request<WorldState>('POST', '/step', { hours }),
   reset: () => request<WorldState>('POST', '/reset', {}),
   inject: (type: InjectType, country: string, platform?: string) =>

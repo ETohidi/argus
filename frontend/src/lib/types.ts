@@ -36,6 +36,8 @@ export interface IncidentSummary {
   status: IncidentStatus
   severity: Severity
   impact_usd_h: number
+  risk_7d_usd?: number // 7-day margin lost by doing nothing vs the recommended fix
+  reaction_h?: number | null // hours until advertisers react; 0 = now; null = n/a
 }
 
 export interface ExplainedChange {
@@ -101,6 +103,12 @@ export interface IncidentDetail {
   id: string
   title: string
   status: IncidentStatus
+  severity?: Severity
+  impact_usd_h?: number
+  risk_7d_usd?: number
+  reaction_h?: number | null
+  kind?: string // "fraud" | "tracking" | ...
+  root?: string
   country: string
   platform: string
   category: string
@@ -142,6 +150,13 @@ export interface PotentialResponse {
 export interface MetricResponse {
   node: Record<string, unknown> | null
   validation: { ok: boolean; checks: { name: string; ok: boolean; detail: string }[] }
+}
+
+export interface MetricGraph {
+  nodes: { id: string; label: string; parents: string[]; edge: string; origin?: string; expr?: string | null }[]
+  edges: GraphEdge[]
+  exogenous: { id: string; label: string }[]
+  levels: Record<string, string>
 }
 
 export interface DemoResponse {

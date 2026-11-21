@@ -80,6 +80,7 @@ function route(method: string, path: string, body: any): unknown {
       return d
     }
     if (p === '/potential') return world.potentialResponse()
+    if (p === '/graph') return world.graph()
   }
   if (method === 'POST') {
     if (p === '/step') {

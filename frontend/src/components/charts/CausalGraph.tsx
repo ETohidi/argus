@@ -117,10 +117,11 @@ const LEGEND: [NodeState, string][] = [
   ['normal', 'Normal'],
 ]
 
-export default function CausalGraph({ nodes, edges }: { nodes: GraphNode[]; edges: GraphEdge[] }) {
+export default function CausalGraph({ nodes, edges, highlight = [], legend = true }: { nodes: GraphNode[]; edges: GraphEdge[]; highlight?: string[]; legend?: boolean }) {
   const { byId, chains, height } = useMemo(() => layout(nodes, edges), [nodes, edges])
   const state = (id: string) => byId.get(id)?.node?.state ?? 'normal'
-  const hot = (e: GraphEdge) => state(e.source) !== 'normal' && state(e.target) !== 'normal'
+  const isNew = (id: string) => highlight.includes(id)
+  const hot = (e: GraphEdge) => (state(e.source) !== 'normal' && state(e.target) !== 'normal') || isNew(e.target)
 
   return (
     <div>
@@ -146,18 +147,19 @@ export default function CausalGraph({ nodes, edges }: { nodes: GraphNode[]; edge
           .map(({ edge, path }) => {
             const d = pathFor(path.map((id) => byId.get(id)!))
             const h = hot(edge)
+            const fresh = isNew(edge.target)
             return (
               <g key={`${edge.source}-${edge.target}`}>
                 <path
                   d={d}
                   fill="none"
-                  stroke={h ? '#fb7185' : '#334155'}
+                  stroke={fresh ? '#2dd4bf' : h ? '#fb7185' : '#334155'}
                   strokeWidth={h ? 1.8 : 1.1}
                   strokeDasharray={edge.type === 'exogenous' ? '2 4' : edge.type === 'formula' && !h ? '3 3' : undefined}
                   markerEnd={`url(#${h ? 'arrow-hot' : 'arrow'})`}
                   opacity={h ? 0.9 : edge.type === 'exogenous' ? 0.5 : 0.8}
                 />
-                {h && <path d={d} fill="none" stroke="#fecdd3" strokeWidth={1.4} className="flow" opacity={0.7} />}
+                {h && <path d={d} fill="none" stroke={fresh ? '#99f6e4' : '#fecdd3'} strokeWidth={1.4} className="flow" opacity={0.7} />}
               </g>
             )
           })}
@@ -165,23 +167,30 @@ export default function CausalGraph({ nodes, edges }: { nodes: GraphNode[]; edge
           .filter((p) => !p.dummy)
           .map((p, i) => {
             const n = p.node!
-            const c = NODE_COLOR[n.state]
-            const active = n.state !== 'normal'
+            const fresh = isNew(n.id)
+            const c = fresh ? '#2dd4bf' : NODE_COLOR[n.state]
+            const active = n.state !== 'normal' || fresh
             return (
               <g key={p.id} transform={`translate(${p.x - NODE_W / 2},${p.y - NODE_H / 2})`} className="fade-in" style={{ animationDelay: `${i * 50}ms` }}>
-                {n.state === 'root' && <rect width={NODE_W} height={NODE_H} rx={8} fill={c} opacity={0.35} filter="url(#glow)" />}
+                {(n.state === 'root' || fresh) && <rect width={NODE_W} height={NODE_H} rx={8} fill={c} opacity={0.35} filter="url(#glow)" className={fresh ? 'animate-pulse' : undefined} />}
+                {fresh && (
+                  <g transform={`translate(${NODE_W - 26},-7)`}>
+                    <rect width={26} height={12} rx={3} fill="#2dd4bf" />
+                    <text x={13} y={9} fontSize={8} fontWeight={700} textAnchor="middle" fill="#04070d">NEW</text>
+                  </g>
+                )}
                 <rect width={NODE_W} height={NODE_H} rx={8} fill={active ? `${c}22` : '#0e1724'} stroke={c} strokeWidth={active ? 1.4 : 1} />
                 <text x={8} y={19} fontSize={10} fill={active ? '#f1f5f9' : '#94a3b8'} fontWeight={n.state === 'root' ? 700 : 500}>
                   {n.label.length > 14 ? n.label.slice(0, 13) + '…' : n.label}
                 </text>
                 <text x={NODE_W - 7} y={19} fontSize={10} textAnchor="end" fill={active ? c : '#64748b'} className="num" fontWeight={600}>
-                  {Math.abs(n.z) >= 0.05 ? (n.z > 0 ? '+' : '−') + Math.abs(n.z).toFixed(1) : '0'}
+                  {!legend ? '' : Math.abs(n.z) >= 0.05 ? (n.z > 0 ? '+' : '−') + Math.abs(n.z).toFixed(1) : '0'}
                 </text>
               </g>
             )
           })}
       </svg>
-      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10.5px] text-slate-400">
+      {legend && <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10.5px] text-slate-400">
         {LEGEND.map(([s, l]) => (
           <span key={s} className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-sm" style={{ background: NODE_COLOR[s] }} />
@@ -192,7 +201,7 @@ export default function CausalGraph({ nodes, edges }: { nodes: GraphNode[]; edge
           <span className="h-0.5 w-4 bg-rose-400" /> propagation
         </span>
         <span className="text-slate-500">number = z-score</span>
-      </div>
+      </div>}
     </div>
   )
 }

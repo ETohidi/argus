@@ -26,7 +26,7 @@ function gauss(r: () => number) {
   return Math.sqrt(-2 * Math.log(r() + 1e-9)) * Math.cos(2 * Math.PI * r())
 }
 
-const EDGES: GraphEdge[] = [
+export const CORE_EDGES: GraphEdge[] = [
   { source: 'new_accounts', target: 'active_users', type: 'mechanism' },
   { source: 'active_users', target: 'impressions', type: 'mechanism' },
   { source: 'impressions', target: 'starts', type: 'mechanism' },
@@ -40,7 +40,7 @@ const EDGES: GraphEdge[] = [
   { source: 'completions', target: 'quality_per_completion', type: 'formula' },
 ]
 
-const LABELS: Record<string, string> = {
+export const CORE_LABELS: Record<string, string> = {
   new_accounts: 'New accounts',
   active_users: 'Active users',
   impressions: 'Offer impressions',
@@ -55,13 +55,13 @@ const LABELS: Record<string, string> = {
 
 function graph(spec: Record<string, [number, NodeState]>): { nodes: GraphNode[]; edges: GraphEdge[] } {
   return {
-    nodes: Object.keys(LABELS).map((id) => ({
+    nodes: Object.keys(CORE_LABELS).map((id) => ({
       id,
-      label: LABELS[id],
+      label: CORE_LABELS[id],
       z: spec[id]?.[0] ?? 0.3,
       state: spec[id]?.[1] ?? 'normal',
     })),
-    edges: EDGES,
+    edges: CORE_EDGES,
   }
 }
 

@@ -11,11 +11,12 @@ import type {
   IncidentSummary,
   InjectType,
   Kpis,
+  MetricGraph,
   MetricResponse,
   PotentialResponse,
   WorldState,
 } from '../lib/types'
-import { buildIncidentDetail } from './incidents'
+import { CORE_EDGES, CORE_LABELS, buildIncidentDetail } from './incidents'
 
 export const MOCK_COUNTRIES = [
   ['US', 'United States', 39.8, -98.6, 900_000, 1.0, -6],
@@ -187,6 +188,8 @@ export class MockWorld {
       status,
       severity: impact > 400 ? 'high' : impact > 150 ? 'medium' : 'low',
       impact_usd_h: impact,
+      risk_7d_usd: inc.kind === 'bot_farm' ? 23_600 : 26_100,
+      reaction_h: inc.kind === 'bot_farm' ? 21 : 0,
     }
   }
 
@@ -302,7 +305,15 @@ export class MockWorld {
     const inc = this.incidents.find((i) => i.id === id)
     if (!inc) return null
     const s = this.summary(inc)
-    return buildIncidentDetail({
+    const extra = {
+      severity: s.severity,
+      impact_usd_h: s.impact_usd_h,
+      risk_7d_usd: s.risk_7d_usd,
+      reaction_h: s.reaction_h,
+      kind: inc.kind === 'bot_farm' ? 'fraud' : 'tracking',
+      root: inc.kind === 'bot_farm' ? 'new_accounts' : 'revenue',
+    }
+    return { ...extra, ...buildIncidentDetail({
       id: inc.id,
       title: s.title,
       status: s.status,
@@ -314,7 +325,24 @@ export class MockWorld {
       applied: inc.applied,
       hoursSinceApply: inc.appliedAt == null ? null : this.t - inc.appliedAt,
       impact: this.impact(inc),
-    })
+    }) }
+  }
+
+  graph(): MetricGraph {
+    const parents = (id: string) => CORE_EDGES.filter((e) => e.target === id).map((e) => e.source)
+    const nodes: MetricGraph['nodes'] = Object.entries(CORE_LABELS).map(([id, label]) => ({
+      id,
+      label,
+      parents: parents(id),
+      edge: id === 'new_accounts' ? 'root' : CORE_EDGES.find((e) => e.target === id)?.type ?? 'mechanism',
+      origin: 'core',
+    }))
+    const edges = [...CORE_EDGES]
+    for (const id of this.extraMetrics) {
+      nodes.push({ id, label: 'Reward cost per completed offer', parents: ['rewards', 'completions'], edge: 'formula', origin: 'extension', expr: 'rewards / completions' })
+      edges.push({ source: 'rewards', target: id, type: 'formula' }, { source: 'completions', target: id, type: 'formula' })
+    }
+    return { nodes, edges, exogenous: [{ id: 'calendar', label: 'Planned events (marketing calendar)' }], levels: {} }
   }
 
   approve(id: string, fixId: string): IncidentDetail | null {

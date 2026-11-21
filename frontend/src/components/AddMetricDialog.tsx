@@ -4,7 +4,7 @@ import type { MetricResponse } from '../lib/types'
 
 type Props = {
   onClose: () => void
-  onAdded: () => void
+  onAdded: (nodeId?: string) => void
   // Result already produced elsewhere (the new_metric demo scene): show it instead of submitting again.
   initial?: MetricResponse | null
 }
@@ -23,7 +23,7 @@ export default function AddMetricDialog({ onClose, onAdded, initial }: Props) {
     try {
       const r = await api.addMetric(name, desc)
       setRes(r)
-      if (r.validation.ok) onAdded()
+      if (r.validation.ok) onAdded((r.node as { id?: string } | null)?.id)
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
     } finally {

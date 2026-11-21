@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import CausalGraph from './charts/CausalGraph'
 import FanChart, { relativeSeries } from './charts/FanChart'
 import L3Scatter from './charts/L3Scatter'
@@ -6,7 +6,7 @@ import ShapleyBars from './charts/ShapleyBars'
 import { PLATFORM_LABEL, VERDICT_COLOR, usd } from '../lib/theme'
 import type { Fix, IncidentDetail as Detail, IncidentStatus, Level } from '../lib/types'
 
-type Audience = 'ceo' | 'manager' | 'engineer'
+export type Audience = 'ceo' | 'manager' | 'engineer'
 const AUDIENCES: { id: Audience; label: string; hint: string }[] = [
   { id: 'ceo', label: 'CEO', hint: 'L1 · money' },
   { id: 'manager', label: 'Manager', hint: 'L2 · segment' },
@@ -35,10 +35,12 @@ type Props = {
   onBack: () => void
   onApprove: (fixId: string) => void
   approving: boolean
+  aud: Audience
+  onAud: (a: Audience) => void
+  countryName?: string
 }
 
-export default function IncidentDetail({ detail, onBack, onApprove, approving }: Props) {
-  const [aud, setAud] = useState<Audience>('engineer')
+export default function IncidentDetail({ detail, onBack, onApprove, approving, aud, onAud: setAud, countryName }: Props) {
   const d = detail
   // Jump back to the top when the incident changes state, so the new verification badge is in view.
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -86,12 +88,15 @@ export default function IncidentDetail({ detail, onBack, onApprove, approving }:
       </div>
 
       <div ref={scrollRef} className="scroll-thin flex-1 space-y-3 overflow-y-auto px-5 py-4">
-        <div key={aud} className="card fade-up border-l-2 !border-l-teal-400/70 p-3.5 text-[12.5px] leading-relaxed text-slate-200">
+        {aud === 'ceo' && <CeoHeadline key="headline-ceo" d={d} />}
+        {aud === 'manager' && <ManagerHeadline key="headline-manager" d={d} countryName={countryName} />}
+
+        <Verification d={d} />
+
+        <div key={`report-${aud}`} className="card fade-up border-l-2 !border-l-teal-400/70 p-3.5 text-[12.5px] leading-relaxed text-slate-200">
           <div className="section-title mb-1.5">Report for the {AUDIENCES.find((a) => a.id === aud)!.label}</div>
           {d.reports[aud]}
         </div>
-
-        <Verification d={d} />
 
         {show.trail && (
           <Section title="Decision trail">
@@ -297,6 +302,111 @@ function Verification({ d }: { d: Detail }) {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// ---------- Audience headlines ----------
+
+const shortHypothesis = (name: string) => name.replace(/\s*\(.*\)\s*$/, '')
+
+function verdictLine(d: Detail) {
+  const best = [...d.hypotheses].sort((a, b) => b.explained - a.explained)[0]
+  if (!best) return null
+  const pct = `${Math.round(best.explained * 100)}% explained`
+  if (best.verdict === 'supported') return { ok: true, text: `Cause proven: ${shortHypothesis(best.name).toLowerCase()}, ${pct}` }
+  return { ok: false, text: `Not yet proven. Best hypothesis: ${shortHypothesis(best.name).toLowerCase()} (${pct})` }
+}
+
+function recommendedFix(d: Detail) {
+  return d.fixes.find((f) => f.id === (d.applied ?? d.recommended))
+}
+
+// Segment from the L2 trail step ("segments covering 80%: Fintech apps (71%), Strategy games (20%)"), else the incident category.
+function affectedCategories(d: Detail): string[] {
+  for (const step of d.trail) {
+    const m = step.finding.match(/segments covering \d+%:\s*([^;]+)/i)
+    if (m) {
+      const cats = m[1].split(/,\s*/).map((c) => c.replace(/\s*\(.*?\)\s*/g, '').trim()).filter(Boolean)
+      if (cats.length) return cats
+    }
+  }
+  return d.category ? [d.category] : []
+}
+
+function BigNumber({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone: string }) {
+  return (
+    <div className="min-w-0 flex-1 rounded-xl bg-slate-900/60 px-3.5 py-3 ring-1 ring-slate-700/50">
+      <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</div>
+      <div className={`num mt-1 text-[24px] font-semibold leading-none ${tone}`}>{value}</div>
+      {sub && <div className="mt-1.5 text-[11px] leading-snug text-slate-400">{sub}</div>}
+    </div>
+  )
+}
+
+function VerdictRow({ d }: { d: Detail }) {
+  const v = verdictLine(d)
+  if (!v) return null
+  return (
+    <div className={`mt-2.5 flex items-center gap-2 text-[12.5px] font-medium ${v.ok ? 'text-teal-200' : 'text-amber-200'}`}>
+      <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] ${v.ok ? 'bg-teal-400/20' : 'bg-amber-400/20'}`}>{v.ok ? '✓' : '?'}</span>
+      {v.text}
+    </div>
+  )
+}
+
+function CeoHeadline({ d }: { d: Detail }) {
+  const impact = d.impact_usd_h ?? 0
+  const risk = d.risk_7d_usd ?? recommendedFix(d)?.delta_p50_usd ?? 0
+  const fraud = d.kind === 'fraud' || d.root === 'new_accounts'
+  const fixed = d.applied != null
+  const reaction =
+    d.reaction_h == null ? undefined : d.reaction_h <= 0 ? 'losses are accruing now' : `advertisers react in ~${Math.round(d.reaction_h)} h`
+  return (
+    <div className="fade-up card p-3.5">
+      <div className="flex gap-2.5">
+        {fraud ? (
+          <BigNumber label="Looks like" value={`+${usd(impact)}/h`} sub="of “growth” (fake: it will be clawed back)" tone="text-amber-200" />
+        ) : (
+          <BigNumber label="Losing now" value={`${usd(-impact)}/h`} sub="of margin" tone="text-rose-300" />
+        )}
+        {fixed ? (
+          <BigNumber label="Fix protects" value={`+${usd(risk)}`} sub="this week vs doing nothing" tone="text-teal-300" />
+        ) : (
+          <BigNumber label="Doing nothing costs" value={`${usd(-risk)}`} sub={`this week${reaction ? ` · ${reaction}` : ''}`} tone="text-rose-300" />
+        )}
+      </div>
+      <VerdictRow d={d} />
+    </div>
+  )
+}
+
+function ManagerHeadline({ d, countryName }: { d: Detail; countryName?: string }) {
+  const name = countryName
+  const cats = affectedCategories(d)
+  const fix = recommendedFix(d)
+  const fixed = d.applied != null
+  return (
+    <div className="fade-up card p-3.5">
+      <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-slate-500">Affected segment</div>
+      <div className="mt-1 text-[17px] font-semibold leading-snug text-slate-50">
+        {name ?? d.country} <span className="text-slate-500">·</span> {PLATFORM_LABEL[d.platform] ?? d.platform}{' '}
+        <span className="text-slate-500">·</span> <span className="text-violet-200">{cats.join(', ')}</span>
+      </div>
+      {fix && (
+        <div className={`mt-3 flex items-center gap-3 rounded-lg px-3 py-2.5 ring-1 ${fixed ? 'bg-teal-400/10 ring-teal-400/40' : 'bg-slate-900/60 ring-slate-700/50'}`}>
+          <div className="min-w-0 flex-1">
+            <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-slate-500">{fixed ? 'Applied action' : 'Recommended action'}</div>
+            <div className="text-[14px] font-semibold text-teal-200">{fix.name}</div>
+            <div className="text-[11.5px] leading-snug text-slate-400">{fix.description}</div>
+          </div>
+          <div className="num shrink-0 text-right text-[15px] font-semibold text-teal-300">
+            +{usd(fix.delta_p50_usd)}
+            <div className="text-[10px] font-normal text-slate-500">7 d vs do nothing</div>
+          </div>
+        </div>
+      )}
+      <VerdictRow d={d} />
     </div>
   )
 }
