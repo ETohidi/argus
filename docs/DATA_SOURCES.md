@@ -78,7 +78,24 @@ Derived constants:
   (Europe 0.667 from DE/GB/FR; South Africa by the Latin America ratio 0.322; South Korea by Japan's ratio 0.554).
   These are marked *simulated* in `config.py`.
 
-## 4. Calibration result (seed 42, last 7 days of history)
+## 4. Launch market (Enter a new country): Argentina
+Mexico and Poland are already among the 20 watched countries, so the launch candidate is **Argentina**. It has the most
+complete public data of the unwatched candidates we checked (Argentina, Colombia, Chile): a StatCounter country
+page, World Bank income and population figures, and a clear language and region match with watched markets (Spanish:
+Mexico, Spain; Latin America: Mexico, Brazil). AppsFlyer publishes no Argentina CPI, so its payout level is predicted
+(GDP regression plus the neighbours' residual) rather than taken from data.
+
+| Figure | Value | Source |
+|---|---|---|
+| iOS share of mobile OS, Argentina | 14.22% (Android 85.77%), October 2026 | StatCounter — https://gs.statcounter.com/os-market-share/mobile/argentina |
+| GDP per capita, current USD, 2024 (all 20 watched + AR) | AR $13,970; MX $13,988; BR $10,311; ES $35,327; TR $15,893; US $86,170; … (full list in `backend/argus/launch.py`, `GDP_PC`) | World Bank WDI, `NY.GDP.PCAP.CD` — https://api.worldbank.org/v2/country/ARG/indicator/NY.GDP.PCAP.CD?date=2024 |
+| Population, 2024 | AR 45,696,159; … (`POPULATION`) | World Bank WDI, `SP.POP.TOTL` — https://api.worldbank.org/v2/country/ARG/indicator/SP.POP.TOTL?date=2024 |
+| Main language | es (AR, MX, ES), pt (BR), … (`LANGUAGE`) | Public knowledge |
+
+Similarity uses only these public features (income, Android share, region, language). The fraud history of the
+watched countries (`FARMS_PER_QUARTER`) is **simulated**.
+
+## 5. Calibration result (seed 42, last 7 days of history)
 
 | Country | Share of rewards (sim) | Published payout share |
 |---|---|---|

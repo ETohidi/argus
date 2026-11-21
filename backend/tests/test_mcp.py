@@ -24,14 +24,15 @@ def test_mcp_server_stdio_roundtrip():
         {"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {"name": "get_world_state", "arguments": {}}},
         {"jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": {"name": "explain_incident", "arguments": {"id": "inc-99"}}},
         {"jsonrpc": "2.0", "id": 9, "method": "nope"},
+        {"jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": {"name": "what_if_launch", "arguments": {"country": "AR"}}},
     ]
     proc = subprocess.run([sys.executable, "-m", "argus.mcp_server"], input="\n".join(json.dumps(m) for m in msgs) + "\n",
                           capture_output=True, text=True, env=env, cwd=BACKEND, timeout=180)
     out = {r["id"]: r for r in map(json.loads, proc.stdout.strip().splitlines())}
-    assert set(out) == {1, 2, 3, 4, 5, 6, 7, 8, 9}                    # no reply to the notification
+    assert set(out) == {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}                    # no reply to the notification
     assert out[1]["result"]["protocolVersion"] == "2025-06-18" and "tools" in out[1]["result"]["capabilities"]
     names = {t["name"] for t in out[2]["result"]["tools"]}
-    assert {"get_world_state", "explain_incident", "simulate_fix", "what_if"} <= names
+    assert {"get_world_state", "explain_incident", "simulate_fix", "what_if", "what_if_launch"} <= names
     assert all("inputSchema" in t for t in out[2]["result"]["tools"])
     assert out[3]["result"]["structuredContent"]["incident_id"] == "inc-1"
     ex = out[4]["result"]["structuredContent"]
@@ -44,5 +45,8 @@ def test_mcp_server_stdio_roundtrip():
     assert [i["country"] for i in st["incidents"]] == ["CA"]          # what_if did not touch the session world
     assert out[8]["result"]["isError"] is True
     assert out[9]["error"]["code"] == -32601
+    la = out[10]["result"]["structuredContent"]
+    assert la["country"]["iso"] == "AR" and la["backtest"]["n"] == 5
+    assert la["fraud_risk"]["farms_per_quarter_neighbours"]["MX"] >= 1.8      # session's CA farm is not a neighbour
     assert all(json.loads(out[i]["result"]["content"][0]["text"]) == out[i]["result"]["structuredContent"]
                for i in (3, 4, 5, 6, 7))

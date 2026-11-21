@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import config as cfg
-from . import llm, meta
+from . import launch, llm, meta
 from .world import INJECT_TYPES, SCENES, World
 
 llm.load_dotenv()  # LLM_* from backend/.env if present (never committed)
@@ -106,6 +106,10 @@ class MetricIn(BaseModel):
     name: str
     description: str = ""
     formula: str | None = None
+
+
+class LaunchIn(BaseModel):
+    country: str = "AR"
 
 
 def _world(x_session: str | None):
@@ -230,6 +234,18 @@ def post_demo(scene: str, x_session: str | None = Header(default=None)) -> dict:
     s = _world(x_session)
     with s.lock:
         return s.world.demo(scene)
+
+
+@app.post("/api/what_if/launch")
+def post_launch(body: LaunchIn = Body(default=LaunchIn()), x_session: str | None = Header(default=None)) -> dict:
+    s = _world(x_session)
+    with s.lock:
+        incidents = [{"country": i["country"], "root": i["root"], "title": i["title"]} for i in s.world.agent.incidents]
+        seed = s.world.seed
+    try:
+        return launch.launch(body.country, seed, incidents)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
 
 
 @app.get("/api/timeline")

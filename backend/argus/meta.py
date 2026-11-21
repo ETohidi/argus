@@ -51,6 +51,11 @@ def data_sources() -> list[dict]:
                      "url": f_url})
     for iso, v in CPI_PUZZLE_IOS.items():
         rows.append({"label": f"Puzzle CPI iOS, {names[iso]}", "value": f"${v:.2f}", "source": f_label, "url": f_url})
+    rows.append({"label": "Launch candidate Argentina: iOS share of mobile OS", "value": "14.2%", "source": s_label,
+                 "url": s_url + "argentina"})
+    rows.append({"label": "GDP per capita and population, 2024 (launch similarity)", "value": "Argentina $13,970; 45.7M",
+                 "source": "World Bank WDI (NY.GDP.PCAP.CD, SP.POP.TOTL)",
+                 "url": "https://api.worldbank.org/v2/country/ARG/indicator/NY.GDP.PCAP.CD?date=2024"})
     return rows
 
 

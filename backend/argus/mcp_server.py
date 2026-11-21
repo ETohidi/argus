@@ -9,6 +9,7 @@ Tools
   simulate_fix(id, fix)              7-day Monte Carlo rollout of one fix vs doing nothing (nothing is applied)
   what_if(country, change, ...)      sandbox copy of the world: inject a change, run N hours, see what Argus would do
   advance_time(hours)                step the world (the agent runs every simulated hour)
+  what_if_launch(country)            forecast launching in a new country (transfer from similar ones, 4-week MC)
   run_demo_scene(scene)              jump to a demo scene (start, promo, bot_farm, ...)
 Approving fixes is deliberately not exposed: applying changes stays human-on-the-loop (web UI / REST API).
 
@@ -55,6 +56,15 @@ TOOLS = [
          "platform": {"type": "string", "enum": ["iOS", "Android"]},
          "hours": {"type": "integer", "minimum": 1, "maximum": 72, "default": 12}},
          "required": ["country", "change"], "additionalProperties": False}},
+    {"name": "what_if_launch",
+     "description": "Forecast launching the marketplace in a country Argus does not watch yet: transfers taste, "
+                    "users and payout level from the most similar watched countries, runs a 4-week Monte Carlo "
+                    "(p10-p90 margin per day), recommends the offer mix and reward level, estimates fraud risk, and "
+                    "reports a hold-out backtest on watched countries. Read-only.",
+     "inputSchema": {"type": "object", "properties": {
+         "country": {"type": "string", "description": "ISO code of the launch market, e.g. AR (Argentina)",
+                     "default": "AR"}},
+         "additionalProperties": False}},
     {"name": "advance_time",
      "description": "Advance the simulated world by N hours; Argus runs its loop every hour.",
      "inputSchema": {"type": "object", "properties": {"hours": {"type": "integer", "minimum": 1, "maximum": 168}},
@@ -159,6 +169,14 @@ class ArgusTools:
                 "explained": [e for e in sand.agent.explained if e["country"] == iso and e["t"] >= t0],
                 "margin_vs_no_change_usd": round(margin(sand) - margin(base)),
                 "note": "Sandbox copy; the session world is unchanged."}
+
+    def what_if_launch(self, country: str = "AR") -> dict:
+        from . import launch
+        incidents = [{"country": i["country"], "root": i["root"], "title": i["title"]} for i in self.world.agent.incidents]
+        try:
+            return launch.launch(country, self.world.seed, incidents)
+        except ValueError as e:
+            raise ToolError(str(e)) from e
 
     def advance_time(self, hours: int) -> dict:
         hours = int(max(1, min(int(hours), 168)))

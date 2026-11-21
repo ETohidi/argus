@@ -237,6 +237,7 @@ Public data behind the simulation, for a "Data" panel.
 | `POST /api/inject` | `{ "type": "promo" \| "bot_farm" \| "tracking_break" \| "data_delay", "country": "CA", "platform": "android" }` (`platform` optional) | Schedules the event at the current hour; returns `{ ok, event }` |
 | `POST /api/incidents/{id}/approve` | `{ "fix_id": "block_cluster" }` | Applies fix to reality; returns the incident detail |
 | `POST /api/metrics` | `{ "name": "margin_per_signup = margin / signups" }` (see below) | Automatic extension: `{ status, message, node, validation, placement?, monitoring?, note?, ambiguity? }` |
+| `POST /api/what_if/launch` | `{ "country": "AR" }` (default `AR`) | Read-only forecast for entering a new country (see below) |
 | `POST /api/demo/{scene}` | — | Deterministic (fixed seed) jump to a video scene; returns `{ scene, state, incident_id? }` |
 
 Demo scenes, in order: `start`, `promo`, `bot_farm`, `investigate`, `approve`, `verify`, `new_metric`, `tracking_break`. Each scene advances the session world from wherever the previous scene left it (calling `start` resets).
@@ -304,3 +305,53 @@ Response, always HTTP 200; branch on `status`:
 After `added`, the metric appears in `GET /api/graph` (node + formula edges), `GET /api/graph/tree` (as a root),
 `GET /api/state` → `added_metrics`, and `attention.watched_series` grows by 20.
 The `new_metric` demo scene posts `margin_per_signup = margin / signups` and returns this response as `metric`.
+
+## Enter a new country: `POST /api/what_if/launch`
+
+Read-only: nothing in the session world changes. Request `{ "country": "AR" }`. The only candidate is `AR` (Argentina);
+a watched country or an unknown code returns `400 {detail}`. The first call takes ~1 s; after that the result is cached
+per seed (~5 ms), and only `fraud_risk` is recomputed (it adds bot-farm issues this session has seen in the neighbours).
+
+For the UI, use the four plain-language lines `headline`, `learned_line`, `backtest_line` and `range_line`, and put
+`country.lat/lng` on the globe.
+
+```jsonc
+{
+  "country": { "iso": "AR", "name": "Argentina", "region": "Latin America", "lat": -38.4, "lng": -63.6,
+               "ios_share": 0.1422, "gdp_per_capita_usd": 13970, "population": 45696159 },
+  "horizon_days": 28,
+  "margin_per_day_usd": { "p10": 2315, "p50": 4591, "p90": 9186 },      // day 28, standard settings (55% rewards)
+  "margin_per_day_weekly_usd": [ { "p10": 985, "p50": 1928, "p90": 3937 }, ... ],  // 4 entries, users build up
+  "margin_4w_total_usd": { "p10": 51528, "p50": 101488, "p90": 205643 },
+  "best_offer_mix": [                                                   // top 3 categories by share of margin
+    { "category": "Fintech apps", "margin_share": 0.297, "taste": 0.125 }, ... ],
+  "best_reward": { "reward_share": 0.5, "current_share": 0.55, "uplift_usd_day": 106,
+                   "grid": [ { "reward_share": 0.45, "margin_day_usd": 4686 }, ... ],   // 0.45 … 0.65
+                   "note": "Starts respond to rewards as in past calendar promos ..." },
+  "fraud_risk": { "level": "low" | "medium" | "high", "farm_chance_4w": 0.45, "expected_loss_usd_4w": 4099,
+                  "farms_per_quarter_neighbours": { "MX": 1.8, "BR": 2.4, "TR": 1.6 },
+                  "text": "Medium: about a 45% chance of a bot farm in the first 4 weeks, based on Mexico, Brazil, Türkiye",
+                  "source": "simulated fraud history of the neighbours (plus bot-farm issues in this session)" },
+  "learned_from": [ { "iso": "MX", "name": "Mexico", "weight": 0.66, "distance": 0.78 },
+                    { "iso": "BR", "name": "Brazil", "weight": 0.24, "distance": 1.81 },
+                    { "iso": "TR", "name": "Türkiye", "weight": 0.10, "distance": 2.66 } ],
+  "assumptions": { "users_per_day_steady": 301892, "payout_level_vs_us": 0.103,
+                   "adoption": "users build up as 1 - exp(-day/7)", "taste_start_elasticity": 0.141, "paths": 400 },
+  "backtest": {
+    "countries": [ { "country": "MX", "name": "Mexico", "learned_from": ["BR", "TR", "ES"],
+                     "predicted_margin_day_usd": 14633, "range_usd": [7199, 32147], "true_margin_day_usd": 14637,
+                     "error": -0.0, "inside_p10_p90": true }, ... ],       // 5 rows: MX, BR, TR, ZA, ES
+    "median_abs_error": 0.143, "max_abs_error": 0.887, "typical_within_pct": 15, "within_pct": 89,
+    "worst": { "country": "TR", "name": "Türkiye", "error": 0.887 },
+    "inside_p10_p90": "5/5", "inside_count": 5, "n": 5,
+    "method": "Each country is hidden in turn and predicted from the other 19 only, then compared with the simulator's true margin over the next 4 weeks (steady state, no launch ramp)."
+  },
+  "headline": "Launching in Argentina: about +$4,591 a day after 4 weeks",
+  "learned_line": "Learned from Mexico, Brazil and Türkiye",
+  "backtest_line": "Tested on 5 countries we know: typically within ±15% (worst Türkiye +89%), 5/5 inside the forecast range",
+  "range_line": "Likely range $2,315–$9,186 a day (p10–p90)"
+}
+```
+
+The backtest countries follow a fixed rule: the 5 watched countries most similar to the launch market. Over all 20
+watched countries the median error is 34% and the truth lands inside p10–p90 for 16 of 20.
