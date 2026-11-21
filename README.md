@@ -17,31 +17,19 @@ z-scores, Shapley contributions and query trail for the engineer.
 ## Architecture
 
 ```mermaid
-flowchart LR
-    subgraph R["Reality (simulator, hidden truth)"]
-        SIM["Hourly marketplace<br/>20 countries · iOS/Android · 6 offer categories<br/>calibrated to public data"]
-        INC["Injected incidents<br/>promo · bot farm · tracking break · data delay"]
+flowchart TB
+    R["Reality (simulator)"] -->|hourly metrics| T
+    subgraph T["Twin"]
+        direction LR
+        L1["L1 Business"] --> L2["L2 Segment"] --> L3["L3 Users"]
     end
-    subgraph T["Twin (Argus's beliefs, learned from 14 days)"]
-        L1["L1 country KPIs<br/>seasonal forecast + backtest σ"]
-        L2["L2 platform × category<br/>causal chain, z given parents,<br/>exact Shapley, counterfactuals"]
-        L3["L3 users (on demand)<br/>taste model: coherence vs payout focus"]
-        FF["Fast-forward<br/>7-day Monte Carlo per fix"]
+    T --> A
+    subgraph A["Agent loop"]
+        direction LR
+        D["Detect"] --> LO["Localise"] --> P["Prove cause"] --> F["Test fixes"] --> AP["Approve"] --> V["Verify"]
     end
-    subgraph A["Agent loop (every sim hour)"]
-        W["Watch · data check ·<br/>naive vs twin"] --> LOC["Localise L2"] --> DAG["Walk DAG:<br/>root vs symptoms"] --> U["L3 if impact × uncertainty"] --> H["Hypotheses<br/>(explained share)"] --> FX["Fixes in twin"] --> AP["Approve → apply → verify 24 h"]
-    end
-    subgraph V["Views"]
-        G["3D globe: health / potential"]
-        C["Issue cards · CEO / Manager / Engineer"]
-        API["FastAPI /api · /api/meta data panel"]
-    end
-    SIM -- "observed metrics only<br/>(+ public calendar, unlabeled samples)" --> L1
-    INC --> SIM
-    L1 --> L2 --> L3
-    T <--> A
-    AP -- "approved action" --> SIM
-    A --> V
+    A --> W["Views: globe · issue card · evidence"]
+    A -. "approved fix" .-> R
 ```
 
 Design notes and the original build plan: [`docs/HANDOFF.md`](docs/HANDOFF.md); API contract: [`docs/API.md`](docs/API.md).
@@ -75,8 +63,9 @@ calling a later scene first runs the earlier ones.
 | `new_metric` | "Reward cost per completed offer" is added in plain words, validated and monitored |
 | `tracking_break` | Advertisers stop confirming UK iOS game completions: root cause revenue, no user-level run needed, pause + notify |
 
-Keyboard shortcuts: none yet; the Demo menu and the top-bar controls (play, +1 h, +6 h, inject, add metric) drive
-everything.
+Keyboard shortcuts (**coming**): `1`–`8` jump to the scenes above and `Space` plays/pauses. They arrive with the
+frontend redesign currently in progress; until then the Demo menu and the top-bar controls (play, +1 h, +6 h, inject,
+add metric) drive everything.
 
 ## Honest limitations
 
