@@ -212,8 +212,12 @@ class Reality:
         imp = imp_h + bot_imp
         st = st_h + bot_st
         co = co_h + bot_co
-        rev = co * payout * accept
-        rew = co * payout * reward_share
+        # Offer mix within a category shifts hour to hour (payout per completion varies by offer), and the
+        # share advertisers confirm wobbles a little. Drawn last so the other noise streams stay unchanged.
+        mix = np.exp(rng.normal(0, 0.06, (Cn, Pn, Kn)))
+        accept = np.minimum(accept * np.exp(rng.normal(0, 0.015, (Cn, Pn, Kn))), 1.0)
+        rev = co * payout * mix * accept
+        rew = co * payout * mix * reward_share
         qual = q_h + bot_q
 
         # Advertiser fraud exposure (per country x category).

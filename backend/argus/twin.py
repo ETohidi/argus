@@ -375,7 +375,13 @@ class Twin:
         total = v[0] - v[1]
         if abs(total) < 1e-9:
             return 0.0
-        return float(np.clip((v[0] - v[2]) / total, -1.0, 1.5))
+        effect = v[0] - v[2]           # what removing H takes away
+        rest = v[2] - v[1]             # movement left after removing H
+        if effect * total <= 0:
+            return 0.0                 # H moves the KPI the other way: explains none of the change
+        # Share of the absolute movement, so it stays in [0, 1] even when the rest moves the opposite way
+        # (the signed ratio effect / total exceeds 100% in that case).
+        return float(abs(effect) / (abs(effect) + abs(rest)))
 
     # ------------------------------------------------------------------ fast-forward (Monte Carlo)
     def fast_forward(self, c: int, options: list[str], ctx: dict, now: int, hours: int = 168, n: int = 40,

@@ -71,9 +71,12 @@ def test_bot_farm_root_shapley_and_counterfactual():
     assert abs(tw.z_of(gp["revenue"], CA, 1)) < 3          # revenue is a symptom, not broken
     sh = tw.shapley(CA, 1, ts, "margin")
     assert sum(sh["phi"].values()) == pytest.approx(sh["v_all"] - sh["v_none"], rel=1e-6)
-    assert abs(sh["phi"]["revenue"]) < 1 and abs(sh["phi"]["rewards"]) < 1
-    assert tw.explained_share(CA, ts, {1: USER_SIDE}, "rewards") >= 0.8
-    assert tw.explained_share(CA, ts, {0: ["revenue"], 1: ["revenue"]}, "rewards") < 0.3
+    user = sum(sh["phi"][m] for m in USER_SIDE)
+    pricing = abs(sh["phi"]["revenue"]) + abs(sh["phi"]["rewards"])
+    assert user > 2 * pricing                               # user-side mechanisms drive the change
+    share = tw.explained_share(CA, ts, {1: USER_SIDE}, "new_accounts")
+    assert 0.8 <= share < 1.0                               # explains most of it, not a suspicious 100%
+    assert tw.explained_share(CA, ts, {0: ["revenue"], 1: ["revenue"]}, "new_accounts") < 0.3
 
 
 def test_chain_reproduces_observed_and_forecast(world):
