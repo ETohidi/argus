@@ -36,7 +36,18 @@ Globe state.
       "impact_usd_h": 134.0,      // current deviation in USD/h
       "risk_7d_usd": 114042,      // 7-day margin lost by doing nothing vs the recommended fix (p50, twin)
       "reaction_h": 27,           // hours until advertisers react (chargebacks), from the do-nothing route's events; 0 = losses accrue now; null = n/a
+      "status_label": "Still going",   // "Open" | "Still going" | "Fix applied" | "Fix verified" | "Resolved"
+      "first_seen": "Mon 04:00",       // first hour out of the normal zone (or detection time)
+      "last_seen": "Mon 09:00",        // last hour the alert condition held
+      "resolved_at": null,             // time label once resolved
+      "alerts_merged": 3,              // later alerts for the same problem folded into this issue (never reported twice)
+      "recurrence_of": null,           // id of an earlier resolved issue with the same country/platform/root cause
       "card": { ... } }           // plain-language issue card, see below
+  ],
+  "added_metrics": [               // metrics added via POST /api/metrics, now monitored
+    { "id": "margin_per_signup", "label": "margin_per_signup", "expr": "margin / new_accounts",
+      "unit": "USD per new account", "added_at": 335, "status": "ok",          // "ok" | "watch" (|z| ≥ 4 somewhere)
+      "max_z": { "country": "US", "z": 1.3 }, "note": "Added because you asked for 'margin_per_signup'. ..." }
   ],
   "explained": [
     { "t": 350, "country": "DE", "event": "Weekend Boost (games)", "naive_z": 5.1, "twin_z": 0.7 }
@@ -44,7 +55,10 @@ Globe state.
   "attention": { "watched_series": 120, "investigations": 1, "l3_runs": 1 }
 }
 ```
-Incident `status`: `open` | `persisting` | `fix_applied` | `verified` | `resolved`. `severity`: `low` | `medium` | `high`,
+Incident `status`: `open` | `persisting` | `fix_applied` | `verified` | `resolved` (show `status_label`).
+Issue tracking: one unresolved issue per country; any further alert there is merged into it (`alerts_merged`,
+`last_seen`). With a fix: resolved after verification plus 6 healthy hours. Without a fix: resolved after 6 healthy
+hours ("Recovered without action" in the trail). A returning problem opens a new issue with `recurrence_of` set. `severity`: `low` | `medium` | `high`,
 from risk rather than hourly impact: high if `risk_7d_usd` ≥ $25k, or ≥ $10k with advertisers reacting within 24 h;
 medium if ≥ $5k, or ≥ $1k with a reaction within 24 h; low otherwise.
 
@@ -119,7 +133,48 @@ After approval `what_to_do` becomes "Done: <fix> applied."
 List of the same summaries as `state.incidents`.
 
 ### `GET /api/graph`
-`MetricGraph.to_dict()`: `{ nodes, edges, exogenous, levels }`.
+The metric graph with typed edges.
+```jsonc
+{
+  "nodes": [ { "id": "margin", "label": "Contribution margin", "unit": "USD/h", "kind": "money", "level": "L2",
+               "parents": ["revenue", "rewards"], "edge": "formula", "expr": "revenue - rewards", "aggregation": "sum",
+               "origin": "core",            // "core" | "extension" (added via POST /api/metrics)
+               "breakdown": ["country", "platform", "offer category"],   // users: ["country", "platform"]
+               "note": "" } ],              // extension nodes: the "Added because ..." note
+  "edges": [                                // drawable between nodes (+ the "calendar" source)
+    { "source": "new_accounts", "target": "active_users", "type": "mechanism", "label": "Possible cause" },
+    { "source": "revenue", "target": "margin", "type": "formula", "label": "Formula" },
+    { "source": "calendar", "target": "starts", "type": "exogenous", "label": "Known event" } ],
+  "breakdown_edges": [                      // metric -> first dimension, then the dimension chain
+    { "source": "margin", "target": "dim:country", "type": "breakdown", "label": "Breakdown" },
+    { "source": "dim:country", "target": "dim:platform", "type": "breakdown", "label": "Breakdown" },
+    { "source": "dim:platform", "target": "dim:offer_category", "type": "breakdown", "label": "Breakdown" } ],
+  "dimensions": [ { "id": "dim:country", "label": "Country (20)" }, { "id": "dim:platform", "label": "Platform (iOS, Android)" },
+                  { "id": "dim:offer_category", "label": "Offer category (6)" } ],
+  "edge_types": [                           // legend: one entry per edge type
+    { "type": "formula",   "label": "Formula",        "meaning": "the metric is computed from its inputs (e.g. margin = revenue − rewards)", "reasoning": "exact decomposition: how much each input contributes to a change" },
+    { "type": "breakdown", "label": "Breakdown",      "meaning": "the same metric split by country → platform → offer category", "reasoning": "localise: find the segment that carries the change" },
+    { "type": "mechanism", "label": "Possible cause", "meaning": "the upstream metric drives this one (e.g. starts → completions)", "reasoning": "root cause: test each link given its parents, counterfactual proof" },
+    { "type": "exogenous", "label": "Known event",    "meaning": "planned marketing events change these metrics on purpose", "reasoning": "explain innocent changes instead of alerting" } ],
+  "exogenous": [ { "id": "calendar", "label": "Planned events (marketing calendar)" } ],
+  "levels": { "L1": "...", "L2": "...", "L3": "..." }
+}
+```
+
+### `GET /api/graph/tree`
+The same graph as a browsable tree: business outcomes (margin, quality per completion) and added metrics at the top,
+then formula inputs, then possible causes. A metric reached a second time has `repeat: true` (show "see above").
+```jsonc
+{ "roots": ["margin", "quality_per_completion", "margin_per_signup"],
+  "rows": [   // depth-first, render as an indented list
+    { "depth": 0, "id": "margin", "label": "Contribution margin", "relation": null, "relation_label": null,
+      "expr": "revenue - rewards", "unit": "USD/h", "origin": "core",
+      "breakdown": "global → country → platform → offer category", "repeat": false },
+    { "depth": 1, "id": "revenue", "label": "Advertiser revenue", "relation": "formula", "relation_label": "Formula", ... },
+    { "depth": 2, "id": "completions", "label": "Completions", "relation": "mechanism", "relation_label": "Possible cause", ... }
+  ],
+  "edge_types": [ ... ] }   // same legend as /api/graph
+```
 
 ### `GET /api/country/{iso}`
 L2 heatmap.
@@ -175,7 +230,7 @@ Public data behind the simulation, for a "Data" panel.
 | `POST /api/reset` | `{}` | New world (14-day history, twin learned); returns `/api/state` |
 | `POST /api/inject` | `{ "type": "promo" \| "bot_farm" \| "tracking_break" \| "data_delay", "country": "CA", "platform": "android" }` (`platform` optional) | Schedules the event at the current hour; returns `{ ok, event }` |
 | `POST /api/incidents/{id}/approve` | `{ "fix_id": "block_cluster" }` | Applies fix to reality; returns the incident detail |
-| `POST /api/metrics` | `{ "name": "...", "description": "..." }` | `{ "node": {...} \| null, "validation": { "ok": true, "checks": [ { "name": "...", "ok": true, "detail": "..." } ] } }` |
+| `POST /api/metrics` | `{ "name": "margin_per_signup = margin / signups" }` (see below) | Automatic extension: `{ status, message, node, validation, placement?, monitoring?, note?, ambiguity? }` |
 | `POST /api/demo/{scene}` | — | Deterministic (fixed seed) jump to a video scene; returns `{ scene, state, incident_id? }` |
 
 Demo scenes, in order: `start`, `promo`, `bot_farm`, `investigate`, `approve`, `verify`, `new_metric`, `tracking_break`. Each scene advances the session world from wherever the previous scene left it (calling `start` resets).
@@ -183,3 +238,63 @@ Story clock: `start` Mon 01:00 · promo from 01:00, explained by 03:00 · bot fa
 with the 04:00 data, detected at 06:00 · approve at 08:00 · verified Tue 08:00 · tracking break detected Tue 13:00.
 
 Errors: `404 {detail}` for unknown incident / country / scene, `400 {detail}` for invalid input.
+
+## Automatic extension: `POST /api/metrics`
+
+Request (any of these forms):
+```jsonc
+{ "name": "margin_per_signup = margin / signups" }                       // name and formula in one line
+{ "name": "margin_per_signup", "formula": "margin / signups" }           // separate fields
+{ "name": "Start rate", "description": "how often users start an offer" } // words only: LLM or keyword rules propose the formula
+```
+Formulas use `+ - * / ( )`, numbers, metric ids (`new_accounts`, `active_users`, `impressions`, `starts`, `completions`,
+`revenue`, `rewards`, `quality`, `margin`, `quality_per_completion`) or business words that map to exactly one metric
+(`signups` → new_accounts, `profit` → margin, `views` → impressions, `payouts` → rewards, `dau` → active_users, …).
+
+Response, always HTTP 200; branch on `status`:
+
+| `status` | Meaning | UI |
+|---|---|---|
+| `added` | Placed, validated, monitored | show `note`, highlight the new node (`node.parents` are its formula edges) |
+| `ambiguous` | A word maps to several metrics | show `message`, offer `ambiguity.suggested_formulas` as buttons that re-submit |
+| `invalid` | Unknown metric (with "did you mean"), bad syntax, units that don't match, or undefined on the data | show `message` |
+| `duplicate` | Same formula, or the same values on the data as an existing metric | show `message`, point at `node` |
+
+```jsonc
+// added
+{ "status": "added", "message": "Added 'margin_per_signup' and started monitoring it.",
+  "node": { "id": "margin_per_signup", "label": "margin_per_signup", "unit": "USD per new account", "kind": "ratio",
+            "level": "L2", "parents": ["margin", "new_accounts"], "edge": "formula", "expr": "margin / new_accounts",
+            "aggregation": "ratio", "origin": "extension", "confidence": 1.0, "note": "Added because ..." },
+  "placement": { "parents": ["margin", "new_accounts"], "edge_type": "formula", "level": "L2",
+                 "breakdown": ["global", "country", "platform"] },                  // dimensions shared by all inputs
+  "validation": { "ok": true, "checks": [        // always in this order; the first failing check ends the flow
+    { "name": "formula",       "ok": true, "detail": "margin_per_signup = margin / new_accounts (from your formula); read 'signups' as new_accounts" },
+    { "name": "names",         "ok": true, "detail": "All inputs are known metrics: margin, new_accounts" },
+    { "name": "dimensions",    "ok": true, "detail": "Units are consistent: result in USD per new account" },
+    { "name": "duplicate",     "ok": true, "detail": "New metric: no existing metric has this formula or the same values on the data" },
+    { "name": "holds_on_data", "ok": true, "detail": "Computed on 336 h of observed data at country × platform level: 100% of segment-hours defined; Canada last 24 h = 13.12 USD per new account" },
+    { "name": "aggregation",   "ok": true, "detail": "Ratio: not additive. Country and global values are Σnumerator / Σdenominator (6.087), not the average of segments (6.159)" },
+    { "name": "monitoring",    "ok": true, "detail": "Watched in 20 countries against its seasonal baseline (backtest error 5.8% per 3 h)" } ] },
+  "monitoring": { "watched": true, "countries": 20, "baseline_error_pct": 5.8, "now": { "country": "US", "z": 1.3 },
+                  "watched_series": 140 },
+  "note": "Added because you asked for 'margin_per_signup'. Argus read it as margin / new_accounts ('signups' = new_accounts), placed it under contribution margin and new accounts as a formula edge, checked the units (USD per new account) and that it computes on 14 days of data, and now watches it in 20 countries as a ratio of sums." }
+
+// ambiguous
+{ "status": "ambiguous", "node": null,
+  "message": "'users' is ambiguous: it could mean active users or new accounts. Pick one and add the metric again.",
+  "ambiguity": { "term": "users", "candidates": ["active_users", "new_accounts"],
+                 "suggested_formulas": ["margin / active_users", "margin / new_accounts"] },
+  "validation": { "ok": false, "checks": [ ... ] } }
+
+// invalid (examples of message)
+"The units don't match: cannot add or subtract USD/h and completion per hour."
+"Unknown metric 'revnue'. Did you mean revenue? Known metrics: active_users, completions, ..."
+
+// duplicate
+{ "status": "duplicate", "message": "On the data this is identical to the existing metric 'rewards': not added twice.",
+  "node": { "id": "rewards", ... } }
+```
+After `added`, the metric appears in `GET /api/graph` (node + formula edges), `GET /api/graph/tree` (as a root),
+`GET /api/state` → `added_metrics`, and `attention.watched_series` grows by 20.
+The `new_metric` demo scene posts `margin_per_signup = margin / signups` and returns this response as `metric`.

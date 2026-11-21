@@ -140,8 +140,7 @@ class World:
                 self.step(1)
             out["incident_id"] = inc["id"] if inc else None
         elif scene == "new_metric":
-            out["metric"] = self.agent.add_metric("Reward cost per completed offer",
-                                                  "reward cost per completed offer = rewards / completions")
+            out["metric"] = self.agent.add_metric("margin_per_signup = margin / signups")
             self.step(1)
         elif scene == "tracking_break":
             self.inject("tracking_break", "GB", "iOS")
