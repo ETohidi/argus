@@ -11,10 +11,10 @@ import type { GraphEdge, IncidentDetail, Level } from '../lib/types'
 
 export type EvidenceTab = 'graph' | 'users' | 'proof' | 'fixes' | 'details'
 const TABS: { id: EvidenceTab; label: string }[] = [
-  { id: 'graph', label: 'Causal graph' },
-  { id: 'users', label: 'Users' },
+  { id: 'graph', label: 'What broke' },
+  { id: 'users', label: 'Who' },
   { id: 'proof', label: 'Proof' },
-  { id: 'fixes', label: 'Fixes' },
+  { id: 'fixes', label: 'Options' },
   { id: 'details', label: 'Details' },
 ]
 
@@ -36,7 +36,7 @@ const joinAnd = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0,
 
 function graphCaption(d: IncidentDetail) {
   const root = d.graph.nodes.find((n) => n.state === 'root')
-  if (!root) return 'No single broken link was found in the causal graph.'
+  if (!root) return 'No single cause was found.'
   const rootName = PLAIN[root.id] ?? root.label.toLowerCase()
   // The money metrics a dashboard shows, downstream of the root: they only move because the root broke.
   const downstream = new Set<string>()
@@ -51,7 +51,7 @@ function graphCaption(d: IncidentDetail) {
 }
 
 function usersCaption(d: IncidentDetail) {
-  if (!d.l3) return `No need to look at individual users: the broken link is ${PLAIN[d.root ?? ''] ?? 'a business mechanism'}, not people.`
+  if (!d.l3) return `No need to look at individual accounts: the cause is ${PLAIN[d.root ?? ''] ?? 'a business process'}, not people.`
   const s = d.l3.summary
   const devices = d.l3.groups?.filter((g) => g.count >= 2).length ?? 0
   if (devices > 0) return `${s.n_flagged} new accounts on ${devices} shared ${devices === 1 ? 'phone' : 'phones'}; their interests don't match what they do.`
@@ -61,17 +61,17 @@ function usersCaption(d: IncidentDetail) {
 
 function proofCaption(d: IncidentDetail) {
   const best = bestHypothesis(d)
-  if (!best) return 'No hypothesis tested yet.'
+  if (!best) return 'No explanation tested yet.'
   const pct = Math.round(best.explained * 100)
   if (best.verdict !== 'supported') return `No explanation passes the bar yet: the best one accounts for ${pct}% of the change.`
   const without = isFraud(d) ? 'without them' : d.kind === 'tracking' || d.root === 'revenue' ? 'with tracking repaired' : `without ${shortHypothesis(best.name).toLowerCase()}`
-  return `Replay the twin ${without}: ${pct}% of the change disappears.`
+  return `Replay the week ${without}: ${pct}% of the change disappears.`
 }
 
 function fixesCaption(d: IncidentDetail) {
   const best = d.fixes.find((f) => f.id === d.recommended)
   if (!best) return 'No fixes tested.'
-  return `Fast-forward a week in the twin: ${best.name.toLowerCase()} keeps ${usd(best.delta_p50_usd)} more margin than doing nothing.`
+  return `Played forward a week: ${best.name.toLowerCase()} keeps ${usd(best.delta_p50_usd)} more margin than doing nothing.`
 }
 
 type Props = {
@@ -144,7 +144,7 @@ export default function EvidenceView({ detail: d, title, initialTab = 'graph', a
                 <FakeAccountPicture l3={d.l3} />
               </Frame>
             ) : (
-              <Empty text="This incident was settled at the segment level (L2); no accounts were sampled." />
+              <Empty text="This problem was found without looking at individual accounts." />
             )
           ) : tab === 'proof' ? (
             <Proof d={d} />
@@ -223,9 +223,9 @@ function StoryGraph({ d }: { d: IncidentDetail }) {
       <CausalGraph nodes={nodes} edges={edges} roles={roles} />
       <div className="mt-6 flex items-center justify-between text-[13px] text-fg-2">
         <span className="flex gap-5">
-          <span className="flex items-center gap-2"><span className="h-3 w-5 rounded bg-problem" /> broke</span>
-          <span className="flex items-center gap-2"><span className="h-3 w-5 rounded border border-dashed border-problem" /> only a symptom</span>
-          <span className="flex items-center gap-2"><span className="h-3 w-5 rounded border border-line" /> normal</span>
+          <span className="flex items-center gap-2"><span className="h-3 w-5 rounded bg-problem" /> cause</span>
+          <span className="flex items-center gap-2"><span className="h-3 w-5 rounded border border-dashed border-problem" /> affected</span>
+          <span className="flex items-center gap-2"><span className="h-3 w-5 rounded border border-line" /> fine</span>
         </span>
         <button onClick={() => setAll((a) => !a)} className="text-fg-2 hover:text-fg">
           {all ? 'Show the story only' : 'Show all metrics'}
@@ -275,7 +275,7 @@ function Proof({ d }: { d: IncidentDetail }) {
             <NormalZoneChart series={series} leftAt={d.left_zone_at} values={without ? cfValues : undefined} width={896} height={300} fontSize={13} showStart={false} />
           </div>
           <div className="mt-3 flex items-baseline justify-between gap-6 text-[13px] text-fg-2">
-            <span>{metricLabel(d.series_meta)} · grey = normal for this hour</span>
+            <span>{metricLabel(d.series_meta)} · grey = usual for this time of day</span>
             <span className={`text-[16px] transition-opacity duration-300 ${without ? 'text-ok opacity-100' : 'opacity-0'}`}>
               {Math.round(share * 100)}% of the change disappears{share >= 0.8 ? ' — cause proven' : ''}
             </span>
@@ -298,7 +298,7 @@ function Proof({ d }: { d: IncidentDetail }) {
             </div>
           ))}
         </div>
-        <p className="mt-5 text-[13px] text-fg-2">Share of the change that vanishes when the twin is replayed without that explanation. Proven at 80% or more.</p>
+        <p className="mt-5 text-[13px] text-fg-2">How much of the change disappears when the week is replayed without that explanation. Counted as proven at 80% or more.</p>
       </Frame>
     </div>
   )
@@ -315,13 +315,13 @@ function Fixes({ d, approving, onApprove }: { d: IncidentDetail; approving: bool
           {v.status === 'verified'
             ? `Prediction verified: actual first-day margin ${usd(v.actual ?? 0)} landed inside the band.`
             : v.status === 'missed'
-              ? 'Prediction missed: the twin was recalibrated.'
+              ? 'Prediction missed: Argus adjusted its expectations.'
               : `${d.fixes.find((f) => f.id === d.applied)?.name ?? 'Fix'} applied. Verifying the prediction after 24 h.`}
         </div>
       )}
       <Frame>
         <WhichFixChart fixes={d.fixes} recommended={d.recommended} applied={d.applied} />
-        <p className="mt-2 text-[13px] text-fg-2">Shaded = range of likely outcomes.</p>
+        <p className="mt-2 text-[13px] text-fg-2">Shaded = likely range</p>
         {best && !d.applied && (
           <div className="mt-6 flex items-center gap-6">
             <button
@@ -399,7 +399,7 @@ function Details({ d }: { d: IncidentDetail }) {
           {d.reports.source && <div className="mt-2 text-[13px] text-fg-2">Written by {d.reports.source === 'llm' ? 'the language model' : 'templates'}.</div>}
         </div>
         <div>
-          <h3 className="mb-4 text-[16px] font-semibold text-fg">Shapley contributions to the margin change</h3>
+          <h3 className="mb-4 text-[16px] font-semibold text-fg">What each step added to the margin change</h3>
           <ShapleyBars items={d.contributions} />
         </div>
         {d.l3 && (

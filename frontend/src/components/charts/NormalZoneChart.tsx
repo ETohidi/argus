@@ -56,7 +56,7 @@ export default function NormalZoneChart({ series, leftAt, values, width: W = 356
   const li = leftAt ? series.findIndex((p) => p.t === leftAt.t) : -1
   const labelLeft = li >= 0 && x(li) > W * 0.55
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="What the twin expected versus what happened">
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="What was expected versus what happened">
       <defs>
         <mask id={`out-${id}`} maskUnits="userSpaceOnUse" x={0} y={0} width={W} height={H}>
           <rect width={W} height={H} fill="white" />
@@ -71,7 +71,7 @@ export default function NormalZoneChart({ series, leftAt, values, width: W = 356
         <g>
           <line x1={x(li)} x2={x(li)} y1={fontSize + 4} y2={H - M.b} stroke="#FF4D8D" strokeOpacity={0.6} strokeDasharray="2 3" />
           <text x={x(li) + (labelLeft ? 4 : -4)} y={fontSize} fontSize={fontSize} fill="#FF8FB7" textAnchor={labelLeft ? 'end' : 'start'}>
-            Left the normal zone at {leftAt!.label}
+            Unusual since {leftAt!.label.replace(/^[A-Za-z]{3}\s+/, '')}
           </text>
         </g>
       )}

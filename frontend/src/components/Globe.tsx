@@ -228,8 +228,8 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
       canvas.style.cursor = 'pointer'
       const line =
         modeRef.current === 'health'
-          ? `<span style="color:${STATUS_COLOR[c.status]}">● ${STATUS_LABEL[c.status]}</span> · z ${c.health_z.toFixed(1)}`
-          : `Potential <b>+${usd(c.potential_usd_day)}</b>/day${c.potential_pct != null ? ` · +${c.potential_pct.toFixed(1)}% margin` : ''}`
+          ? `<span style="color:${STATUS_COLOR[c.status]}">● ${STATUS_LABEL[c.status]}</span>`
+          : `Opportunity: <b>+${usd(c.potential_usd_day)}</b> a day if offers matched local tastes`
       popup.setLngLat(e.lngLat).setHTML(`<div class="font-semibold">${c.name}</div><div>${line}</div>`).addTo(map)
     })
     // The globe moves under a still pointer (auto-rotation, fly-to), so a stale hover is cleared on movement too.

@@ -94,11 +94,10 @@ export default function ScenarioMenu(p: Props) {
             <Btn onClick={act(p.onAddMetric)}>Add a metric…</Btn>
           </Group>
           <div className="mt-4 border-t border-line pt-3 text-fg-2">
-            {p.backend === 'live' ? 'Live twin' : p.backend === 'mock' ? 'Mock data (backend unreachable)' : 'Connecting…'}
+            {p.backend === 'live' ? 'Live simulation' : p.backend === 'mock' ? 'Sample data (simulation unreachable)' : 'Connecting…'}
             {a && (
               <div className="mt-1">
-                Watching {a.watched_series} series · {a.investigations} investigation{a.investigations === 1 ? '' : 's'} · {a.l3_runs} deep dive
-                {a.l3_runs === 1 ? '' : 's'} (L3)
+                Watching {a.watched_series} numbers · {a.investigations} investigation{a.investigations === 1 ? '' : 's'} · {a.l3_runs} account-level check{a.l3_runs === 1 ? '' : 's'}
               </div>
             )}
           </div>

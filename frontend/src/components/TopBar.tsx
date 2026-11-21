@@ -32,7 +32,7 @@ export default function TopBar({ clock, status, mode, onMode }: Props) {
               onClick={() => onMode(m)}
               className={`rounded-full px-4 py-1.5 text-[13px] transition ${mode === m ? 'bg-line/80 text-fg' : 'text-fg-2 hover:text-fg'}`}
             >
-              {m === 'health' ? 'Health' : 'Potential'}
+              {m === 'health' ? 'Problems' : 'Opportunities'}
             </button>
           ))}
         </div>

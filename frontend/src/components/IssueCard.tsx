@@ -13,10 +13,10 @@ type Props = {
   onClose: () => void
 }
 
-// "+$85/h of 'growth'" → ["+$85/h", "of 'growth'"]
-function splitAmount(s: string): [string, string] {
-  const m = s.match(/^\s*([+−-]?\$[\d,.]+[kM]?(?:\/h)?)\s*(.*)$/)
-  return m ? [m[1], m[2].replace(/'([^']+)'/g, '“$1”')] : [s, '']
+// "+$85/h of 'growth'" → "+$85" (shown as "Looks like: +$85 an hour")
+function amountOf(s: string): string {
+  const m = s.match(/^\s*([+−-]?\$[\d,.]+[kM]?)/)
+  return m ? m[1].replace('-', '−') : s
 }
 
 // L2 / manager: one decision, in plain words. No charts here; the evidence is one click away.
@@ -25,7 +25,7 @@ export default function IssueCard({ summary, detail, countryName, approving, onA
   const status = summary.status
   const decided = status !== 'open' && status !== 'persisting'
   const fix = detail ? recommendedFix(detail) : undefined
-  const [amount, amountNote] = splitAmount(card?.looks_like ?? `${usd(summary.impact_usd_h)}/h`)
+  const amount = amountOf(card?.looks_like ?? `${usd(summary.impact_usd_h)}`)
   const atStake = card?.at_stake_7d_usd ?? summary.risk_7d_usd ?? 0
   const [line1, line2] = cardLines(card, detail ? isFraud(detail) : /fake/i.test(card?.title ?? summary.title))
   // Status chips: pink on 15% pink for problems, mint for verified, neutral while waiting.
@@ -50,14 +50,14 @@ export default function IssueCard({ summary, detail, countryName, approving, onA
       {!decided ? (
         <>
           <div className="mt-5 grid grid-cols-2 gap-6">
-            <Big label="Looks like" value={amount} note={amountNote} />
+            <Big label="Looks like:" value={amount} note="an hour" />
             <Big label="Doing nothing costs" value={usd(atStake)} note="this week" tone="text-problem" />
           </div>
           {detail?.series && detail.series.length > 1 && (
             <figure className="mt-6">
               <div className="mb-1 text-[13px] text-fg-2">{metricLabel(detail.series_meta)}</div>
               <NormalZoneChart series={detail.series.slice(-24)} leftAt={detail.left_zone_at} width={364} height={100} showStart={false} />
-              <figcaption className="mt-1 text-[13px] text-fg-2">Grey = normal for this hour. The line is what happened.</figcaption>
+              <figcaption className="mt-1 text-[13px] text-fg-2">Grey = usual for this time of day</figcaption>
             </figure>
           )}
           <div className="mt-5 space-y-2 text-[16px] leading-snug">
@@ -109,7 +109,7 @@ function Outcome({ detail, countryName, statusLine }: { detail: IncidentDetail |
         </div>
         {band && v.actual != null && <BandBar band={band} actual={v.actual} />}
         <p className="mt-4 text-[13px] text-fg-2">
-          {fix ? `${fix.name} was applied. ` : ''}Margin on the first day landed inside the range the twin predicted.
+          {fix ? `${fix.name} was applied. ` : ''}Margin on the first day landed inside the range Argus predicted.
         </p>
       </div>
     )
@@ -117,7 +117,7 @@ function Outcome({ detail, countryName, statusLine }: { detail: IncidentDetail |
     return (
       <div className="mt-6">
         <div className="text-[24px] font-semibold text-problem">The prediction missed.</div>
-        <p className="mt-2 text-[13px] text-fg-2">{statusLine ?? 'The twin has been recalibrated.'}</p>
+        <p className="mt-2 text-[13px] text-fg-2">{statusLine ?? 'Argus has adjusted its expectations.'}</p>
         {band && v.actual != null && <BandBar band={band} actual={v.actual} />}
       </div>
     )

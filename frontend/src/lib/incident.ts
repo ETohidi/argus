@@ -39,7 +39,7 @@ export function whatHappened(d: IncidentDetail, countryName: string) {
 
 export function why(d: IncidentDetail) {
   const best = bestHypothesis(d)
-  if (!best) return { proven: false, text: 'Still investigating.' }
+  if (!best) return { proven: false, text: 'Still looking into it.' }
   const pct = Math.round(best.explained * 100)
   const name = shortHypothesis(best.name)
   if (best.verdict === 'supported') return { proven: true, text: `Proven, ${pct}% explained: ${name.charAt(0).toLowerCase()}${name.slice(1)}.` }
@@ -52,20 +52,27 @@ export function whatToDo(d: IncidentDetail) {
   return `${fix.name}: +${usd(fix.delta_p50_usd)} margin this week vs doing nothing.`
 }
 
+// Name of a planned event, e.g. "Weekend Boost (Casual games, …): rewards +36% …" → "Weekend Boost".
+export const eventName = (event: string) => event.split(/[(:]/)[0].trim()
+
 // One status sentence for the home screen, most urgent first.
 export function statusSentence(state: WorldState): { text: string; tone: 'ok' | 'issue' | 'neutral' } {
   const name = (iso: string) => state.countries.find((c) => c.iso === iso)?.name ?? iso
-  const decide = state.incidents.filter(needsDecision)
-  if (decide.length) return { text: decide.length === 1 ? `1 issue needs a decision · ${name(decide[0].country)}` : `${decide.length} issues need a decision`, tone: 'issue' }
+  const decide = [...new Set(state.incidents.filter(needsDecision).map((i) => i.country))]
+  if (decide.length) return { text: decide.length === 1 ? `${name(decide[0])} needs attention` : `${decide.length} countries need attention`, tone: 'issue' }
   const applied = state.incidents.filter((i) => i.status === 'fix_applied')
-  if (applied.length) return { text: `Fix applied in ${name(applied[0].country)} · verifying the prediction`, tone: 'neutral' }
+  if (applied.length) return { text: `Fix applied in ${name(applied[0].country)} · checking the result`, tone: 'neutral' }
   const watch = state.countries.filter((c) => c.status === 'watch')
-  if (watch.length) return { text: watch.length === 1 ? `Watching ${watch[0].name} closely` : `Watching ${watch.length} markets closely`, tone: 'issue' }
+  if (watch.length) return { text: watch.length === 1 ? `${watch[0].name} looks unusual · watching` : `${watch.length} countries look unusual · watching`, tone: 'issue' }
   const waiting = state.countries.filter((c) => c.status === 'waiting')
-  if (waiting.length) return { text: `Waiting for data from ${waiting.map((c) => c.name).join(', ')} · no alert`, tone: 'neutral' }
+  if (waiting.length) return { text: `Data still arriving from ${waiting.map((c) => c.name).join(', ')}`, tone: 'neutral' }
   const explained = state.countries.filter((c) => c.status === 'explained')
-  if (explained.length) return { text: explained.length === 1 ? '1 change explained · no alert' : `${explained.length} changes explained · no alert`, tone: 'neutral' }
-  return { text: `All ${state.countries.length} markets within forecast`, tone: 'ok' }
+  if (explained.length === 1) {
+    const ev = state.explained.find((e) => e.country === explained[0].iso)
+    return { text: `${explained[0].name}: ${ev ? eventName(ev.event) : 'planned change'}, as planned`, tone: 'neutral' }
+  }
+  if (explained.length) return { text: `${explained.length} planned changes, as expected`, tone: 'neutral' }
+  return { text: `All ${state.countries.length} countries as expected`, tone: 'ok' }
 }
 
 // "Fake-account cluster in Canada (Android)" → "Fake accounts in Canada"; "Tracking break in United Kingdom (iOS, …)"

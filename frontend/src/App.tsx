@@ -9,7 +9,7 @@ import ScenarioMenu, { SCENE_LABEL } from './components/ScenarioMenu'
 import TimelineStrip from './components/TimelineStrip'
 import TopBar from './components/TopBar'
 import { api, onBackendChange, type Backend } from './lib/api'
-import { needsDecision, shortTitle, statusSentence } from './lib/incident'
+import { eventName, needsDecision, shortTitle, statusSentence } from './lib/incident'
 import { DEMO_SCENES } from './lib/types'
 import type { CountryDetail, DemoScene, IncidentDetail, InjectType, MetricGraph, MetricResponse, PotentialResponse, TimelineEvent, WorldState } from './lib/types'
 
@@ -62,8 +62,8 @@ export default function App() {
         const prev = backendRef.current
         backendRef.current = b
         setBackend(b)
-        if (prev === 'live' && b === 'mock') flash('Twin unreachable — showing mock data')
-        if (prev === 'mock' && b === 'live') flash('Twin connected')
+        if (prev === 'live' && b === 'mock') flash('Simulation unreachable — showing sample data')
+        if (prev === 'mock' && b === 'live') flash('Simulation connected')
       }),
     [flash],
   )
@@ -95,7 +95,7 @@ export default function App() {
         setPlaying(false)
         setLastScene(null)
         dismissed.current.clear()
-        flash(src === 'live' ? 'Twin restarted — world reset' : 'Mock world reset')
+        flash(src === 'live' ? 'Simulation restarted — starting over' : 'Sample data reset')
       }
       setState(next)
     },
@@ -300,14 +300,14 @@ export default function App() {
     <div className="relative h-full overflow-hidden bg-bg">
       {state && <Globe countries={state.countries} mode={mode} selectedIso={focusIso} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
 
-      <TopBar clock={state ? shortClock(state.clock) : 'Connecting…'} status={state ? statusSentence(state) : { text: 'Connecting to the twin…', tone: 'neutral' }} mode={mode} onMode={setMode} />
+      <TopBar clock={state ? shortClock(state.clock) : 'Connecting…'} status={state ? statusSentence(state) : { text: 'Connecting…', tone: 'neutral' }} mode={mode} onMode={setMode} />
 
       {/* Right column: an explained change as a quiet note, then the issue card or the country sheet. */}
       <div className="pointer-events-none absolute bottom-8 right-8 top-24 z-20 flex flex-col items-end gap-4 overflow-y-auto">
         {explained && !country && !card && (
           <div className="fade-in pointer-events-auto max-w-[420px] text-right text-[13px] leading-relaxed text-fg-2">
             <span className="mr-2 inline-block h-2 w-2 rounded-full bg-fg-2" />
-            {state?.countries.find((c) => c.iso === explained.country)?.name ?? explained.country}: {explained.event.split(':')[0]}. Expected by the twin, no alert.
+            {state?.countries.find((c) => c.iso === explained.country)?.name ?? explained.country}: {eventName(explained.event)}, as planned
           </div>
         )}
         {country ? (

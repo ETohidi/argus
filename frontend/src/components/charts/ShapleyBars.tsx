@@ -41,7 +41,7 @@ export default function ShapleyBars({ items }: { items: { mechanism: string; val
         )
       })}
       <div className="mt-3 flex justify-between border-t border-line pt-3 text-[13px] text-fg-2">
-        <span>Exact Shapley values over 8 mechanisms; they add up to the margin change</span>
+        <span>Each step's share of the change (Shapley values); together they add up to the margin change</span>
         <span className="num font-semibold text-fg">Σ {usd(total)}/h</span>
       </div>
     </div>

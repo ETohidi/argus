@@ -3,7 +3,7 @@ import { PINK, PINK_SOFT, PLATFORM_LABEL, STATUS_COLOR, STATUS_LABEL, usd } from
 import type { CountryDetail, CountryState, IncidentSummary, PotentialResponse } from '../lib/types'
 
 const KPI_OPTIONS = [
-  { id: 'worst', label: 'Worst' },
+  { id: 'worst', label: 'Most unusual' },
   { id: 'new_accounts', label: 'Sign-ups' },
   { id: 'completions', label: 'Completions' },
   { id: 'revenue', label: 'Revenue' },
@@ -64,7 +64,7 @@ export default function CountrySheet({ country, detail, incident, potential, onO
       )}
 
       <div className="mt-8 flex items-baseline justify-between">
-        <h3 className="text-[13px] text-fg-2">Where it deviates</h3>
+        <h3 className="text-[13px] text-fg-2">Where it is unusual</h3>
         <div className="flex gap-2">
           {KPI_OPTIONS.map((o) => (
             <button key={o.id} onClick={() => setKpi(o.id)} className={`text-[13px] ${kpi === o.id ? 'text-fg' : 'text-fg-2 hover:text-fg'}`}>
@@ -95,7 +95,7 @@ export default function CountrySheet({ country, detail, incident, potential, onO
                     key={c}
                     className="num flex aspect-square items-center justify-center rounded-lg text-[13px] transition-colors duration-700"
                     style={cellStyle(z)}
-                    title={`${Object.entries(s.kpi_z).map(([kk, v]) => `${kk}: ${v.toFixed(1)}`).join('\n')}\nmargin deviation ${usd(s.deviation_usd_h)}/h`}
+                    title={`Margin vs usual: ${usd(s.deviation_usd_h)} an hour`}
                   >
                     {z > 0 ? '+' : ''}
                     {z.toFixed(1)}
@@ -106,12 +106,12 @@ export default function CountrySheet({ country, detail, incident, potential, onO
           ))}
         </div>
       )}
-      <div className="mt-2 text-[13px] text-fg-2">Deviation from the twin's forecast, in standard deviations</div>
+      <div className="mt-2 text-[13px] text-fg-2">How unusual each platform and offer type is: 0 = as expected, 4 or more = clearly off</div>
 
       {pot && (
         <div className="mt-6 text-[13px] leading-relaxed text-fg-2">
           <span className="text-ok">+{usd(pot.potential_usd_day)}/day</span>
-          {pot.potential_pct != null && ` (${pot.potential_pct.toFixed(1)}% of margin)`} if the feed matched local taste: more {pot.top_categories.join(' and ').toLowerCase()}.
+          {pot.potential_pct != null && ` (${pot.potential_pct.toFixed(1)}% of margin)`} if offers matched local tastes: more {pot.top_categories.join(' and ').toLowerCase()}.
         </div>
       )}
     </section>

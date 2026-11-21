@@ -10,6 +10,14 @@ type Props = {
   onOpen: (e: TimelineEvent) => void
 }
 
+// Backend labels in plain words for the audience.
+function plain(label: string) {
+  return label
+    .replace(/left the normal zone/gi, 'became unusual')
+    .replace(/\bnew accounts\b/gi, 'new sign-ups')
+    .replace(/\s*\((Casual|Strategy|Fintech|Streaming|Shopping|Surveys)[^)]*\)/g, '')
+}
+
 const KIND_COLOUR: Record<TimelineEvent['kind'], string> = {
   anomaly: PINK,
   detected: PINK,
@@ -49,7 +57,7 @@ export default function TimelineStrip({ events, now, hours = 72, countryName, on
           onMouseEnter={() => setActive(i)}
           onFocus={() => setActive(i)}
           onClick={() => onOpen(e)}
-          aria-label={`${e.time_label}: ${e.label}`}
+          aria-label={`${e.time_label}: ${plain(e.label)}`}
           className="absolute top-5 -translate-x-1/2 -translate-y-1/2 p-1.5"
           style={{ left: `calc(${left}% + ${offset}px)` }}
         >
@@ -62,7 +70,7 @@ export default function TimelineStrip({ events, now, hours = 72, countryName, on
           style={{ left: `clamp(120px, calc(${placed[active].left}% + ${placed[active].offset}px), calc(100% - 120px))` }}
         >
           <span className="num text-fg-2">{placed[active].e.time_label}</span> · {countryName(placed[active].e.country)}
-          <div>{placed[active].e.label}</div>
+          <div>{plain(placed[active].e.label)}</div>
         </div>
       )}
     </div>

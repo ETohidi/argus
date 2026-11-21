@@ -4,7 +4,7 @@ import type { GraphEdge, GraphNode } from '../../lib/types'
 
 // What each node is in the story, shown as a word instead of a z-score.
 export type NodeRole = 'broke' | 'symptom' | 'normal' | 'new'
-export const ROLE_WORD: Record<NodeRole, string> = { broke: 'broke', symptom: 'only a symptom', normal: 'normal', new: 'new' }
+export const ROLE_WORD: Record<NodeRole, string> = { broke: 'cause', symptom: 'affected', normal: 'fine', new: 'new' }
 
 type Dims = { W: number; nodeW: number; nodeH: number; row: number; pad: number }
 const DEFAULT_DIMS: Dims = { W: 640, nodeW: 196, nodeH: 52, row: 84, pad: 10 }
@@ -136,8 +136,9 @@ type Props = {
   dims?: Partial<Dims>
 }
 
+// Only the root is "the cause"; other off-pattern steps (broken mechanisms, symptoms) read as "affected".
 export function defaultRole(n: GraphNode): NodeRole {
-  return n.state === 'root' || n.state === 'broken' ? 'broke' : n.state === 'symptom' ? 'symptom' : 'normal'
+  return n.state === 'root' ? 'broke' : n.state === 'broken' || n.state === 'symptom' ? 'symptom' : 'normal'
 }
 
 export default function CausalGraph({ nodes, edges, roles = {}, showWords = true, dims: dimsIn }: Props) {
@@ -149,7 +150,7 @@ export default function CausalGraph({ nodes, edges, roles = {}, showWords = true
   const { W, nodeW, nodeH } = dims
 
   return (
-    <svg viewBox={`0 0 ${W} ${height}`} className="w-full" style={{ height: 'auto' }} role="img" aria-label="Causal graph of the business metrics">
+    <svg viewBox={`0 0 ${W} ${height}`} className="w-full" style={{ height: 'auto' }} role="img" aria-label="How the business numbers drive each other">
       <defs>
         <marker id="cg-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
           <path d="M0,0 L8,4 L0,8 z" fill="#3A3F6B" />

@@ -35,11 +35,11 @@ export default function MetricGraphPanel({ graph, highlight, result, onClose }: 
         <button onClick={onClose} className="text-[13px] text-fg-2 hover:text-fg">
           ← Back to the Earth
         </button>
-        <div className="mt-6 text-[13px] text-fg-2">Metric graph · {graph ? `${graph.nodes.length} metrics` : 'loading'}</div>
+        <div className="mt-6 text-[13px] text-fg-2">How the numbers connect · {graph ? `${graph.nodes.length} numbers tracked` : 'loading'}</div>
         <p className="mt-2 max-w-[760px] text-[24px] font-medium leading-snug text-fg">
           {fresh
-            ? `“${fresh.label}” is now part of the twin: ${fresh.expr ? `${fresh.expr}, ` : ''}validated on history and watched in every market.`
-            : 'Every metric Argus watches, and how they cause each other.'}
+            ? `“${fresh.label}” is now tracked: ${fresh.expr ? `${fresh.expr}, ` : ''}checked against past data and watched in every country.`
+            : 'Every number Argus watches, and which ones drive which.'}
         </p>
         <div className="mt-10 grid grid-cols-[1.4fr_1fr] gap-8">
           <div className="rounded-2xl bg-panel/60 p-8 ring-1 ring-line">
@@ -59,7 +59,7 @@ export default function MetricGraphPanel({ graph, highlight, result, onClose }: 
               </ul>
             ) : (
               <p className="text-[13px] leading-relaxed text-fg-2">
-                Solid lines are mechanisms the twin simulates; dashed lines are formulas and the marketing calendar. Metrics added live are shown in mint.
+                Arrows show which numbers drive which; dashed arrows are simple formulas and the marketing calendar. Numbers added live are shown in mint.
               </p>
             )}
           </div>

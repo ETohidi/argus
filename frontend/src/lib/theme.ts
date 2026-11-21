@@ -34,11 +34,11 @@ export const STATUS_COLOR: Record<CountryStatus, string> = {
 }
 
 export const STATUS_LABEL: Record<CountryStatus, string> = {
-  ok: 'Healthy',
-  watch: 'Watching',
-  incident: 'Issue',
-  explained: 'Explained change',
-  waiting: 'Waiting for data',
+  ok: 'As expected',
+  watch: 'Unusual, watching',
+  incident: 'Needs attention',
+  explained: 'Planned change',
+  waiting: 'Data still arriving',
 }
 
 export const NODE_COLOR: Record<NodeState, string> = {
