@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import AddMetricDialog from './components/AddMetricDialog'
 import CountrySheet from './components/CountrySheet'
 import EvidenceView, { type EvidenceTab } from './components/EvidenceView'
 import Globe, { type GlobeMode } from './components/Globe'
@@ -10,8 +9,9 @@ import TimelineStrip from './components/TimelineStrip'
 import TopBar from './components/TopBar'
 import { api, onBackendChange, type Backend } from './lib/api'
 import { eventName, needsDecision, shortTitle, statusSentence } from './lib/incident'
+import { toOutcome, type MetricOutcome } from './lib/metrics'
 import { DEMO_SCENES } from './lib/types'
-import type { CountryDetail, DemoScene, IncidentDetail, InjectType, MetricGraph, MetricResponse, PotentialResponse, TimelineEvent, WorldState } from './lib/types'
+import type { CountryDetail, DemoScene, IncidentDetail, InjectType, MetricGraph, PotentialResponse, TimelineEvent, WorldState } from './lib/types'
 
 // Default targets for the inject actions (the demo script), overridden by the selected country.
 const INJECT_DEFAULT: Record<InjectType, { country: string; platform?: string }> = {
@@ -37,10 +37,8 @@ export default function App() {
   const [approving, setApproving] = useState(false)
   // L3 overlays.
   const [evidence, setEvidence] = useState<{ tab: EvidenceTab } | null>(null)
-  const [graphView, setGraphView] = useState<{ highlight: string[] } | null>(null)
+  const [graphView, setGraphView] = useState<{ highlight: string[]; outcome?: MetricOutcome | null; openForm?: boolean } | null>(null)
   const [metricGraph, setMetricGraph] = useState<MetricGraph | null>(null)
-  const [metricOpen, setMetricOpen] = useState(false)
-  const [metricResult, setMetricResult] = useState<MetricResponse | null>(null)
   // Country side sheet.
   const [countryIso, setCountryIso] = useState<string | null>(null)
   const [countryDetail, setCountryDetail] = useState<CountryDetail | null>(null)
@@ -214,9 +212,10 @@ export default function App() {
           setEvidence({ tab: 'graph' })
           break
         case 'new_metric': {
-          const node = r.metric?.node as { id?: string } | null | undefined
-          setMetricResult(r.metric ?? null)
-          setGraphView({ highlight: node?.id ? [node.id] : [] })
+          // Play what Argus did by itself with the metric the scene just added.
+          const node = r.metric?.node as { id?: string; expr?: string } | null | undefined
+          const outcome = r.metric ? toOutcome(r.metric as never, node?.expr ?? '', []) : null
+          setGraphView({ highlight: node?.id ? [node.id] : [], outcome })
           break
         }
         default: // bot_farm, approve, verify, tracking_break: the issue card
@@ -258,9 +257,9 @@ export default function App() {
     setCardId(null)
     setEvidence(null)
   }
-  const openAddMetric = () => {
-    setMetricResult(null)
-    setMetricOpen(true)
+  const openMetricGraph = () => {
+    closeAll()
+    setGraphView({ highlight: [] })
   }
 
   // Keyboard: 1–8 demo scenes, Space play / pause, E evidence, Esc closes the top layer.
@@ -355,7 +354,7 @@ export default function App() {
         onStep={step}
         onDemo={demo}
         onInject={inject}
-        onAddMetric={openAddMetric}
+        onAddMetric={openMetricGraph}
       />
 
       <div className="pointer-events-none absolute bottom-1.5 right-8 z-10 text-[13px] text-fg-2">Earth imagery: NASA Visible Earth</div>
@@ -376,20 +375,21 @@ export default function App() {
           onClose={() => setEvidence(null)}
         />
       )}
-      {graphView && <MetricGraphPanel graph={metricGraph} highlight={graphView.highlight} result={metricResult} onClose={() => setGraphView(null)} />}
-
-      {metricOpen && (
-        <AddMetricDialog
-          initial={metricResult}
-          onClose={() => setMetricOpen(false)}
-          onAdded={(id) => {
+      {graphView && (
+        <MetricGraphPanel
+          key={graphView.outcome?.kind === 'added' ? graphView.outcome.id : 'graph'}
+          graph={metricGraph}
+          highlight={graphView.highlight}
+          outcome={graphView.outcome}
+          openForm={graphView.openForm}
+          onAdded={() => {
+            api.graph().then(setMetricGraph).catch(() => {})
             api.state().then(applyState).catch(() => {})
-            setMetricOpen(false)
-            closeAll()
-            setGraphView({ highlight: id ? [id] : [] })
           }}
+          onClose={() => setGraphView(null)}
         />
       )}
+
     </div>
   )
 }

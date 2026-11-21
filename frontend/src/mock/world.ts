@@ -18,6 +18,7 @@ import type {
   WorldState,
 } from '../lib/types'
 import { CORE_EDGES, CORE_LABELS, buildIncidentDetail } from './incidents'
+import { resolveLocally, splitNameFormula } from '../lib/metrics'
 
 export const MOCK_COUNTRIES = [
   ['US', 'United States', 39.8, -98.6, 900_000, 1.0, -6],
@@ -83,6 +84,7 @@ export class MockWorld {
   incidents: MockIncident[] = []
   explained: ExplainedChange[] = []
   extraMetrics: string[] = []
+  extraFormulas = new Map<string, { expr: string; parents: string[]; label: string }>()
   noise = new Map<string, number>()
 
   label() {
@@ -383,8 +385,9 @@ export class MockWorld {
     }))
     const edges = [...CORE_EDGES]
     for (const id of this.extraMetrics) {
-      nodes.push({ id, label: 'Reward cost per completed offer', parents: ['rewards', 'completions'], edge: 'formula', origin: 'extension', expr: 'rewards / completions' })
-      edges.push({ source: 'rewards', target: id, type: 'formula' }, { source: 'completions', target: id, type: 'formula' })
+      const f = this.extraFormulas.get(id) ?? { expr: 'rewards / completions', parents: ['rewards', 'completions'], label: 'Reward cost per completed offer' }
+      nodes.push({ id, label: f.label, parents: f.parents, edge: 'formula', origin: 'extension', expr: f.expr })
+      for (const p of f.parents) edges.push({ source: p, target: id, type: 'formula' })
     }
     return { nodes, edges, exogenous: [{ id: 'calendar', label: 'Planned events (marketing calendar)' }], levels: {} }
   }
@@ -459,36 +462,36 @@ export class MockWorld {
     }
   }
 
-  addMetric(name: string, description: string): MetricResponse {
-    const text = `${name} ${description}`.toLowerCase()
-    const ratio = text.includes('per') || text.includes('/') || text.includes('rate')
-    const formula = text.includes('reward') && text.includes('complet') ? 'rewards / completions' : ratio ? 'revenue / completions' : 'revenue - rewards'
-    const parents = formula.split(/[^a-z_]+/).filter(Boolean)
-    const id = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'new_metric'
+  addMetric(nameIn: string, description: string, formulaIn?: string): MetricResponse & Record<string, unknown> {
+    const known = Object.keys(CORE_LABELS)
+    const { name, formula } = splitNameFormula(nameIn, formulaIn ?? (description.includes('/') || description.includes('-') ? description : ''))
+    const r = resolveLocally(formula || description, known)
+    const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'new_metric'
+    const fail = (detail: string, extra: Record<string, unknown> = {}) => ({
+      node: null,
+      validation: { ok: false, checks: [{ name: 'formula', ok: false, detail }] },
+      ...extra,
+    })
+    if (r.ambiguous.length) return fail('ambiguous word', { ambiguous: Object.fromEntries(r.ambiguous.map((a) => [a.word, a.options])) })
+    if (r.unknown.length) return fail(`unknown metric “${r.unknown[0]}”`, { unknown: { [r.unknown[0]]: known.filter((k) => k.startsWith(r.unknown[0].slice(0, 3))).slice(0, 3) } })
+    if (r.bad || !r.parents.length) return fail('This is not a formula Argus can compute. Use metric names with + − × ÷.')
+    if (this.extraMetrics.includes(id)) return fail(`A metric called “${id}” already exists.`)
     this.extraMetrics.push(id)
+    this.extraFormulas.set(id, { expr: r.expr, parents: r.parents, label: name })
+    const ratio = r.expr.includes('/')
     return {
-      node: {
-        id,
-        label: name,
-        expr: formula,
-        parents,
-        kind: 'formula',
-        aggregation: ratio ? 'ratio' : 'sum',
-        unit: ratio ? 'USD/completion' : 'USD/h',
-      },
+      node: { id, label: name, expr: r.expr, parents: r.parents, kind: 'formula', aggregation: ratio ? 'ratio' : 'sum', origin: 'extension' },
+      placement: { parents: r.parents, breakdown: ['global', 'country', 'platform', ...(r.parents.some((p) => p === 'new_accounts' || p === 'active_users') ? [] : ['offer category'])] },
+      fit: { share: 1 },
       validation: {
         ok: true,
         checks: [
-          { name: 'names', ok: true, detail: `parents ${parents.join(', ')} exist in the metric graph` },
-          { name: 'identity', ok: true, detail: 'recomputed on 336 h of history, max rel. error 2.1e-12' },
-          {
-            name: 'aggregation',
-            ok: true,
-            detail: ratio ? 'ratio → non-additive; country totals use Σnum / Σden' : 'sum → additive across countries',
-          },
+          { name: 'names', ok: true, detail: `uses ${r.parents.join(', ')}` },
+          { name: 'identity', ok: true, detail: 'recomputed on 336 h of history; 100% of hours defined' },
           { name: 'monitoring', ok: true, detail: 'baseline learned, now watched in 20 countries' },
         ],
       },
     }
   }
+
 }

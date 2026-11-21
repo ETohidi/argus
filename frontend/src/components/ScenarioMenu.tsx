@@ -91,7 +91,7 @@ export default function ScenarioMenu(p: Props) {
             </div>
           </Group>
           <Group title="Metrics" last>
-            <Btn onClick={act(p.onAddMetric)}>Add a metric…</Btn>
+            <Btn onClick={act(p.onAddMetric)}>How the numbers connect…</Btn>
           </Group>
           <div className="mt-4 border-t border-line pt-3 text-fg-2">
             {p.backend === 'live' ? 'Live simulation' : p.backend === 'mock' ? 'Sample data (simulation unreachable)' : 'Connecting…'}

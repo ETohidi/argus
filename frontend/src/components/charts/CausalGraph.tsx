@@ -134,6 +134,8 @@ type Props = {
   roles?: Record<string, NodeRole> // defaults from node.state
   showWords?: boolean
   dims?: Partial<Dims>
+  // 'story': propagation from the cause in pink. 'types': formula = solid line, possible cause = dashed line with arrow.
+  edgeMode?: 'story' | 'types'
 }
 
 // Only the root is "the cause"; other off-pattern steps (broken mechanisms, symptoms) read as "affected".
@@ -141,7 +143,7 @@ export function defaultRole(n: GraphNode): NodeRole {
   return n.state === 'root' ? 'broke' : n.state === 'broken' || n.state === 'symptom' ? 'symptom' : 'normal'
 }
 
-export default function CausalGraph({ nodes, edges, roles = {}, showWords = true, dims: dimsIn }: Props) {
+export default function CausalGraph({ nodes, edges, roles = {}, showWords = true, dims: dimsIn, edgeMode = 'story' }: Props) {
   const dims = { ...DEFAULT_DIMS, ...dimsIn }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const { byId, chains, height } = useMemo(() => layout(nodes, edges, dims), [nodes, edges, dims.W, dims.nodeW, dims.nodeH, dims.row])
@@ -169,6 +171,22 @@ export default function CausalGraph({ nodes, edges, roles = {}, showWords = true
           const d = pathFor(path.map((id) => byId.get(id)!), nodeH)
           const fresh = roleOf(edge.target) === 'new'
           const h = hot(edge)
+          if (edgeMode === 'types') {
+            const formula = edge.type === 'formula'
+            return (
+              <path
+                key={`${edge.source}-${edge.target}`}
+                d={d}
+                fill="none"
+                stroke={fresh ? MINT : formula ? '#6B6F9E' : '#4A4E78'}
+                strokeWidth={fresh ? 2 : formula ? 1.6 : 1.2}
+                strokeDasharray={formula ? undefined : '5 4'}
+                markerEnd={formula && !fresh ? undefined : `url(#${fresh ? 'cg-arrow-new' : 'cg-arrow'})`}
+                className={fresh ? 'draw' : undefined}
+                pathLength={fresh ? 1 : undefined}
+              />
+            )
+          }
           return (
             <path
               key={`${edge.source}-${edge.target}`}

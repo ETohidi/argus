@@ -103,7 +103,7 @@ function route(method: string, path: string, body: any): unknown {
     }
     if (p === '/metrics') {
       if (!body?.name) throw new MockError(400, 'name required')
-      return world.addMetric(body.name, body.description ?? '')
+      return world.addMetric(body.name, body.description ?? '', body.formula)
     }
     if ((m = p.match(/^\/demo\/(\w+)$/))) return demo(m[1] as DemoScene)
   }

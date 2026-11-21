@@ -95,6 +95,8 @@ export const api = {
   inject: (type: InjectType, country: string, platform?: string) =>
     request<{ ok: boolean; event: unknown }>('POST', '/inject', { type, country, ...(platform ? { platform } : {}) }),
   approve: (id: string, fix_id: string) => request<IncidentDetail>('POST', `/incidents/${id}/approve`, { fix_id }),
-  addMetric: (name: string, description: string) => request<MetricResponse>('POST', '/metrics', { name, description }),
+  // `formula` is optional: the backend also accepts "name = formula" in `name`, or the formula in `description`.
+  addMetric: (name: string, description: string, formula?: string) =>
+    request<MetricResponse>('POST', '/metrics', { name, description: description || formula || '', ...(formula ? { formula } : {}) }),
   demo: (scene: DemoScene) => request<DemoResponse>('POST', `/demo/${scene}`),
 }

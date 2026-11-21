@@ -1,70 +1,329 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import CausalGraph from './charts/CausalGraph'
-import type { GraphEdge, GraphNode, MetricGraph, MetricResponse } from '../lib/types'
+import { api } from '../lib/api'
+import { plainMetric, replaceWord, splitNameFormula, toOutcome, type MetricOutcome } from '../lib/metrics'
+import type { GraphEdge, GraphNode, MetricGraph } from '../lib/types'
+
+const EXAMPLES = [
+  { name: 'margin_per_signup', formula: 'margin / signups' },
+  { name: 'revenue_per_user', formula: 'revenue / users' }, // ambiguous on purpose: Argus asks
+]
 
 type Props = {
   graph: MetricGraph | null
   highlight: string[]
-  result?: MetricResponse | null // validation of the metric just added
+  outcome?: MetricOutcome | null // from the "add a metric" demo scene
+  openForm?: boolean
+  onAdded: (id: string) => void
   onClose: () => void
 }
 
-// Full-screen view of the metric graph the twin monitors, with metrics added at runtime highlighted.
-export default function MetricGraphPanel({ graph, highlight, result, onClose }: Props) {
+// Users have no offer category, so breakdowns that involve them stop at platform.
+const breakdownOf = (id: string, parents: string[] = []) =>
+  [id, ...parents].some((p) => p === 'new_accounts' || p === 'active_users') ? ['country', 'platform'] : ['country', 'platform', 'offer']
+
+export default function MetricGraphPanel({ graph, highlight, outcome: initial, openForm, onAdded, onClose }: Props) {
+  const [formOpen, setFormOpen] = useState(!!openForm || !!initial)
+  const [name, setName] = useState(initial?.kind === 'added' ? initial.id : '')
+  const [formula, setFormula] = useState(initial?.kind === 'added' ? initial.expr : '')
+  const [busy, setBusy] = useState(false)
+  const [outcome, setOutcome] = useState<MetricOutcome | null>(initial ?? null)
+  const [stage, setStage] = useState(initial?.kind === 'added' ? 0 : -1) // number of steps shown (0..3)
+  const [pointTo, setPointTo] = useState<string | null>(null)
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
-  const { nodes, edges, added } = useMemo(() => {
-    if (!graph) return { nodes: [] as GraphNode[], edges: [] as GraphEdge[], added: [] as MetricGraph['nodes'] }
+
+  const known = useMemo(() => graph?.nodes.map((n) => n.id) ?? [], [graph])
+  const addedId = outcome?.kind === 'added' ? outcome.id : null
+  const inGraph = !!addedId && known.includes(addedId)
+
+  // Step through what Argus does by itself once the new node is in the graph.
+  useEffect(() => {
+    if (outcome?.kind !== 'added') return
+    if (!inGraph) {
+      const fallback = window.setTimeout(() => setStage((s) => Math.max(s, 1)), 1500)
+      return () => window.clearTimeout(fallback)
+    }
+    const timers = [
+      window.setTimeout(() => setStage((s) => Math.max(s, 1)), 150),
+      window.setTimeout(() => setStage((s) => Math.max(s, 2)), 1100),
+      window.setTimeout(() => setStage(3), 2100),
+    ]
+    return () => timers.forEach(window.clearTimeout)
+  }, [outcome, inGraph])
+
+  const submit = async (n = name, f = formula) => {
+    const split = splitNameFormula(n, f)
+    if (!split.name || !split.formula) return
+    setName(split.name)
+    setFormula(split.formula)
+    setBusy(true)
+    setStage(-1)
+    setPointTo(null)
+    try {
+      const raw = await api.addMetric(split.name, '', split.formula)
+      const o = toOutcome(raw as never, split.formula, known)
+      setOutcome(o)
+      if (o.kind === 'added') {
+        setStage(0)
+        onAdded(o.id)
+      }
+    } catch (e) {
+      setOutcome({ kind: 'error', message: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const { nodes, edges } = useMemo(() => {
+    if (!graph) return { nodes: [] as GraphNode[], edges: [] as GraphEdge[] }
+    const show = (id: string) => !(id === addedId && stage < 1) // the new node appears with "Found its place"
     const nodes: GraphNode[] = [
-      ...graph.exogenous.map((x) => ({ id: x.id, label: x.label.replace(/\s*\(.*\)$/, ''), z: 0, state: 'normal' as const })),
-      ...graph.nodes.map((n) => ({ id: n.id, label: n.label, z: 0, state: 'normal' as const })),
+      ...graph.exogenous.map((x) => ({ id: x.id, label: plainMetric(x.id, x.label), z: 0, state: 'normal' as const })),
+      ...graph.nodes.filter((n) => show(n.id)).map((n) => ({ id: n.id, label: plainMetric(n.id, n.label), z: 0, state: 'normal' as const })),
     ]
     const ids = new Set(nodes.map((n) => n.id))
-    return { nodes, edges: graph.edges.filter((e) => ids.has(e.source) && ids.has(e.target)), added: graph.nodes.filter((n) => n.origin === 'extension') }
-  }, [graph])
-  const lit = highlight.length ? highlight : added.map((n) => n.id)
-  const fresh = added.find((n) => lit.includes(n.id))
-  const checks = result && (result.node as { id?: string } | null)?.id === fresh?.id ? result.validation.checks : null
+    return { nodes, edges: graph.edges.filter((e) => ids.has(e.source) && ids.has(e.target)) }
+  }, [graph, addedId, stage])
+  const lit = pointTo ? [pointTo] : addedId ? [addedId] : highlight
 
   return (
-    <div className="fade-in absolute inset-0 z-40 overflow-y-auto bg-bg/80 backdrop-blur-md">
-      <div className="mx-auto max-w-[1040px] px-10 pb-16 pt-8">
+    <div className="fade-in absolute inset-0 z-40 overflow-y-auto bg-bg/85 backdrop-blur-md">
+      <div className="mx-auto max-w-[1100px] px-10 pb-16 pt-8">
         <button onClick={onClose} className="text-[13px] text-fg-2 hover:text-fg">
           ← Back to the Earth
         </button>
-        <div className="mt-6 text-[13px] text-fg-2">How the numbers connect · {graph ? `${graph.nodes.length} numbers tracked` : 'loading'}</div>
-        <p className="mt-2 max-w-[760px] text-[24px] font-medium leading-snug text-fg">
-          {fresh
-            ? `“${fresh.label}” is now tracked: ${fresh.expr ? `${fresh.expr}, ` : ''}checked against past data and watched in every country.`
-            : 'Every number Argus watches, and which ones drive which.'}
-        </p>
-        <div className="mt-10 grid grid-cols-[1.4fr_1fr] gap-8">
-          <div className="rounded-2xl bg-panel/60 p-8 ring-1 ring-line">
-            {graph ? <CausalGraph nodes={nodes} edges={edges} roles={Object.fromEntries(lit.map((id) => [id, 'new' as const]))} showWords={false} dims={{ W: 700, nodeW: 150, nodeH: 46, row: 70 }} /> : <div className="h-96 animate-pulse rounded-xl bg-line/50" />}
-          </div>
+        <div className="mt-6 flex items-end justify-between">
           <div>
-            {checks ? (
-              <ul className="space-y-4">
-                {checks.map((c, i) => (
-                  <li key={c.name} className="fade-up" style={{ animationDelay: `${i * 120}ms` }}>
-                    <div className={`text-[16px] ${c.ok ? 'text-ok' : 'text-problem'}`}>
-                      {c.ok ? '✓' : '✕'} {c.name.charAt(0).toUpperCase() + c.name.slice(1)}
-                    </div>
-                    <div className="text-[13px] leading-relaxed text-fg-2">{c.detail}</div>
-                  </li>
-                ))}
-              </ul>
+            <h1 className="text-[24px] font-semibold text-fg">How the numbers connect</h1>
+            <div className="text-[13px] text-fg-2">{graph ? `${graph.nodes.length} metrics, watched in every country` : 'Loading…'}</div>
+          </div>
+          {!formOpen && (
+            <button onClick={() => setFormOpen(true)} className="rounded-full px-4 py-2 text-[13px] text-fg ring-1 ring-line hover:ring-accent">
+              + Add a metric
+            </button>
+          )}
+        </div>
+
+        <div className="mt-8 grid grid-cols-[1.45fr_1fr] gap-8">
+          <div className="rounded-2xl bg-panel/70 p-6 ring-1 ring-line">
+            {graph ? (
+              <CausalGraph
+                nodes={nodes}
+                edges={edges}
+                roles={Object.fromEntries(lit.map((id) => [id, 'new' as const]))}
+                showWords={false}
+                edgeMode="types"
+                dims={{ W: 640, nodeW: 140, nodeH: 44, row: 66 }}
+              />
             ) : (
-              <p className="text-[13px] leading-relaxed text-fg-2">
-                Arrows show which numbers drive which; dashed arrows are simple formulas and the marketing calendar. Numbers added live are shown in mint.
-              </p>
+              <div className="h-96 animate-pulse rounded-xl bg-line/50" />
+            )}
+            <Legend />
+          </div>
+
+          <div>
+            {formOpen ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  submit()
+                }}
+                className="rounded-2xl bg-panel/70 p-6 ring-1 ring-line"
+              >
+                <label className="block text-[13px] text-fg-2" htmlFor="m-name">
+                  Name
+                </label>
+                <input id="m-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="margin_per_signup" autoComplete="off" className="mt-1 w-full rounded-lg bg-bg px-3 py-2 text-[16px] text-fg outline-none ring-1 ring-line focus:ring-accent" />
+                <label className="mt-4 block text-[13px] text-fg-2" htmlFor="m-formula">
+                  Formula
+                </label>
+                <input id="m-formula" value={formula} onChange={(e) => setFormula(e.target.value)} placeholder="margin / signups" autoComplete="off" className="num mt-1 w-full rounded-lg bg-bg px-3 py-2 text-[16px] text-fg outline-none ring-1 ring-line focus:ring-accent" />
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {EXAMPLES.map((ex) => (
+                    <button
+                      type="button"
+                      key={ex.name}
+                      onClick={() => {
+                        setName(ex.name)
+                        setFormula(ex.formula)
+                        setOutcome(null)
+                        setStage(-1)
+                      }}
+                      className="num rounded-full bg-line/70 px-3 py-1 text-[13px] text-fg-2 hover:text-fg"
+                    >
+                      {ex.name} = {ex.formula}
+                    </button>
+                  ))}
+                </div>
+                <button type="submit" disabled={busy || !name.trim() || (!formula.trim() && !name.includes('='))} className="mt-5 w-full rounded-xl bg-ok py-2.5 text-[16px] font-semibold text-bg hover:brightness-110 disabled:bg-line disabled:text-fg-2">
+                  {busy ? 'Adding…' : 'Add'}
+                </button>
+
+                <Outcome
+                  outcome={outcome}
+                  stage={stage}
+                  onShow={setPointTo}
+                  onChoose={(word, id) => {
+                    const f = replaceWord(formula, word, id)
+                    setFormula(f)
+                    submit(name, f)
+                  }}
+                />
+              </form>
+            ) : (
+              <p className="text-[13px] leading-relaxed text-fg-2">Each box is a number Argus watches. Add your own and Argus places it, checks it and starts watching it.</p>
             )}
           </div>
         </div>
+
+        {graph && <MetricTree graph={graph} fresh={addedId} breakdown={outcome?.kind === 'added' ? outcome.breakdown : []} />}
       </div>
     </div>
+  )
+}
+
+function Outcome({ outcome, stage, onChoose, onShow }: { outcome: MetricOutcome | null; stage: number; onChoose: (word: string, id: string) => void; onShow: (id: string) => void }) {
+  if (!outcome) return null
+  if (outcome.kind === 'exists')
+    return (
+      <div className="fade-up mt-5 flex items-center justify-between gap-4 rounded-xl bg-bg/60 p-4 ring-1 ring-line">
+        <p className="text-[13px] text-fg">{outcome.message}</p>
+        <button type="button" onClick={() => onShow(outcome.id)} className="shrink-0 rounded-lg bg-line px-3 py-1.5 text-[13px] text-fg hover:ring-1 hover:ring-accent">
+          Show it
+        </button>
+      </div>
+    )
+  if (outcome.kind === 'choose')
+    return (
+      <div className="fade-up mt-5 rounded-xl bg-bg/60 p-4 ring-1 ring-line">
+        <p className="text-[13px] text-fg">{outcome.message}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {outcome.options.map((o) => (
+            <button type="button" key={o.id} onClick={() => onChoose(outcome.word, o.id)} className="rounded-lg bg-line px-3 py-1.5 text-[13px] text-fg hover:ring-1 hover:ring-accent">
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  if (outcome.kind === 'error')
+    return (
+      <div className="fade-up mt-5 rounded-xl bg-problem/15 p-4 text-[13px] text-problem" role="alert">
+        {outcome.message}
+      </div>
+    )
+  const parents = outcome.parents.map((p) => plainMetric(p)).join(' and ')
+  const by = outcome.breakdown.filter((b) => b !== 'global').join(', ')
+  const steps = [
+    { title: 'Found its place', detail: `${parents ? `Below ${parents}` : 'In the graph'}${by ? ` · by ${by}` : ''}` },
+    { title: 'Checked it on the data', detail: outcome.fit.charAt(0).toUpperCase() + outcome.fit.slice(1) },
+    { title: 'Watching it now', detail: 'In all 20 countries' },
+  ]
+  return (
+    <ol className="mt-5 space-y-3" aria-live="polite">
+      {steps.map((s, i) =>
+        stage > i ? (
+          <li key={s.title} className="fade-up flex gap-3">
+            <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-ok ${i === 2 ? 'animate-pulse' : ''}`} />
+            <div>
+              <div className="text-[16px] text-fg">{s.title}</div>
+              <div className="text-[13px] text-fg-2">{s.detail}</div>
+            </div>
+          </li>
+        ) : null,
+      )}
+    </ol>
+  )
+}
+
+function Legend() {
+  return (
+    <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-[13px] text-fg-2">
+      <span className="flex items-center gap-2">
+        <svg width="26" height="8" aria-hidden>
+          <line x1="1" y1="4" x2="25" y2="4" stroke="#6B6F9E" strokeWidth="1.6" />
+        </svg>
+        formula
+      </span>
+      <span className="flex items-center gap-2">
+        <svg width="26" height="8" aria-hidden>
+          <line x1="1" y1="4" x2="20" y2="4" stroke="#4A4E78" strokeWidth="1.2" strokeDasharray="4 3" />
+          <path d="M19,1 L25,4 L19,7 z" fill="#4A4E78" />
+        </svg>
+        possible cause
+      </span>
+      <span className="flex items-center gap-2">
+        <span>└</span>
+        breakdown by country, platform, offer (list below)
+      </span>
+    </div>
+  )
+}
+
+// Browsable tree: each top-level metric expands into what it is made of; breakdowns appear as thin rows.
+function MetricTree({ graph, fresh, breakdown }: { graph: MetricGraph; fresh: string | null; breakdown: string[] }) {
+  const [open, setOpen] = useState(false)
+  const inputs = (id: string) => graph.edges.filter((e) => e.target === id)
+  // Top level: metrics nothing else is built from (edges into added metrics don't count, so Margin stays on top).
+  const added = new Set(graph.nodes.filter((n) => n.origin === 'extension').map((n) => n.id))
+  const isInput = new Set(graph.edges.filter((e) => !added.has(e.target)).map((e) => e.source))
+  const tops = graph.nodes.filter((n) => !isInput.has(n.id))
+  const nodeById = new Map(graph.nodes.map((n) => [n.id, n]))
+  return (
+    <section className="mt-8 rounded-2xl bg-panel/50 ring-1 ring-line">
+      <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center justify-between px-6 py-4 text-left text-[16px] text-fg">
+        All metrics
+        <span className="text-[13px] text-fg-2">{open ? 'Hide' : 'Show'}</span>
+      </button>
+      {open && (
+        <ul className="px-6 pb-5 text-[13px]">
+          {tops.map((n) => (
+            <TreeRow key={n.id} id={n.id} depth={0} inputs={inputs} nodeById={nodeById} fresh={fresh} freshBreakdown={breakdown} seen={new Set()} />
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function TreeRow(p: {
+  id: string
+  depth: number
+  edgeType?: string
+  inputs: (id: string) => GraphEdge[]
+  nodeById: Map<string, MetricGraph['nodes'][number]>
+  fresh: string | null
+  freshBreakdown: string[]
+  seen: Set<string>
+}) {
+  const [open, setOpen] = useState(p.depth === 0 && p.id === p.fresh)
+  const node = p.nodeById.get(p.id)
+  const kids = p.seen.has(p.id) ? [] : p.inputs(p.id)
+  const seen = new Set(p.seen).add(p.id)
+  const by = p.id === p.fresh && p.freshBreakdown.length ? p.freshBreakdown.filter((b) => b !== 'global') : breakdownOf(p.id, node?.parents)
+  return (
+    <li>
+      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 py-1.5 text-left hover:text-fg" style={{ paddingLeft: p.depth * 20 }}>
+        <span className="w-3 text-fg-2">{open ? '▾' : '▸'}</span>
+        <span className={p.id === p.fresh ? 'text-ok' : 'text-fg'}>{plainMetric(p.id, node?.label)}</span>
+        {node?.expr && <span className="num text-fg-2">= {node.expr}</span>}
+        {p.edgeType && p.edgeType !== 'formula' && <span className="text-fg-2">· possible cause</span>}
+      </button>
+      {open && (
+        <ul>
+          <li className="py-1 text-fg-2" style={{ paddingLeft: (p.depth + 1) * 20 + 20 }}>
+            └ by {by.join(' › ')}
+          </li>
+          {kids.map((e) => (
+            <TreeRow key={e.source} {...p} id={e.source} depth={p.depth + 1} edgeType={e.type} seen={seen} />
+          ))}
+        </ul>
+      )}
+    </li>
   )
 }
