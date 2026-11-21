@@ -18,19 +18,22 @@ z-scores, Shapley contributions and query trail for the engineer.
 
 ```mermaid
 flowchart TB
-    R["Reality (simulator)"] -->|hourly metrics| T
+    R["Reality (simulator)"]
     subgraph T["Twin"]
         direction LR
         L1["L1 Business"] --> L2["L2 Segment"] --> L3["L3 Users"]
     end
-    T --> A
     subgraph A["Agent loop"]
         direction LR
         D["Detect"] --> LO["Localise"] --> P["Prove cause"] --> F["Test fixes"] --> AP["Approve"] --> V["Verify"]
     end
-    A --> W["Views: globe · issue card · evidence"]
-    A -. "approved fix" .-> R
+    W["Views: globe · issue card · evidence"]
+    R -->|hourly metrics| T
+    T --> A
+    A --> W
 ```
+
+Approved fixes are applied back to Reality, and the next hours of data show whether they worked.
 
 Design notes and the original build plan: [`docs/HANDOFF.md`](docs/HANDOFF.md); API contract: [`docs/API.md`](docs/API.md).
 
