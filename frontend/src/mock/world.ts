@@ -390,7 +390,7 @@ export class MockWorld {
       node: {
         id,
         label: name,
-        formula,
+        expr: formula,
         parents,
         kind: 'formula',
         aggregation: ratio ? 'ratio' : 'sum',

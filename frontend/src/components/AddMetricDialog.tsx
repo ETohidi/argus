@@ -2,11 +2,19 @@ import { useState } from 'react'
 import { api } from '../lib/api'
 import type { MetricResponse } from '../lib/types'
 
-export default function AddMetricDialog({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
-  const [name, setName] = useState('Reward cost per completed offer')
+type Props = {
+  onClose: () => void
+  onAdded: () => void
+  // Result already produced elsewhere (the new_metric demo scene): show it instead of submitting again.
+  initial?: MetricResponse | null
+}
+
+export default function AddMetricDialog({ onClose, onAdded, initial }: Props) {
+  const initialNode = initial?.node as Record<string, unknown> | null | undefined
+  const [name, setName] = useState(String(initialNode?.label ?? 'Reward cost per completed offer'))
   const [desc, setDesc] = useState('How much we pay users in rewards for each completed offer (rewards / completions)')
   const [busy, setBusy] = useState(false)
-  const [res, setRes] = useState<MetricResponse | null>(null)
+  const [res, setRes] = useState<MetricResponse | null>(initial ?? null)
   const [err, setErr] = useState<string | null>(null)
 
   const submit = async () => {
@@ -42,7 +50,7 @@ export default function AddMetricDialog({ onClose, onAdded }: { onClose: () => v
             {node && (
               <div className="mb-3 flex items-center gap-2">
                 <code className="num rounded bg-teal-400/10 px-2 py-1 text-[12.5px] text-teal-200">
-                  {String(node.id ?? node.name ?? name)} = {String(node.formula ?? node.expression ?? '?')}
+                  {String(node.id ?? node.name ?? name)} = {String(node.expr ?? node.formula ?? node.expression ?? '?')}
                 </code>
                 {node.aggregation != null && <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10.5px] text-slate-300">{String(node.aggregation)}</span>}
               </div>

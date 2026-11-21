@@ -140,6 +140,7 @@ export interface DemoResponse {
   scene: string
   state: WorldState
   incident_id?: string
+  metric?: MetricResponse // new_metric scene: the metric it added
 }
 
 export const DEMO_SCENES = [

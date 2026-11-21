@@ -7,7 +7,7 @@ import IncidentFeed from './components/IncidentFeed'
 import TopBar from './components/TopBar'
 import { api, onBackendChange, type Backend } from './lib/api'
 import { POTENTIAL_STOPS, STATUS_COLOR, STATUS_LABEL, usd } from './lib/theme'
-import type { CountryDetail, CountryStatus, DemoScene, IncidentDetail as Detail, InjectType, PotentialResponse, WorldState } from './lib/types'
+import type { CountryDetail, CountryStatus, DemoScene, IncidentDetail as Detail, InjectType, MetricResponse, PotentialResponse, WorldState } from './lib/types'
 
 // Default targets for the inject buttons (the demo script), overridden by the selected country.
 const INJECT_DEFAULT: Record<InjectType, { country: string; platform?: string }> = {
@@ -29,6 +29,7 @@ export default function App() {
   const [countryDetail, setCountryDetail] = useState<CountryDetail | null>(null)
   const [potential, setPotential] = useState<PotentialResponse | null>(null)
   const [metricOpen, setMetricOpen] = useState(false)
+  const [metricResult, setMetricResult] = useState<MetricResponse | null>(null)
   const [approving, setApproving] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [lastScene, setLastScene] = useState<DemoScene | null>(null)
@@ -108,7 +109,10 @@ export default function App() {
         setCountryIso(null)
         setMode('health')
       }
-      if (scene === 'new_metric') setMetricOpen(true)
+      if (scene === 'new_metric') {
+        setMetricResult(r.metric ?? null)
+        setMetricOpen(true)
+      }
       if (r.incident_id && scene !== 'bot_farm') {
         setCountryIso(null)
         setIncidentId(r.incident_id)
@@ -154,7 +158,10 @@ export default function App() {
         onMode={setMode}
         onDemo={demo}
         onInject={inject}
-        onAddMetric={() => setMetricOpen(true)}
+        onAddMetric={() => {
+          setMetricResult(null)
+          setMetricOpen(true)
+        }}
         lastScene={lastScene}
       />
 
@@ -210,6 +217,7 @@ export default function App() {
 
       {metricOpen && (
         <AddMetricDialog
+          initial={metricResult}
           onClose={() => setMetricOpen(false)}
           onAdded={() => {
             api.state().then(setState).catch(() => {})

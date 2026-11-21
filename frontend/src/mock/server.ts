@@ -18,6 +18,7 @@ function clone<T>(v: T): T {
 
 function demo(scene: DemoScene) {
   let incident_id: string | undefined
+  let metric: unknown
   const latest = () => world.incidents[0]?.id
   switch (scene) {
     case 'start':
@@ -48,7 +49,7 @@ function demo(scene: DemoScene) {
       incident_id = world.incidents.find((i) => i.kind === 'bot_farm')?.id
       break
     case 'new_metric':
-      world.addMetric('Reward cost per completed offer', 'rewards / completions')
+      metric = world.addMetric('Reward cost per completed offer', 'rewards / completions')
       world.step(1)
       break
     case 'tracking_break':
@@ -59,7 +60,7 @@ function demo(scene: DemoScene) {
     default:
       throw new MockError(404, `unknown scene ${scene}`)
   }
-  return { scene, state: world.state(), ...(incident_id ? { incident_id } : {}) }
+  return { scene, state: world.state(), ...(incident_id ? { incident_id } : {}), ...(metric ? { metric } : {}) }
 }
 
 function route(method: string, path: string, body: any): unknown {

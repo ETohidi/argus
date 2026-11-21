@@ -153,9 +153,9 @@ export default function CausalGraph({ nodes, edges }: { nodes: GraphNode[]; edge
                   fill="none"
                   stroke={h ? '#fb7185' : '#334155'}
                   strokeWidth={h ? 1.8 : 1.1}
-                  strokeDasharray={edge.type === 'formula' && !h ? '3 3' : undefined}
+                  strokeDasharray={edge.type === 'exogenous' ? '2 4' : edge.type === 'formula' && !h ? '3 3' : undefined}
                   markerEnd={`url(#${h ? 'arrow-hot' : 'arrow'})`}
-                  opacity={h ? 0.9 : 0.8}
+                  opacity={h ? 0.9 : edge.type === 'exogenous' ? 0.5 : 0.8}
                 />
                 {h && <path d={d} fill="none" stroke="#fecdd3" strokeWidth={1.4} className="flow" opacity={0.7} />}
               </g>
