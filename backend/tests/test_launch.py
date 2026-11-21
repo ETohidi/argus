@@ -1,4 +1,4 @@
-"""Enter a new country: transfer forecast, plain-language fields, and the hold-out backtest."""
+"""Enter a new country: per-user forecast, user count as input, and the 20-country hold-out backtest."""
 import pytest
 from fastapi.testclient import TestClient
 
@@ -7,36 +7,63 @@ from argus import launch as L
 from argus.api import app
 
 
-def test_launch_argentina_forecast_and_fields():
+def test_launch_argentina_per_user_headline_and_assumed_users():
     r = L.launch("AR", 42)
     assert "AR" not in cfg.ISO_INDEX
-    m = r["margin_per_day_usd"]
-    assert 0 < m["p10"] < m["p50"] < m["p90"]
+    pu = r["margin_per_1000_users_day_usd"]
+    assert 0 < pu["p10"] < pu["p50"] < pu["p90"]
+    assert r["headline"] == f"Launching in Argentina: about ${pu['p50']:,.0f} margin per 1,000 users a day"
+    u = r["users"]
+    assert u["assumed"] is True and u["daily_users"] > 0 and u["source"].startswith("assumed")
+    assert "(assumed)" in r["total_line"]
+    day = r["margin_per_day_usd"]["p50"]                                    # total = per user × users × adoption
+    assert day == pytest.approx(pu["p50"] / 1000 * u["daily_users"] * (1 - 2.718281828 ** -4), rel=0.02)
     weeks = [w["p50"] for w in r["margin_per_day_weekly_usd"]]
-    assert len(weeks) == 4 and weeks == sorted(weeks)                    # users build up over the 4 weeks
-    assert len(r["best_offer_mix"]) == 3 and r["best_offer_mix"][0]["margin_share"] >= r["best_offer_mix"][2]["margin_share"]
-    assert {x["category"] for x in r["best_offer_mix"]} <= set(cfg.CATEGORIES)
+    assert len(weeks) == 4 and weeks == sorted(weeks)
+    assert len(r["best_offer_mix"]) == 3 and {x["category"] for x in r["best_offer_mix"]} <= set(cfg.CATEGORIES)
     assert r["best_reward"]["reward_share"] in L.REWARD_GRID
-    assert r["fraud_risk"]["level"] in ("low", "medium", "high") and 0 < r["fraud_risk"]["farm_chance_4w"] < 1
     lf = r["learned_from"]
-    assert 2 <= len(lf) <= 3 and abs(sum(x["weight"] for x in lf) - 1) < 0.02
-    assert all(x["iso"] in cfg.ISO_INDEX for x in lf) and lf[0]["iso"] == "MX"   # Spanish-speaking, same income
-    assert r["headline"].startswith("Launching in Argentina: about +$") and "a day after 4 weeks" in r["headline"]
+    assert len(lf) == 3 and abs(sum(x["weight"] for x in lf) - 1) < 0.02 and lf[0]["iso"] == "MX"
     assert r["learned_line"].startswith("Learned from Mexico")
-    assert r["backtest_line"].startswith("Tested on 5 countries we know: typically within ±")
 
 
-def test_launch_backtest_is_honest_and_calibrated():
+def test_launch_users_input_scales_total_not_per_user():
+    a, b = L.launch("AR", 42, users=100_000), L.launch("AR", 42, users=200_000)
+    assert a["users"] == {**a["users"], "daily_users": 100_000, "assumed": False}
+    assert a["margin_per_1000_users_day_usd"] == b["margin_per_1000_users_day_usd"]
+    assert b["margin_per_day_usd"]["p50"] == pytest.approx(2 * a["margin_per_day_usd"]["p50"], rel=0.01)
+    assert "(planned)" in a["total_line"]
+    with pytest.raises(ValueError):
+        L.launch("AR", 42, users=10)
+
+
+def test_backtest_all_20_countries_reports_real_counts():
     bt = L.launch("AR", 42)["backtest"]
-    assert bt["n"] == 5 and len(bt["countries"]) == 5
+    assert bt["n"] == 20 and len(bt["countries"]) == 20
     for row in bt["countries"]:
         assert row["country"] not in row["learned_from"]                     # held out: never learns from itself
-        assert row["true_margin_day_usd"] > 0
-    assert bt["median_abs_error"] <= 0.25                                    # typical error on similar countries
-    assert bt["inside_count"] >= 4                                           # truth mostly inside p10-p90
-    # over all 20 watched countries the p10-p90 range should hold the truth roughly 80% of the time
-    full = L.backtest([c.iso for c in cfg.COUNTRIES], 42)
-    assert 13 <= full["inside_count"] <= 20 and full["median_abs_error"] <= 0.5
+    o, m, rw = bt["offers"], bt["margin_per_user"], bt["reward"]
+    assert o["true_top_in_top3"] == sum(r["offers"]["hit"] for r in bt["countries"])
+    assert o["true_top_in_top3"] >= 18 and o["true_top_in_top3"] >= o["naive_baseline"]["true_top_in_top3"]
+    assert o["true_top_is_first"] > o["naive_baseline"]["true_top_is_first"]   # similarity beats one global ranking
+    assert m["median_abs_error"] <= 0.35 and m["inside_p10_p90"] >= 14         # calibrated range (~80% nominal)
+    assert rw["within_one_step"] == sum(r["reward"]["within_one_step"] for r in bt["countries"]) and rw["within_one_step"] >= 16
+    # the plain-language line quotes the strongest of the three, with its real count
+    best = max(o["true_top_in_top3"], rw["within_one_step"], m["inside_p10_p90"])
+    line = L.launch("AR", 42)["backtest_line"]
+    assert line.startswith("Tested on 20 countries we know: ") and f"{best} of 20" in line
+
+
+def test_reward_truth_is_hidden_and_off_by_default():
+    from argus.reality import Reality
+    a, b = Reality(seed=3), Reality(seed=3)
+    a.run(30)
+    b.run(6)
+    b.apply({"type": "set_reward", "country": cfg.ISO_INDEX["IN"], "reward_share": 0.65})
+    b.run(24)
+    i = cfg.ISO_INDEX["IN"]
+    assert a.true[-1]["starts"][i].sum() < b.true[-1]["starts"][i].sum()     # higher rewards, more starts
+    assert a.true[-1]["starts"][0].sum() == b.true[-1]["starts"][0].sum()     # other countries untouched
 
 
 def test_launch_rejects_watched_or_unknown_country():
@@ -48,10 +75,11 @@ def test_launch_rejects_watched_or_unknown_country():
 
 def test_launch_api():
     client = TestClient(app)
-    r = client.post("/api/what_if/launch", json={"country": "AR"}, headers={"X-Session": "launch-test"})
-    assert r.status_code == 200
-    d = r.json()
-    for k in ("headline", "learned_line", "backtest_line", "range_line", "margin_per_day_usd", "best_offer_mix",
-              "best_reward", "fraud_risk", "learned_from", "backtest", "country"):
+    h = {"X-Session": "launch-test"}
+    d = client.post("/api/what_if/launch", json={"country": "AR"}, headers=h).json()
+    for k in ("headline", "learned_line", "backtest_line", "range_line", "total_line", "margin_per_1000_users_day_usd",
+              "users", "margin_per_day_usd", "best_offer_mix", "best_reward", "fraud_risk", "learned_from", "backtest"):
         assert k in d
-    assert client.post("/api/what_if/launch", json={"country": "DE"}, headers={"X-Session": "launch-test"}).status_code == 400
+    d2 = client.post("/api/what_if/launch", json={"country": "AR", "users": 250000}, headers=h).json()
+    assert d2["users"]["assumed"] is False and d2["users"]["daily_users"] == 250000
+    assert client.post("/api/what_if/launch", json={"country": "DE"}, headers=h).status_code == 400

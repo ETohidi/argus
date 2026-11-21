@@ -134,13 +134,22 @@ calling a later scene first runs the earlier ones.
 | `new_metric` | `margin_per_signup = margin / signups` is resolved, validated (units, data, aggregation), placed in the graph and monitored, with an "Added because…" note |
 | `tracking_break` | Advertisers stop confirming UK iOS game completions: root cause revenue, no user-level run needed, pause + notify |
 
-**Enter a new country** (`POST /api/what_if/launch {"country": "AR"}`, last 15 s of the video):
-- **Prediction for Argentina** (not among the 20 watched): about **+$4.6k margin a day after 4 weeks**
-  (p10–p90 $2.3k–$9.2k). Learned from Mexico, Brazil and Türkiye.
-- **Recommendations:** an offer mix led by fintech, streaming and casual games, and a 50% reward share.
+**Enter a new country** (`POST /api/what_if/launch {"country": "AR", "users": optional}`, last 15 s of the video):
+- **Prediction for Argentina** (not among the 20 watched): about **$25 margin per 1,000 users a day** (p10–p90 $18–$36).
+  Learned from Mexico, Brazil and Türkiye.
+- **Recommendations:** an offer mix of casual games, streaming and fintech, and a 65% reward share.
 - **Fraud risk:** medium.
-- **Backtest:** 5 watched countries, each hidden in turn and predicted from the other 19, then compared with the
-  simulator's true next 4 weeks. Typical error ±15%, worst Türkiye +89%, and the truth is inside p10–p90 for 5/5.
+- **User count:** an input. By default it is *assumed* from the similar countries, which gives about 176k daily users
+  and about +$4.3k a day after 4 weeks.
+- **Backtest:** each of the 20 watched countries is hidden in turn and predicted from the other 19, then checked against
+  the simulator's true next 4 weeks.
+
+  | Check | Argus | Same ranking for every country |
+  |---|---|---|
+  | Best offers: true top category in Argus's top 3 | 20 of 20 | 18 of 20 |
+  | Best offers: true top category ranked first | 15 of 20 | 11 of 20 |
+  | Margin per user | median error 24%, 17 of 20 inside p10–p90 | — |
+  | Best reward level within one 5-point step of the true best | 19 of 20 (exact in 10) | — |
 
 Keyboard shortcuts (**coming**): `1`–`8` jump to the scenes above and `Space` plays/pauses. They arrive with the
 frontend redesign currently in progress; until then the Demo menu and the top-bar controls (play, +1 h, +6 h, inject,
@@ -159,9 +168,10 @@ add metric) drive everything.
   the simulator's truth for the same feed is higher, because the twin's taste model is flatter than reality.
 - **Issues are separated by cause family** (users / revenue confirmation / reward pricing) per country and platform;
   two problems of the same family on the same platform and country at the same time would be merged.
-- **Launch forecasts are only as good as the transferred user count.** Taste and offer mechanics transfer well, but
-  user scale in the simulator follows the payout-share calibration, not public features. Over all 20 watched countries
-  the median hold-out error is 34%, so the forecast range is wide on purpose (truth inside p10–p90 for 16 of 20).
+- **Launch totals are only as good as the user count.** Per-user economics, offers and rewards transfer well, but user
+  scale in the simulator follows the payout-share calibration, not public features. That's why the user count is an
+  input or a labelled assumption. Predicting the *total* margin with the assumed user count gives a median hold-out
+  error of 32% over all 20 watched countries (worst India, +232%; truth inside p10–p90 for 17 of 20).
 - **Free-tier hosting:** sessions live in memory (up to 13, idle expiry 30 min, LRU eviction); a restart resets them.
 - LLM-written reports are optional; without a key Argus uses deterministic templates.
 
@@ -193,7 +203,7 @@ cd backend && .venv/bin/python -m argus.mcp_server      # stdio; logs on stderr
 | `explain_incident(id)` | Root cause, counterfactual proof, decision trail, hypotheses, fixes, engineer report |
 | `simulate_fix(id, fix)` | 7-day Monte Carlo rollout of one fix vs doing nothing (read-only) |
 | `what_if(country, change, platform?, hours?)` | Sandbox copy of the world: inject `promo` / `bot_farm` / `tracking_break` / `data_delay`, run it forward, report what Argus detects and the margin difference |
-| `what_if_launch(country)` | Forecast entering a new country (Argentina): transfer from similar watched countries, 4-week Monte Carlo, offer mix, reward level, fraud risk, hold-out backtest |
+| `what_if_launch(country, users?)` | Forecast entering a new country (Argentina): margin per 1,000 users, offer mix, reward level, fraud risk, total at a given or assumed user count, 20-country hold-out backtest |
 | `advance_time(hours)`, `run_demo_scene(scene)` | Drive the simulation |
 
 Approving fixes is deliberately not exposed: changing the marketplace stays a human decision in the UI.

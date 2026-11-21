@@ -97,6 +97,7 @@ class Reality:
         # Simulation assumption, see docs/ASSUMPTIONS.md: this leaves a few % of margin on the table.
         alloc = self.pref * cfg.PAYOUT ** 1.1
         self.alloc = alloc / alloc.sum(axis=1, keepdims=True)                # (C,K)
+        self.reward_elasticity = cfg.reward_elasticity_truth()               # hidden (C,)
         self.exposure = np.zeros((cfg.C, cfg.K))                             # advertiser fraud exposure (hours)
         self.true: list[dict] = []
         self.observed: list[dict] = []
@@ -149,6 +150,10 @@ class Reality:
                     for k in iv["categories"]:
                         reward_share[c, pp, k] = 0.35
                         start_mult[c, pp, k] *= 0.85
+            elif iv["type"] == "set_reward":
+                for pp in ps:
+                    reward_share[c, pp, :] = iv["reward_share"]
+                    start_mult[c, pp, :] *= (iv["reward_share"] / cfg.REWARD_SHARE) ** self.reward_elasticity[c]
             elif iv["type"] == "pause_offers":
                 if t < iv.get("until", 10**9):
                     for pp in ps:
@@ -288,6 +293,11 @@ class Reality:
                           "_bot": True})
         order = rng.permutation(len(users))
         return [users[i] for i in order]
+
+    def reward_tests(self) -> np.ndarray:
+        """Results of past reward A/B tests per watched country (observable): measured start elasticity with noise."""
+        rng = np.random.default_rng([self.seed, 12])
+        return self.reward_elasticity * np.exp(rng.normal(0, 0.08, cfg.C))
 
     # ------------------------------------------------------------------ scenario controls
     def add_event(self, ev: PlannedEvent) -> None:

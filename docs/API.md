@@ -237,7 +237,7 @@ Public data behind the simulation, for a "Data" panel.
 | `POST /api/inject` | `{ "type": "promo" \| "bot_farm" \| "tracking_break" \| "data_delay", "country": "CA", "platform": "android" }` (`platform` optional) | Schedules the event at the current hour; returns `{ ok, event }` |
 | `POST /api/incidents/{id}/approve` | `{ "fix_id": "block_cluster" }` | Applies fix to reality; returns the incident detail |
 | `POST /api/metrics` | `{ "name": "margin_per_signup = margin / signups" }` (see below) | Automatic extension: `{ status, message, node, validation, placement?, monitoring?, note?, ambiguity? }` |
-| `POST /api/what_if/launch` | `{ "country": "AR" }` (default `AR`) | Read-only forecast for entering a new country (see below) |
+| `POST /api/what_if/launch` | `{ "country": "AR", "users": 250000 }` (both optional; default `AR`, users assumed) | Read-only forecast for entering a new country (see below) |
 | `POST /api/demo/{scene}` | — | Deterministic (fixed seed) jump to a video scene; returns `{ scene, state, incident_id? }` |
 
 Demo scenes, in order: `start`, `promo`, `bot_farm`, `investigate`, `approve`, `verify`, `new_metric`, `tracking_break`. Each scene advances the session world from wherever the previous scene left it (calling `start` resets).
@@ -308,50 +308,72 @@ The `new_metric` demo scene posts `margin_per_signup = margin / signups` and ret
 
 ## Enter a new country: `POST /api/what_if/launch`
 
-Read-only: nothing in the session world changes. Request `{ "country": "AR" }`. The only candidate is `AR` (Argentina);
-a watched country or an unknown code returns `400 {detail}`. The first call takes ~1 s; after that the result is cached
-per seed (~5 ms), and only `fraud_risk` is recomputed (it adds bot-farm issues this session has seen in the neighbours).
+Read-only: nothing in the session world changes.
+- **Request:** `{ "country": "AR", "users": 250000 }`.
+  - `country`: the only candidate is `AR` (Argentina). A watched country or an unknown code returns `400 {detail}`.
+  - `users` (optional): expected daily users after 4 weeks, between 1,000 and 50,000,000. If omitted, it is
+    **assumed** from the similar countries (their daily users per capita × Argentina's population).
+- **Timing:** the first call takes ~1.5 s; after that ~5 ms, cached per seed.
+- **What depends on `users`:** only the totals (`users`, `margin_per_day_usd`, weekly, 4-week, `total_line`) and
+  `fraud_risk`. Everything per user is independent of it.
 
-For the UI, use the four plain-language lines `headline`, `learned_line`, `backtest_line` and `range_line`, and put
-`country.lat/lng` on the globe.
+**What the UI shows:**
+- **Headline** is per user: `headline`, then `range_line`.
+- **Total** sits under it, marked as an assumption: `total_line` (says "(assumed)", or "(planned)" when `users` was given).
+- **Credibility:** `learned_line` and `backtest_line`.
+- **Globe pin:** `country.lat/lng`.
 
 ```jsonc
 {
   "country": { "iso": "AR", "name": "Argentina", "region": "Latin America", "lat": -38.4, "lng": -63.6,
                "ios_share": 0.1422, "gdp_per_capita_usd": 13970, "population": 45696159 },
   "horizon_days": 28,
-  "margin_per_day_usd": { "p10": 2315, "p50": 4591, "p90": 9186 },      // day 28, standard settings (55% rewards)
-  "margin_per_day_weekly_usd": [ { "p10": 985, "p50": 1928, "p90": 3937 }, ... ],  // 4 entries, users build up
-  "margin_4w_total_usd": { "p10": 51528, "p50": 101488, "p90": 205643 },
-  "best_offer_mix": [                                                   // top 3 categories by share of margin
-    { "category": "Fintech apps", "margin_share": 0.297, "taste": 0.125 }, ... ],
-  "best_reward": { "reward_share": 0.5, "current_share": 0.55, "uplift_usd_day": 106,
-                   "grid": [ { "reward_share": 0.45, "margin_day_usd": 4686 }, ... ],   // 0.45 … 0.65
-                   "note": "Starts respond to rewards as in past calendar promos ..." },
-  "fraud_risk": { "level": "low" | "medium" | "high", "farm_chance_4w": 0.45, "expected_loss_usd_4w": 4099,
-                  "farms_per_quarter_neighbours": { "MX": 1.8, "BR": 2.4, "TR": 1.6 },
-                  "text": "Medium: about a 45% chance of a bot farm in the first 4 weeks, based on Mexico, Brazil, Türkiye",
-                  "source": "simulated fraud history of the neighbours (plus bot-farm issues in this session)" },
-  "learned_from": [ { "iso": "MX", "name": "Mexico", "weight": 0.66, "distance": 0.78 },
-                    { "iso": "BR", "name": "Brazil", "weight": 0.24, "distance": 1.81 },
-                    { "iso": "TR", "name": "Türkiye", "weight": 0.10, "distance": 2.66 } ],
-  "assumptions": { "users_per_day_steady": 301892, "payout_level_vs_us": 0.103,
+  "margin_per_1000_users_day_usd": { "p10": 17.72, "p50": 24.74, "p90": 36.05 },   // what Argus predicts
+  "users": { "daily_users": 176000, "assumed": true,
+             "source": "assumed: daily users per capita of Mexico, Brazil, Türkiye × population of Argentina (45,696,159)",
+             "note": "An assumption, not a prediction: ..." },                       // source "input" when given
+  "margin_per_day_usd": { "p10": 3062, "p50": 4275, "p90": 6229 },        // day 28 at that user count (98% adopted)
+  "margin_per_day_weekly_usd": [ { "p10": 1285, "p50": 1794, "p90": 2614 }, ... ],   // 4 entries, users build up
+  "margin_4w_total_usd": { "p10": 67406, "p50": 94098, "p90": 137101 },
+  "best_offer_mix": [ { "category": "Casual games", "margin_share": 0.242, "taste": 0.189 }, ... ],   // top 3
+  "best_reward": { "reward_share": 0.65, "current_share": 0.55, "uplift_per_1000_users_day_usd": 1.33,
+                   "grid": [ { "reward_share": 0.45, "margin_per_1000_users_day_usd": 20.38 }, ... ],  // 0.45 … 0.65
+                   "elasticity": 2.13, "note": "..." },
+  "fraud_risk": { "level": "low" | "medium" | "high", "farm_chance_4w": 0.45, "expected_loss_usd_4w": 3817,
+                  "farms_per_quarter_neighbours": { "MX": 1.8, "BR": 2.4, "TR": 1.6 }, "text": "...", "source": "..." },
+  "learned_from": [ { "iso": "MX", "name": "Mexico", "weight": 0.66, "distance": 0.78 }, ... ],    // 3 entries
+  "assumptions": { "payout_level_vs_us": 0.103, "active_hours_per_user": 1.71,
                    "adoption": "users build up as 1 - exp(-day/7)", "taste_start_elasticity": 0.141, "paths": 400 },
   "backtest": {
-    "countries": [ { "country": "MX", "name": "Mexico", "learned_from": ["BR", "TR", "ES"],
-                     "predicted_margin_day_usd": 14633, "range_usd": [7199, 32147], "true_margin_day_usd": 14637,
-                     "error": -0.0, "inside_p10_p90": true }, ... ],       // 5 rows: MX, BR, TR, ZA, ES
-    "median_abs_error": 0.143, "max_abs_error": 0.887, "typical_within_pct": 15, "within_pct": 89,
-    "worst": { "country": "TR", "name": "Türkiye", "error": 0.887 },
-    "inside_p10_p90": "5/5", "inside_count": 5, "n": 5,
-    "method": "Each country is hidden in turn and predicted from the other 19 only, then compared with the simulator's true margin over the next 4 weeks (steady state, no launch ramp)."
+    "n": 20,
+    "offers": { "true_top_in_top3": 20, "true_top_is_first": 15,
+                "naive_baseline": { "true_top_in_top3": 18, "true_top_is_first": 11, "rule": "..." },
+                "text": "best offers right in 20 of 20" },
+    "margin_per_user": { "median_abs_error": 0.242, "max_abs_error": 0.638, "inside_p10_p90": 17,
+                         "text": "margin per user typically within ±24%, 17 of 20 inside the range" },
+    "reward": { "within_one_step": 19, "exact": 10, "step": 0.05,
+                "text": "best reward level within one step in 19 of 20" },
+    "countries": [ {                                                       // 20 rows, one per watched country
+      "country": "US", "name": "United States", "learned_from": ["CA", "GB", "AU"],
+      "offers": { "predicted_top3": [...], "true_top": "Fintech apps", "hit": true, "top1_hit": true,
+                  "naive_top3": [...], "naive_hit": true, "naive_top1_hit": true },
+      "per_1000_users": { "predicted": 416.5, "range": [290.1, 590.98], "true": 357.45, "error": 0.165,
+                          "inside_p10_p90": true },
+      "reward": { "predicted": 0.55, "true_best": 0.5, "steps_off": 1, "within_one_step": true } }, ... ],
+    "method": "Each watched country is hidden in turn and predicted from the other 19 only, ..."
   },
-  "headline": "Launching in Argentina: about +$4,591 a day after 4 weeks",
+  "headline": "Launching in Argentina: about $25 margin per 1,000 users a day",
+  "range_line": "Likely $18–$36 per 1,000 users a day (p10–p90)",
+  "total_line": "At 176,000 daily users (assumed): about +$4,275 a day after 4 weeks",
   "learned_line": "Learned from Mexico, Brazil and Türkiye",
-  "backtest_line": "Tested on 5 countries we know: typically within ±15% (worst Türkiye +89%), 5/5 inside the forecast range",
-  "range_line": "Likely range $2,315–$9,186 a day (p10–p90)"
+  "backtest_line": "Tested on 20 countries we know: best offers right in 20 of 20"
 }
 ```
 
-The backtest countries follow a fixed rule: the 5 watched countries most similar to the launch market. Over all 20
-watched countries the median error is 34% and the truth lands inside p10–p90 for 16 of 20.
+How the backtest works:
+- **Ground truth:** the simulator's true next 4 weeks for each watched country.
+- **Best reward truth:** the simulator is rerun at each reward share. The reward response is hidden in the simulator
+  and only switched on by a `set_reward` change. Argus sees only noisy results of past reward tests.
+- **Which line the UI gets:** `backtest_line` quotes the strongest of the three checks, with its real count.
+- **Baseline:** the same ranking for every country already gets 18 of 20 offers right, so the offer result is
+  strongest on the top pick: 15 of 20, against 11 for that baseline.

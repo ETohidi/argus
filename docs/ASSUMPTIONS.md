@@ -60,22 +60,26 @@ levels are calibrated to public data; everything else is invented. No private Al
 
 ## Enter a new country (launch forecast)
 
-`backend/argus/launch.py`, `POST /api/what_if/launch`.
+`backend/argus/launch.py`, `POST /api/what_if/launch`. Argus predicts **per-user economics**. The user count is an
+input; by default it is **assumed** from the similar countries' daily users per capita × population.
 - **Similarity** (public features): distance = |log GDP ratio| / 0.5 + |iOS share difference| / 0.15 + 1 if the region
   differs + 0.4 / 0.8 if the language differs (same family / other). The 3 nearest watched countries are weighted ∝ e^−distance.
-- **Taste:** the taste model scores 600 sampled users per platform in each neighbour; the launch market gets the
-  weighted mix. The feed follows the production rule (taste × payout^1.1).
-- **Learned across the watched countries** (from the twin's 14-day learning window): starts per impression =
-  base_k × (taste_k / feed share_k)^γ; payout level ~ GDP per capita (log–log) plus the neighbours' residual.
-- **Transferred from the neighbours:** user-hours per capita, impressions per user, completions per start, margin per
-  completion (scaled by payout level).
-- **Uncertainty:** the spread of user count and payout level is the leave-one-out error of those two transfers across
-  the watched pool, so the p10–p90 range is calibrated on data rather than chosen. 400 Monte Carlo paths.
+- **Taste profile:** the taste model scores 600 sampled users per platform in each neighbour; the launch market gets the
+  weighted mix, which is reported as `taste`.
+- **Offers:** completions per active hour for each platform × category come from the neighbours' observed data. Their
+  taste and feed are already in those numbers.
+- **Payout level:** log value ~ log GDP per capita across the watched countries, plus the neighbours' residual.
+- **Active hours per daily user:** taken from the neighbours.
+- **Uncertainty:** the spread of payout level, active hours and reward elasticity is the leave-one-out error of each
+  transfer across the watched pool. Offer rates carry the neighbours' spread. 400 Monte Carlo paths.
+- **Reward response (simulated, hidden ground truth):**
+  - Changing a country's reward share scales its offer starts by (share / 55%)^e. Here e = 1 + 0.5·ln(80,000 / GDP
+    per capita) + noise, clipped to 0.6–3.5, so lower-income markets are more reward-sensitive.
+  - It only applies under a `set_reward` change, so the baseline data, calibration and incident demos are unchanged.
+  - Argus sees only "past reward tests": e measured with 8% noise per watched country.
+  - Longer-term loyalty effects of lower rewards are not modelled.
 - **Simulated:**
-  - Users build up as 1 − e^(−day/7), so day 28 is ~98% of steady state.
-  - Starts respond to the reward share with the elasticity of past calendar promos (70% → +30% starts); loyalty
-    effects of lower rewards are not modelled.
+  - Users build up as 1 − e^(−day/7), so day 28 is ~98% of the user count.
   - Fraud history per watched country is invented. A farm costs ~2 days of the country's margin.
-- **Biggest error source:** user count. In the simulator, per-country user scale comes from calibration to published
-  payout shares, so it doesn't follow from public features (Türkiye: +89% in the backtest). The taste-driven unit
-  economics transfer much better.
+- **User count doesn't transfer:** in the simulator, per-country user scale comes from calibration to published payout
+  shares. That's why it is an input or labelled assumption, not a prediction.

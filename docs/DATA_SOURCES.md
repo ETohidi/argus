@@ -88,12 +88,13 @@ Mexico, Spain; Latin America: Mexico, Brazil). AppsFlyer publishes no Argentina 
 | Figure | Value | Source |
 |---|---|---|
 | iOS share of mobile OS, Argentina | 14.22% (Android 85.77%), October 2026 | StatCounter — https://gs.statcounter.com/os-market-share/mobile/argentina |
-| GDP per capita, current USD, 2024 (all 20 watched + AR) | AR $13,970; MX $13,988; BR $10,311; ES $35,327; TR $15,893; US $86,170; … (full list in `backend/argus/launch.py`, `GDP_PC`) | World Bank WDI, `NY.GDP.PCAP.CD` — https://api.worldbank.org/v2/country/ARG/indicator/NY.GDP.PCAP.CD?date=2024 |
-| Population, 2024 | AR 45,696,159; … (`POPULATION`) | World Bank WDI, `SP.POP.TOTL` — https://api.worldbank.org/v2/country/ARG/indicator/SP.POP.TOTL?date=2024 |
+| GDP per capita, current USD, 2024 (all 20 watched + AR) | AR $13,970; MX $13,988; BR $10,311; ES $35,327; TR $15,893; US $86,170; … (full list in `backend/argus/config.py`, `GDP_PC`) | World Bank WDI, `NY.GDP.PCAP.CD` — https://api.worldbank.org/v2/country/ARG/indicator/NY.GDP.PCAP.CD?date=2024 |
+| Population, 2024 | AR 45,696,159; … (`config.POPULATION`) | World Bank WDI, `SP.POP.TOTL` — https://api.worldbank.org/v2/country/ARG/indicator/SP.POP.TOTL?date=2024 |
 | Main language | es (AR, MX, ES), pt (BR), … (`LANGUAGE`) | Public knowledge |
 
-Similarity uses only these public features (income, Android share, region, language). The fraud history of the
-watched countries (`FARMS_PER_QUARTER`) is **simulated**.
+Similarity uses only these public features (income, Android share, region, language). Population also sets the
+default (assumed) user count. The fraud history of the watched countries (`FARMS_PER_QUARTER`) and the per-country
+reward response are **simulated**.
 
 ## 5. Calibration result (seed 42, last 7 days of history)
 

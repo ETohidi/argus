@@ -9,7 +9,7 @@ Tools
   simulate_fix(id, fix)              7-day Monte Carlo rollout of one fix vs doing nothing (nothing is applied)
   what_if(country, change, ...)      sandbox copy of the world: inject a change, run N hours, see what Argus would do
   advance_time(hours)                step the world (the agent runs every simulated hour)
-  what_if_launch(country)            forecast launching in a new country (transfer from similar ones, 4-week MC)
+  what_if_launch(country, users?)    forecast launching in a new country: margin per 1,000 users, offers, rewards
   run_demo_scene(scene)              jump to a demo scene (start, promo, bot_farm, ...)
 Approving fixes is deliberately not exposed: applying changes stays human-on-the-loop (web UI / REST API).
 
@@ -58,12 +58,14 @@ TOOLS = [
          "required": ["country", "change"], "additionalProperties": False}},
     {"name": "what_if_launch",
      "description": "Forecast launching the marketplace in a country Argus does not watch yet: transfers taste, "
-                    "users and payout level from the most similar watched countries, runs a 4-week Monte Carlo "
-                    "(p10-p90 margin per day), recommends the offer mix and reward level, estimates fraud risk, and "
-                    "reports a hold-out backtest on watched countries. Read-only.",
+                    "activity and payout level from the most similar watched countries and predicts margin per 1,000 "
+                    "daily users (p10-p90), the best offer mix and reward level, and fraud risk; the total at a given "
+                    "or assumed user count over 4 weeks; plus a hold-out backtest on all 20 watched countries. Read-only.",
      "inputSchema": {"type": "object", "properties": {
          "country": {"type": "string", "description": "ISO code of the launch market, e.g. AR (Argentina)",
-                     "default": "AR"}},
+                     "default": "AR"},
+         "users": {"type": "integer", "minimum": 1000, "description": "Expected daily users after 4 weeks "
+                   "(optional; default is an assumption from similar countries)"}},
          "additionalProperties": False}},
     {"name": "advance_time",
      "description": "Advance the simulated world by N hours; Argus runs its loop every hour.",
@@ -170,11 +172,11 @@ class ArgusTools:
                 "margin_vs_no_change_usd": round(margin(sand) - margin(base)),
                 "note": "Sandbox copy; the session world is unchanged."}
 
-    def what_if_launch(self, country: str = "AR") -> dict:
+    def what_if_launch(self, country: str = "AR", users: int | None = None) -> dict:
         from . import launch
         incidents = [{"country": i["country"], "root": i["root"], "title": i["title"]} for i in self.world.agent.incidents]
         try:
-            return launch.launch(country, self.world.seed, incidents)
+            return launch.launch(country, self.world.seed, incidents, users)
         except ValueError as e:
             raise ToolError(str(e)) from e
 

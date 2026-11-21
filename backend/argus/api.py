@@ -110,6 +110,7 @@ class MetricIn(BaseModel):
 
 class LaunchIn(BaseModel):
     country: str = "AR"
+    users: int | None = None        # expected daily users after 4 weeks; default: assumed from similar countries
 
 
 def _world(x_session: str | None):
@@ -243,7 +244,7 @@ def post_launch(body: LaunchIn = Body(default=LaunchIn()), x_session: str | None
         incidents = [{"country": i["country"], "root": i["root"], "title": i["title"]} for i in s.world.agent.incidents]
         seed = s.world.seed
     try:
-        return launch.launch(body.country, seed, incidents)
+        return launch.launch(body.country, seed, incidents, body.users)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
 

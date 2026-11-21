@@ -46,7 +46,7 @@ def test_mcp_server_stdio_roundtrip():
     assert out[8]["result"]["isError"] is True
     assert out[9]["error"]["code"] == -32601
     la = out[10]["result"]["structuredContent"]
-    assert la["country"]["iso"] == "AR" and la["backtest"]["n"] == 5
+    assert la["country"]["iso"] == "AR" and la["backtest"]["n"] == 20 and la["users"]["assumed"] is True
     assert la["fraud_risk"]["farms_per_quarter_neighbours"]["MX"] >= 1.8      # session's CA farm is not a neighbour
     assert all(json.loads(out[i]["result"]["content"][0]["text"]) == out[i]["result"]["structuredContent"]
                for i in (3, 4, 5, 6, 7))

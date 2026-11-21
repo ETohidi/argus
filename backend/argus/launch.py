@@ -1,17 +1,19 @@
 """Forward-looking scenario: launch the marketplace in a country Argus does not watch yet.
 
+What Argus predicts is per-user economics; the user count is an input (default: assumed from similar countries).
 Transfer learning from the most similar watched countries, then a 4-week Monte Carlo in the twin's terms:
 
   similarity   public features only: GDP per capita, Android share, region, language (World Bank, StatCounter)
   taste        the taste model scores sampled users of each neighbour; the launch market gets their weighted mix
-  users        active-user-hours per capita, transferred from the neighbours (weighted geometric mean)
+  activity     active hours per daily user and impressions per hour, from the neighbours
   payout level log(value) ~ log(GDP per capita) across watched countries, plus the neighbours' residual
   start rate   learned across watched countries: log(starts/impression) = base_k + γ·log(taste_k / feed share_k)
   finishing    completions per start and margin per completion (per platform × category) from the neighbours
+  rewards      start elasticity to the reward share, from the neighbours' past reward tests
 
-Backtest: hold out watched countries one at a time, predict them from the other 19 only, and compare with the
-simulator's true margin over the next 4 weeks. Everything is learned from the twin's 14-day learning window
-(the same clean history the twin learns from), so the forecast is deterministic per seed and cached.
+Backtest over all 20 watched countries (each hidden in turn, predicted from the other 19), against the simulator's
+true next 4 weeks: best offers, margin per user, best reward level. Learned from the twin's 14-day learning window,
+so the result is deterministic per seed and cached.
 """
 from __future__ import annotations
 
@@ -23,18 +25,8 @@ WEEKS = 4
 DAYS = WEEKS * 7
 N_PATHS = 400
 ADOPTION_DAYS = 7.0      # simulated: launch users build up as 1 - exp(-day / 7); ~98% of steady state on day 28
-PROMO_START_ELASTICITY = float(np.log(1.30) / np.log(0.70 / cfg.REWARD_SHARE))  # calendar promos: 70% share -> +30% starts
 REWARD_GRID = [0.45, 0.50, 0.55, 0.60, 0.65]
 
-# public: World Bank WDI 2024 (NY.GDP.PCAP.CD in current USD, SP.POP.TOTL), fetched 21 Nov 2026.
-GDP_PC = {"US": 86170, "CA": 55016, "MX": 13988, "BR": 10311, "GB": 53341, "DE": 56104, "FR": 46103, "NL": 67465,
-          "ES": 35327, "IT": 40430, "PL": 25104, "SE": 57223, "TR": 15893, "ZA": 6267, "IN": 2592, "ID": 4925,
-          "PH": 3985, "JP": 33797, "KR": 36239, "AU": 64610, "AR": 13970}
-POPULATION = {"US": 340_003_797, "CA": 41_262_329, "MX": 130_861_007, "BR": 211_998_573, "GB": 69_281_000,
-              "DE": 83_516_593, "FR": 68_551_653, "NL": 17_993_485, "ES": 48_848_840, "IT": 58_952_704,
-              "PL": 36_559_233, "SE": 10_569_709, "TR": 85_518_661, "ZA": 64_007_187, "IN": 1_450_935_791,
-              "ID": 283_487_931, "PH": 115_843_670, "JP": 123_975_371, "KR": 51_751_065, "AU": 27_194_286,
-              "AR": 45_696_159}
 # public: main language (ISO 639-1); "family" groups Romance and Germanic languages for a partial match.
 LANGUAGE = {"US": "en", "CA": "en", "MX": "es", "BR": "pt", "GB": "en", "DE": "de", "FR": "fr", "NL": "nl",
             "ES": "es", "IT": "it", "PL": "pl", "SE": "sv", "TR": "tr", "ZA": "en", "IN": "en", "ID": "id",
@@ -50,7 +42,6 @@ FARMS_PER_QUARTER = {"US": 1.2, "CA": 0.6, "MX": 1.8, "BR": 2.4, "GB": 0.7, "DE"
                      "ES": 0.8, "IT": 0.7, "PL": 0.9, "SE": 0.2, "TR": 1.6, "ZA": 1.5, "IN": 3.0, "ID": 2.6,
                      "PH": 2.2, "JP": 0.3, "KR": 0.4, "AU": 0.4}
 FARM_LOSS_DAYS = 2.0     # simulated: a farm costs ~2 days of the country's margin before it is caught and cleaned up
-BACKTEST_DEFAULT = 5
 SIGMA_FLOOR = 0.05
 
 _CACHE: dict[int, dict] = {}
@@ -66,7 +57,7 @@ def _features(iso: str) -> dict:
 
 def distance(a: str, b: str) -> float:
     fa, fb = _features(a), _features(b)
-    d = abs(np.log(GDP_PC[a] / GDP_PC[b])) / 0.5                    # a factor 1.65 in income = 1
+    d = abs(np.log(cfg.GDP_PC[a] / cfg.GDP_PC[b])) / 0.5            # a factor 1.65 in income = 1
     d += abs(fa["ios_share"] - fb["ios_share"]) / 0.15              # 15 points of Android share = 1
     d += 0.0 if fa["region"] == fb["region"] else 1.0
     la, lb = LANGUAGE[a], LANGUAGE[b]
@@ -82,8 +73,21 @@ def neighbours(iso: str, pool: list[str], k: int = 3) -> list[tuple[str, float]]
 
 
 # ---------------------------------------------------------------------------------------------- learned stats
+def _true_future(seed: int, reward_share: float | None) -> list[dict]:
+    """Simulator ground truth for the 4 weeks after the learning window (backtest only, never used to predict)."""
+    from .reality import Reality
+
+    r = Reality(seed=seed)
+    r.run(cfg.HISTORY_HOURS)
+    if reward_share is not None:
+        for c in range(cfg.C):
+            r.apply({"type": "set_reward", "country": c, "reward_share": reward_share})
+    r.run(DAYS * 24)
+    return r.true[cfg.HISTORY_HOURS:]
+
+
 def _learn(seed: int) -> dict:
-    """Per-country stats from the twin's learning window, plus the simulator's true next 4 weeks (backtest only)."""
+    """Per-country stats from the twin's learning window, plus the simulator's truth for the backtest."""
     if seed in _CACHE:
         return _CACHE[seed]
     from .reality import Reality
@@ -95,8 +99,8 @@ def _learn(seed: int) -> dict:
     days = cfg.HISTORY_HOURS / 24
     S = lambda k: np.sum([o[k] for o in obs], axis=0)  # noqa: E731
     act, imp, st, co = S("active_users"), S("impressions"), S("starts"), S("completions")
-    marg = S("revenue") - S("rewards")
-    rev = S("revenue")
+    marg, rev = S("revenue") - S("rewards"), S("revenue")
+    dau = np.array([c.dau for c in cfg.COUNTRIES], dtype=float)                # own business data: daily users
     tm = taste_model()
     taste = np.zeros((cfg.C, cfg.K))
     for c in range(cfg.C):
@@ -104,54 +108,69 @@ def _learn(seed: int) -> dict:
         taste[c] = sum(share[p] * tm.country_demand(r.sample_users(c, p, 600)) for p in range(cfg.P))
     stats = {
         "taste": taste,                                                        # (C,K) taste-model demand
-        "users_pc": act.sum(1) / days / np.array([POPULATION[c.iso] for c in cfg.COUNTRIES]),  # user-hours/day/capita
-        "imp_per_user": imp.sum((1, 2)) / act.sum(1),                          # (C,)
+        "dau_pc": dau / np.array([cfg.POPULATION[c.iso] for c in cfg.COUNTRIES]),
+        "hours_per_user": act.sum(1) / days / dau,                             # active hours per daily user
+        "imp_per_user": imp.sum((1, 2)) / act.sum(1),                          # impressions per active hour
         "feed": imp.sum(1) / imp.sum((1, 2))[:, None],                         # (C,K) impression shares
         "sr": st.sum(1) / imp.sum(1),                                          # (C,K) starts per impression
         "cr": co / st,                                                         # (C,P,K)
         "mpc": marg / co,                                                      # (C,P,K) margin per completion
-        "margin_share_of_rev": marg.sum((1, 2)) / rev.sum((1, 2)),
-        "rev_per_comp_android": rev[:, 1] / co[:, 1],                          # (C,K)
+        "hist_cat_margin": marg.sum(1),                                        # (C,K) margin by category (history)
+        "cph": co / act[:, :, None],                                           # (C,P,K) completions per active hour
+        "reward_tests": r.reward_tests(),                                      # (C,) measured start elasticity
     }
     # payout level seen in the data: Android revenue per completion vs. the offer list price (US Android)
-    stats["value"] = np.median(stats["rev_per_comp_android"] / (cfg.PAYOUT * cfg.ACCEPTANCE), axis=1)
-    stats["day_margin_hist"] = marg.sum((1, 2)) / days
-    r.run(DAYS * 24)                                                           # ground truth for the backtest only
-    fut = r.true[cfg.HISTORY_HOURS:]
-    stats["true_day_margin"] = np.sum([(x["revenue"] - x["rewards"]).sum((1, 2)) for x in fut], axis=0) / DAYS
+    stats["value"] = np.median(rev[:, 1] / co[:, 1] / (cfg.PAYOUT * cfg.ACCEPTANCE), axis=1)
+
+    # ---- ground truth (backtest only)
+    fut = _true_future(seed, None)
+    tm_ = lambda rows: np.sum([(x["revenue"] - x["rewards"]).sum(1) for x in rows], axis=0) / DAYS  # noqa: E731
+    cat_margin = tm_(fut)                                                       # (C,K) margin per day by category
+    stats["true_day_margin"] = cat_margin.sum(1)
+    stats["true_margin_per_user"] = stats["true_day_margin"] / dau
+    stats["true_cat_margin"] = cat_margin
+    stats["true_cat_margin_per_imp"] = cat_margin / (np.sum([x["impressions"].sum(1) for x in fut], axis=0) / DAYS)
+    grid = np.zeros((cfg.C, len(REWARD_GRID)))
+    for g, rs in enumerate(REWARD_GRID):
+        grid[:, g] = stats["true_day_margin"] if rs == cfg.REWARD_SHARE else tm_(_true_future(seed, rs)).sum(1)
+    stats["true_reward_grid"] = grid
+    stats["true_best_reward"] = np.array(REWARD_GRID)[grid.argmax(1)]
     _CACHE[seed] = stats
     return stats
 
 
-def _wmean_log(vals: np.ndarray, w: np.ndarray) -> tuple[float, float]:
-    lv = np.log(vals)
-    m = float(np.sum(w * lv))
-    return m, max(float(np.sqrt(np.sum(w * (lv - m) ** 2))), SIGMA_FLOOR)
+def _wmean_log(vals: np.ndarray, w: np.ndarray) -> float:
+    return float(np.sum(w * np.log(vals)))
 
 
-def _loo_sigma(st: dict, pool: list[str]) -> tuple[float, float]:
-    """Out-of-sample error of the two transferred scale inputs (users per capita, payout level), measured by hiding
-    each pool country in turn. Used as the forecast's spread, so the p10-p90 range is calibrated, not hopeful."""
-    eu, ev = [], []
+def _value_fit(st: dict, pool: list[str], iso: str, nb: list[tuple[str, float]]) -> float:
+    """log payout level = a + b log GDP over the pool, plus the neighbours' weighted residual."""
+    lg = np.log([cfg.GDP_PC[p] for p in pool])
+    lv = np.log(st["value"][[cfg.ISO_INDEX[p] for p in pool]])
+    b, a = np.polyfit(lg, lv, 1)
+    res = {p: lv[i] - (a + b * lg[i]) for i, p in enumerate(pool)}
+    return float(a + b * np.log(cfg.GDP_PC[iso]) + sum(x * res[n] for n, x in nb))
+
+
+def _loo_sigma(st: dict, pool: list[str]) -> dict:
+    """Out-of-sample error of each transferred input, measured by hiding each pool country in turn. Used as the
+    forecast's spread, so the p10-p90 range is calibrated on data rather than chosen."""
+    err = {"value": [], "hours": [], "dau_pc": [], "elasticity": []}
     for h in pool:
         rest = [p for p in pool if p != h]
         nb = neighbours(h, rest)
         ni = np.array([cfg.ISO_INDEX[n] for n, _ in nb])
         w = np.array([x for _, x in nb])
-        eu.append(_wmean_log(st["users_pc"][ni], w)[0] - np.log(st["users_pc"][cfg.ISO_INDEX[h]]))
-        lg = np.log([GDP_PC[p] for p in rest])
-        lv = np.log(st["value"][[cfg.ISO_INDEX[p] for p in rest]])
-        b, a = np.polyfit(lg, lv, 1)
-        res = {p: lv[i] - (a + b * lg[i]) for i, p in enumerate(rest)}
-        pred = a + b * np.log(GDP_PC[h]) + sum(x * res[n] for n, x in nb)
-        ev.append(pred - np.log(st["value"][cfg.ISO_INDEX[h]]))
-    rms = lambda e: max(float(np.sqrt(np.mean(np.square(e)))), SIGMA_FLOOR)  # noqa: E731
-    return rms(eu), rms(ev)
+        i = cfg.ISO_INDEX[h]
+        err["value"].append(_value_fit(st, rest, h, nb) - np.log(st["value"][i]))
+        err["hours"].append(_wmean_log(st["hours_per_user"][ni], w) - np.log(st["hours_per_user"][i]))
+        err["dau_pc"].append(_wmean_log(st["dau_pc"][ni], w) - np.log(st["dau_pc"][i]))
+        err["elasticity"].append(_wmean_log(st["reward_tests"][ni], w) - np.log(st["reward_tests"][i]))
+    return {k: max(float(np.sqrt(np.mean(np.square(e)))), SIGMA_FLOOR) for k, e in err.items()}
 
 
-def predict(iso: str, seed: int = 42, pool: list[str] | None = None, reward_share: float = cfg.REWARD_SHARE,
-            n: int = N_PATHS, ramp: bool = True) -> dict:
-    """4-week Monte Carlo forecast for `iso`, learning only from `pool` (watched countries, target excluded)."""
+def predict(iso: str, seed: int = 42, pool: list[str] | None = None, n: int = N_PATHS) -> dict:
+    """Per-user forecast for `iso`, learning only from `pool` (watched countries, target excluded)."""
     st = _learn(seed)
     pool = [c.iso for c in cfg.COUNTRIES if c.iso != iso] if pool is None else [p for p in pool if p != iso]
     idx = np.array([cfg.ISO_INDEX[p] for p in pool])
@@ -161,90 +180,111 @@ def predict(iso: str, seed: int = 42, pool: list[str] | None = None, reward_shar
     f = _features(iso)
     share = np.array([f["ios_share"], 1 - f["ios_share"]])
     rng = np.random.default_rng([seed, 7041, sum(map(ord, iso))])
+    sig = _loo_sigma(st, pool)
 
-    u_loo, v_loo = _loo_sigma(st, pool)
-    # taste: weighted taste-model demand of the neighbours
-    taste = (w[:, None] * st["taste"][ni]).sum(0)
+    taste = (w[:, None] * st["taste"][ni]).sum(0)                              # taste-model demand of neighbours
     taste /= taste.sum()
-    # users: active-user-hours per capita
-    u_m, _ = _wmean_log(st["users_pc"][ni], w)
-    u_s = u_loo
-    # payout level: log value = a + b log GDP over the pool, plus the neighbours' weighted residual
-    lg = np.log([GDP_PC[p] for p in pool])
-    lv = np.log(st["value"][idx])
-    b, a = np.polyfit(lg, lv, 1)
-    resid = lv - (a + b * lg)
-    res_n = np.array([resid[pool.index(n)] for n, _ in nb])
-    v_m = a + b * np.log(GDP_PC[iso]) + float(np.sum(w * res_n))
-    v_s = v_loo
+    v_m = _value_fit(st, pool, iso, nb)
+    h_m = _wmean_log(st["hours_per_user"][ni], w)
+    e_m = _wmean_log(st["reward_tests"][ni], w)
+    dau_pc = float(np.exp(_wmean_log(st["dau_pc"][ni], w)))
     # start rate: log sr = base_k + γ log(taste / feed), fitted over the pool
-    X = np.log(st["taste"][idx] / st["feed"][idx])                           # (n,K)
+    X = np.log(st["taste"][idx] / st["feed"][idx])
     Y = np.log(st["sr"][idx])
     Xc, Yc = X - X.mean(0), Y - Y.mean(0)
     gamma = float(np.sum(Xc * Yc) / np.sum(Xc * Xc))
     base = Y.mean(0) - gamma * X.mean(0)
     sr_s = max(float(np.std(Yc - gamma * Xc)), SIGMA_FLOOR)
-    # feed: the production rule (taste × payout^1.1), applied to the predicted taste
-    feed = taste * cfg.PAYOUT ** 1.1
+    feed = taste * cfg.PAYOUT ** 1.1                                           # production rule on predicted taste
     feed /= feed.sum()
     ipu = float(np.exp(np.sum(w * np.log(st["imp_per_user"][ni]))))
     cr = np.exp((w[:, None, None] * np.log(st["cr"][ni])).sum(0))             # (P,K)
-    # margin per completion per unit of payout level, at the target reward share
     mpc_unit = (w[:, None, None] * (st["mpc"][ni] / st["value"][ni][:, None, None])).sum(0)
     rpc_unit = cfg.PAYOUT[None, :] * cfg.PLATFORM_PAYOUT[:, None] * cfg.ACCEPTANCE
     rew_unit = rpc_unit / cfg.ACCEPTANCE - mpc_unit                           # reward cost per completion / value
-    rew_unit_rs = rew_unit * reward_share / cfg.REWARD_SHARE
-    mpc_unit_rs = rpc_unit - rew_unit_rs
-    start_mult = (reward_share / cfg.REWARD_SHARE) ** PROMO_START_ELASTICITY
 
-    pop = POPULATION[iso]
-    users = np.exp(u_m + u_s * rng.standard_normal(n)) * pop                  # user-hours/day at steady state
-    value = np.exp(v_m + v_s * rng.standard_normal(n))
+    value = np.exp(v_m + sig["value"] * rng.standard_normal(n))
+    hours = np.exp(h_m + sig["hours"] * rng.standard_normal(n))
+    elast = np.exp(e_m + sig["elasticity"] * rng.standard_normal(n))
     sr = np.exp(base[None, :] + gamma * np.log(taste / feed)[None, :] + sr_s * rng.standard_normal((n, cfg.K)))
-    sr *= start_mult
-    per_user_k = ipu * feed[None, :] * sr                                     # starts per user-hour (n,K)
-    comp = per_user_k[:, None, :] * cr[None, :, :] * share[None, :, None]     # completions per user-hour (n,P,K)
-    m_user = (comp * mpc_unit_rs[None]).sum((1, 2)) * value                   # margin per user-hour
-    day_steady = users * m_user
-    noise = np.exp(0.03 * rng.standard_normal((n, DAYS)))
-    adopt = (1 - np.exp(-np.arange(1, DAYS + 1) / ADOPTION_DAYS)) if ramp else np.ones(DAYS)
-    daily = day_steady[:, None] * adopt[None, :] * noise
-    by_cat = (comp * mpc_unit_rs[None]).sum(1).mean(0)                        # margin per user-hour by category
-    q = lambda x: {"p10": float(np.percentile(x, 10)), "p50": float(np.percentile(x, 50)),  # noqa: E731
-                   "p90": float(np.percentile(x, 90))}
-    return {"iso": iso, "neighbours": nb, "sigma_users": u_s, "sigma_value": v_s, "taste": taste, "feed": feed, "gamma": gamma,
-            "users_per_day": float(np.median(users)), "value": float(np.exp(v_m)),
-            "day_last": q(daily[:, -1]), "day_avg": q(daily.mean(1)), "total": q(daily.sum(1)),
-            "weekly": [q(daily[:, 7 * i:7 * (i + 1)].mean(1)) for i in range(WEEKS)],
-            "margin_share_by_category": by_cat / by_cat.sum(), "margin_per_user_hour": float(np.median(m_user))}
+    # completions per active hour by platform × category: the neighbours' observed rates (their taste and feed are
+    # already in the data), with the category spread among the neighbours as uncertainty
+    lc = np.log(st["cph"][ni])                                                 # (3,P,K)
+    lc_m = (w[:, None, None] * lc).sum(0)
+    lc_s = np.maximum(np.sqrt((w[:, None, None] * (lc - lc_m) ** 2).sum(0)), 0.1)
+    comp = np.exp(lc_m[None] + lc_s[None] * rng.standard_normal((n, 1, cfg.K))) * share[None, :, None]
+
+    def per_user(rs: float) -> np.ndarray:                                    # margin per daily user (n,K)
+        mult = (rs / cfg.REWARD_SHARE) ** elast
+        m = (comp * (rpc_unit - rew_unit * rs / cfg.REWARD_SHARE)[None]).sum(1)
+        return m * (mult * value * hours)[:, None]
+
+    pu = per_user(cfg.REWARD_SHARE)
+    grid = np.array([np.median(per_user(rs).sum(1)) for rs in REWARD_GRID])
+    cat = pu.mean(0)
+    return {"iso": iso, "neighbours": nb, "sigma": sig, "taste": taste, "feed": feed, "gamma": gamma,
+            "per_user": pu.sum(1), "margin_share_by_category": cat / cat.sum(),
+            "reward_grid_per_user": grid, "best_reward": REWARD_GRID[int(grid.argmax())],
+            "elasticity": float(np.exp(e_m)), "value": float(np.exp(v_m)), "hours_per_user": float(np.exp(h_m)),
+            "dau_pc": dau_pc, "sigma_dau_pc": sig["dau_pc"]}
 
 
-def backtest_countries(iso: str, k: int = BACKTEST_DEFAULT) -> list[str]:
-    """Rule fixed in advance: the k watched countries most similar to the launch market."""
-    return [n for _, n in sorted((distance(iso, c.iso), c.iso) for c in cfg.COUNTRIES)[:k]]
+def _q(x: np.ndarray, scale: float = 1.0) -> dict:
+    return {k: float(np.percentile(x, p)) * scale for k, p in (("p10", 10), ("p50", 50), ("p90", 90))}
 
 
-def backtest(isos: list[str], seed: int = 42) -> dict:
+def backtest(seed: int = 42) -> dict:
+    """Hold out each of the 20 watched countries, predict it from the other 19, compare with the simulator's truth."""
     st = _learn(seed)
     rows = []
-    for h in isos:
-        pool = [c.iso for c in cfg.COUNTRIES if c.iso != h]
-        pr = predict(h, seed, pool, ramp=False)
-        true = float(st["true_day_margin"][cfg.ISO_INDEX[h]])
-        d = pr["day_avg"]
-        rows.append({"country": h, "name": _features(h)["name"], "learned_from": [n for n, _ in pr["neighbours"]],
-                     "predicted_margin_day_usd": round(d["p50"]), "range_usd": [round(d["p10"]), round(d["p90"])],
-                     "true_margin_day_usd": round(true), "error": round(d["p50"] / true - 1, 3),
-                     "inside_p10_p90": bool(d["p10"] <= true <= d["p90"])})
-    errs = [abs(r["error"]) for r in rows]
-    inside = sum(r["inside_p10_p90"] for r in rows)
-    worst = max(rows, key=lambda r: abs(r["error"]))
-    return {"countries": rows, "max_abs_error": round(max(errs), 3), "median_abs_error": round(float(np.median(errs)), 3),
-            "typical_within_pct": float(np.ceil(np.median(errs) * 100)), "within_pct": float(np.ceil(max(errs) * 100)),
-            "worst": {"country": worst["country"], "name": worst["name"], "error": worst["error"]},
-            "inside_p10_p90": f"{inside}/{len(rows)}", "inside_count": inside, "n": len(rows),
-            "method": "Each country is hidden in turn and predicted from the other 19 only, then compared with the "
-                      "simulator's true margin over the next 4 weeks (steady state, no launch ramp)."}
+    for c in cfg.COUNTRIES:
+        h, i = c.iso, cfg.ISO_INDEX[c.iso]
+        pr = predict(h, seed, [x.iso for x in cfg.COUNTRIES if x.iso != h])
+        top3 = [int(k) for k in np.argsort(pr["margin_share_by_category"])[::-1][:3]]
+        true_top = int(np.argmax(st["true_cat_margin"][i]))
+        q = _q(pr["per_user"], 1000)
+        true_pu = float(st["true_margin_per_user"][i]) * 1000
+        true_rs = float(st["true_best_reward"][i])
+        steps = round(abs(pr["best_reward"] - true_rs) / 0.05)
+        # naive baseline without similarity: the average category ranking of the other 19 countries
+        others = [j for j in range(cfg.C) if j != i]
+        hs = st["hist_cat_margin"][others]
+        naive = [int(k) for k in np.argsort((hs / hs.sum(1, keepdims=True)).mean(0))[::-1][:3]]
+        rows.append({"country": h, "name": c.name, "learned_from": [n for n, _ in pr["neighbours"]],
+                     "offers": {"predicted_top3": [cfg.CATEGORIES[k] for k in top3], "true_top": cfg.CATEGORIES[true_top],
+                                "hit": true_top in top3, "top1_hit": true_top == top3[0],
+                                "naive_top3": [cfg.CATEGORIES[k] for k in naive], "naive_hit": true_top in naive,
+                                "naive_top1_hit": true_top == naive[0]},
+                     "per_1000_users": {"predicted": round(q["p50"], 2), "range": [round(q["p10"], 2), round(q["p90"], 2)],
+                                        "true": round(true_pu, 2), "error": round(q["p50"] / true_pu - 1, 3),
+                                        "inside_p10_p90": bool(q["p10"] <= true_pu <= q["p90"])},
+                     "reward": {"predicted": pr["best_reward"], "true_best": true_rs, "steps_off": steps,
+                                "within_one_step": steps <= 1}})
+    n = len(rows)
+    errs = [abs(r["per_1000_users"]["error"]) for r in rows]
+    offers_hit = sum(r["offers"]["hit"] for r in rows)
+    top1 = sum(r["offers"]["top1_hit"] for r in rows)
+    naive_hit = sum(r["offers"]["naive_hit"] for r in rows)
+    naive_top1 = sum(r["offers"]["naive_top1_hit"] for r in rows)
+    inside = sum(r["per_1000_users"]["inside_p10_p90"] for r in rows)
+    rew1 = sum(r["reward"]["within_one_step"] for r in rows)
+    rew0 = sum(r["reward"]["steps_off"] == 0 for r in rows)
+    return {
+        "n": n, "countries": rows,
+        "offers": {"true_top_in_top3": offers_hit, "true_top_is_first": top1,
+                   "naive_baseline": {"true_top_in_top3": naive_hit, "true_top_is_first": naive_top1,
+                                      "rule": "same ranking everywhere: average of the other 19 countries"},
+                   "text": f"best offers right in {offers_hit} of {n}"},
+        "margin_per_user": {"median_abs_error": round(float(np.median(errs)), 3),
+                            "max_abs_error": round(max(errs), 3), "inside_p10_p90": inside,
+                            "text": f"margin per user typically within ±{np.median(errs) * 100:.0f}%, "
+                                    f"{inside} of {n} inside the range"},
+        "reward": {"within_one_step": rew1, "exact": rew0, "step": 0.05,
+                   "text": f"best reward level within one step in {rew1} of {n}"},
+        "method": "Each watched country is hidden in turn and predicted from the other 19 only, then compared with "
+                  "the simulator's true next 4 weeks: the category that earns the most margin, margin per daily "
+                  "user, and the reward share (45-65%) that earns the most margin.",
+    }
 
 
 def _fraud_risk(nb: list[tuple[str, float]], day_margin: float, incidents: list[dict] | None) -> dict:
@@ -263,60 +303,88 @@ def _fraud_risk(nb: list[tuple[str, float]], day_margin: float, incidents: list[
             "source": "simulated fraud history of the neighbours (plus bot-farm issues in this session)"}
 
 
-def launch(iso: str = "AR", seed: int = 42, incidents: list[dict] | None = None) -> dict:
+def _strongest(bt: dict) -> str:
+    """The plain-language backtest line: the strongest result, stated with its real count."""
+    n = bt["n"]
+    scores = [(bt["offers"]["true_top_in_top3"], bt["offers"]["text"]),
+              (bt["reward"]["within_one_step"], bt["reward"]["text"]),
+              (bt["margin_per_user"]["inside_p10_p90"], f"margin per user inside the forecast range in "
+                                                        f"{bt['margin_per_user']['inside_p10_p90']} of {n}")]
+    best = max(scores, key=lambda s: s[0])
+    return f"Tested on {n} countries we know: {best[1]}"
+
+
+def launch(iso: str = "AR", seed: int = 42, incidents: list[dict] | None = None, users: int | None = None) -> dict:
     iso = (iso or "AR").upper()
     if iso in cfg.ISO_INDEX:
         raise ValueError(f"{iso} is already watched; launch candidates: {sorted(CANDIDATES)}")
     if iso not in CANDIDATES:
         raise ValueError(f"unknown launch country '{iso}'; candidates: {sorted(CANDIDATES)}")
+    if users is not None and not 1_000 <= int(users) <= 50_000_000:
+        raise ValueError("users must be between 1,000 and 50,000,000 daily users")
     key = (iso, seed)
     if key not in _LAUNCH:
         _LAUNCH[key] = _launch(iso, seed)
-    out = dict(_LAUNCH[key])
-    out["fraud_risk"] = _fraud_risk(out.pop("_neighbours"), out["margin_per_day_usd"]["p50"], incidents)
+    base = _LAUNCH[key]
+    pr = base["_pred"]
+    f = _features(iso)
+    assumed = users is None
+    n_users = round(pr["dau_pc"] * cfg.POPULATION[iso], -3) if assumed else int(users)
+    adopt = 1 - np.exp(-np.arange(1, DAYS + 1) / ADOPTION_DAYS)
+    day28 = _q(pr["per_user"], n_users * adopt[-1])
+    rnd = lambda q: {k: round(v) for k, v in q.items()}  # noqa: E731
+    out = {k: v for k, v in base.items() if not k.startswith("_")}
+    out["users"] = {
+        "daily_users": int(n_users), "assumed": assumed,
+        "source": (f"assumed: daily users per capita of {', '.join(_features(n)['name'] for n, _ in pr['neighbours'])}"
+                   f" × population of {f['name']} ({cfg.POPULATION[iso]:,})") if assumed else "input",
+        "note": "An assumption, not a prediction: user scale is the part that does not transfer well "
+                "(see backtest)." if assumed else "Given by the caller."}
+    out["margin_per_day_usd"] = rnd(day28)
+    out["margin_per_day_weekly_usd"] = [rnd(_q(pr["per_user"], n_users * adopt[7 * w:7 * w + 7].mean()))
+                                        for w in range(WEEKS)]
+    out["margin_4w_total_usd"] = rnd(_q(pr["per_user"], n_users * adopt.sum()))
+    out["fraud_risk"] = _fraud_risk(pr["neighbours"], day28["p50"], incidents)
+    tag = "assumed" if assumed else "planned"
+    out["total_line"] = (f"At {n_users:,.0f} daily users ({tag}): about +${day28['p50']:,.0f} a day after 4 weeks")
     return out
 
 
 def _launch(iso: str, seed: int) -> dict:
     f = _features(iso)
-    base = predict(iso, seed)
-    rewards = []
-    for rs in REWARD_GRID:
-        pr = base if rs == cfg.REWARD_SHARE else predict(iso, seed, reward_share=rs)
-        rewards.append({"reward_share": rs, "margin_day_usd": round(pr["day_last"]["p50"])})
-    best_rs = max(rewards, key=lambda x: x["margin_day_usd"])
-    cur = next(x for x in rewards if x["reward_share"] == cfg.REWARD_SHARE)
-    order = np.argsort(base["margin_share_by_category"])[::-1][:3]
-    mix = [{"category": cfg.CATEGORIES[k], "margin_share": round(float(base["margin_share_by_category"][k]), 3),
-            "taste": round(float(base["taste"][k]), 3)} for k in order]
-    bt = backtest(backtest_countries(iso), seed)
-    day = base["day_last"]
-    names = [_features(n)["name"] for n, _ in base["neighbours"]]
-    rnd = lambda q: {k: round(v) for k, v in q.items()}  # noqa: E731
+    pr = predict(iso, seed)
+    per1000 = _q(pr["per_user"], 1000)
+    grid = pr["reward_grid_per_user"] * 1000
+    cur = grid[REWARD_GRID.index(cfg.REWARD_SHARE)]
+    order = np.argsort(pr["margin_share_by_category"])[::-1][:3]
+    mix = [{"category": cfg.CATEGORIES[k], "margin_share": round(float(pr["margin_share_by_category"][k]), 3),
+            "taste": round(float(pr["taste"][k]), 3)} for k in order]
+    bt = backtest(seed)
+    names = [_features(n)["name"] for n, _ in pr["neighbours"]]
+    r2 = lambda q: {k: round(v, 2) for k, v in q.items()}  # noqa: E731
     return {
+        "_pred": pr,
         "country": {"iso": iso, "name": f["name"], "region": f["region"], "lat": f["lat"], "lng": f["lng"],
-                    "ios_share": f["ios_share"],
-                    "gdp_per_capita_usd": GDP_PC[iso], "population": POPULATION[iso]},
+                    "ios_share": f["ios_share"], "gdp_per_capita_usd": cfg.GDP_PC[iso],
+                    "population": cfg.POPULATION[iso]},
         "horizon_days": DAYS,
-        "margin_per_day_usd": rnd(day),                       # after 4 weeks (day 28), standard settings
-        "margin_per_day_weekly_usd": [rnd(x) for x in base["weekly"]],
-        "margin_4w_total_usd": rnd(base["total"]),
+        "margin_per_1000_users_day_usd": r2(per1000),
         "best_offer_mix": mix,
-        "best_reward": {"reward_share": best_rs["reward_share"], "current_share": cfg.REWARD_SHARE,
-                        "uplift_usd_day": best_rs["margin_day_usd"] - cur["margin_day_usd"], "grid": rewards,
-                        "note": "Starts respond to rewards as in past calendar promos (70% share gave +30% starts); "
+        "best_reward": {"reward_share": pr["best_reward"], "current_share": cfg.REWARD_SHARE,
+                        "uplift_per_1000_users_day_usd": round(float(grid.max() - cur), 2),
+                        "grid": [{"reward_share": rs, "margin_per_1000_users_day_usd": round(float(g), 2)}
+                                 for rs, g in zip(REWARD_GRID, grid)],
+                        "elasticity": round(pr["elasticity"], 2),
+                        "note": "Starts respond to the reward share as measured in the neighbours' past reward tests; "
                                 "longer-term loyalty effects are not modelled."},
-        "_neighbours": base["neighbours"],
         "learned_from": [{"iso": n, "name": _features(n)["name"], "weight": round(x, 2),
-                          "distance": round(distance(iso, n), 2)} for n, x in base["neighbours"]],
-        "assumptions": {"users_per_day_steady": round(base["users_per_day"]), "payout_level_vs_us": round(base["value"], 3),
+                          "distance": round(distance(iso, n), 2)} for n, x in pr["neighbours"]],
+        "assumptions": {"payout_level_vs_us": round(pr["value"], 3), "active_hours_per_user": round(pr["hours_per_user"], 2),
                         "adoption": f"users build up as 1 - exp(-day/{ADOPTION_DAYS:g})",
-                        "taste_start_elasticity": round(base["gamma"], 3), "paths": N_PATHS},
+                        "taste_start_elasticity": round(pr["gamma"], 3), "paths": N_PATHS},
         "backtest": bt,
-        "headline": f"Launching in {f['name']}: about +${day['p50']:,.0f} a day after 4 weeks",
+        "headline": f"Launching in {f['name']}: about ${per1000['p50']:,.0f} margin per 1,000 users a day",
         "learned_line": f"Learned from {', '.join(names[:-1])} and {names[-1]}",
-        "backtest_line": f"Tested on {bt['n']} countries we know: typically within ±{bt['typical_within_pct']:.0f}% "
-                         f"(worst {bt['worst']['name']} {bt['worst']['error']:+.0%}), {bt['inside_p10_p90']} inside "
-                         f"the forecast range",
-        "range_line": f"Likely range ${day['p10']:,.0f}–${day['p90']:,.0f} a day (p10–p90)",
+        "backtest_line": _strongest(bt),
+        "range_line": f"Likely ${per1000['p10']:,.0f}–${per1000['p90']:,.0f} per 1,000 users a day (p10–p90)",
     }

@@ -136,3 +136,21 @@ HISTORY_HOURS = 14 * 24          # simulated: learning window of the twin
 PUBLISHED_PAYOUT_SHARE = {"US": 0.579, "DE": 0.097, "GB": 0.082, "CA": 0.037, "FR": 0.032}
 PUBLISHED_RUN_RATE_USD = 1_000_000_000
 TARGET_REVENUE_DAY = PUBLISHED_RUN_RATE_USD / 365
+
+# public: World Bank WDI 2024 (NY.GDP.PCAP.CD in current USD, SP.POP.TOTL), fetched 21 Nov 2026.
+GDP_PC = {"US": 86170, "CA": 55016, "MX": 13988, "BR": 10311, "GB": 53341, "DE": 56104, "FR": 46103, "NL": 67465,
+          "ES": 35327, "IT": 40430, "PL": 25104, "SE": 57223, "TR": 15893, "ZA": 6267, "IN": 2592, "ID": 4925,
+          "PH": 3985, "JP": 33797, "KR": 36239, "AU": 64610, "AR": 13970}
+POPULATION = {"US": 340_003_797, "CA": 41_262_329, "MX": 130_861_007, "BR": 211_998_573, "GB": 69_281_000,
+              "DE": 83_516_593, "FR": 68_551_653, "NL": 17_993_485, "ES": 48_848_840, "IT": 58_952_704,
+              "PL": 36_559_233, "SE": 10_569_709, "TR": 85_518_661, "ZA": 64_007_187, "IN": 1_450_935_791,
+              "ID": 283_487_931, "PH": 115_843_670, "JP": 123_975_371, "KR": 51_751_065, "AU": 27_194_286,
+              "AR": 45_696_159}
+
+# simulated (hidden ground truth): how strongly offer starts respond to the user reward share, per country.
+# Lower-income markets are more reward-sensitive. Starts scale as (share / 0.55) ** elasticity when a country's reward
+# share is changed with a "set_reward" intervention. Off by default, so baseline data and calibration are unchanged.
+def reward_elasticity_truth() -> np.ndarray:
+    rng = np.random.default_rng(11)
+    gdp = np.array([GDP_PC[c.iso] for c in COUNTRIES], dtype=float)
+    return np.clip(1.0 + 0.5 * np.log(80_000 / gdp) + rng.normal(0, 0.15, C), 0.6, 3.5)
