@@ -46,8 +46,8 @@ function graphCaption(d: IncidentDetail) {
     for (const e of d.graph.edges) if (e.source === id && !downstream.has(e.target)) downstream.add(e.target), queue.push(e.target)
   }
   const symptoms = ['revenue', 'margin'].filter((id) => downstream.has(id)).map((id) => PLAIN[id])
-  if (!symptoms.length) return `${cap(rootName)} broke; everything downstream follows from it.`
-  return `${cap(rootName)} broke. ${cap(joinAnd(symptoms))} ${symptoms.length === 1 ? 'is only a symptom' : 'are only symptoms'}.`
+  if (!symptoms.length) return `${cap(rootName)} ${rootName.endsWith('s') ? 'are' : 'is'} the cause; everything downstream follows from it.`
+  return `${cap(rootName)} ${rootName.endsWith('s') ? 'are' : 'is'} the cause. ${cap(joinAnd(symptoms))} ${symptoms.length === 1 ? 'is' : 'are'} only affected.`
 }
 
 function usersCaption(d: IncidentDetail) {
