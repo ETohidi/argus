@@ -1,0 +1,101 @@
+# Argus API contract
+
+Base path: `/api`. All bodies are JSON. All endpoints accept an optional `X-Session` header; each session gets its own simulated world (LRU of 50 sessions, 1 h idle expiry). Without the header the shared `default` session is used.
+
+The built frontend (`frontend/dist`) is served at `/` when it exists.
+
+## Read endpoints
+
+### `GET /api/state`
+Globe state.
+```jsonc
+{
+  "clock": { "t": 336, "label": "Day 15 · Sun 00:00 UTC" },
+  "countries": [
+    {
+      "iso": "CA", "name": "Canada", "lat": 56.1, "lng": -106.3,
+      "status": "ok",              // "ok" | "watch" | "incident" | "explained" | "waiting"
+      "health_z": 0.4,             // max |z| over the country's KPIs (signed value of that KPI)
+      "kpis": {                    // last-hour observed values
+        "new_accounts": 0, "completions": 0, "revenue": 0,
+        "rewards": 0, "margin": 0, "quality_per_completion": 0
+      },
+      "potential_usd_day": 1234.0
+    }
+  ],
+  "incidents": [
+    { "id": "inc-1", "title": "...", "country": "CA", "status": "open", "severity": "high", "impact_usd_h": 812.0 }
+  ],
+  "explained": [
+    { "t": 350, "country": "DE", "event": "Weekend Boost (games)", "naive_z": 5.1, "twin_z": 0.7 }
+  ],
+  "attention": { "watched_series": 120, "investigations": 1, "l3_runs": 1 }
+}
+```
+Incident `status`: `open` | `persisting` | `fix_applied` | `verified` | `resolved`. `severity`: `low` | `medium` | `high`.
+
+### `GET /api/incidents/{id}`
+```jsonc
+{
+  "id": "inc-1", "title": "...", "status": "open",
+  "country": "CA", "platform": "android", "category": "fintech", "detected_at": 352,
+  "trail": [ { "t": 352, "level": "L1", "action": "...", "finding": "..." } ],   // level: "L1" | "L2" | "L3"
+  "graph": {
+    "nodes": [ { "id": "new_accounts", "label": "New accounts", "z": 9.3, "state": "root" } ],  // state: "root" | "broken" | "symptom" | "normal"
+    "edges": [ { "source": "new_accounts", "target": "active_users", "type": "mechanism" } ]
+  },
+  "contributions": [ { "mechanism": "new_accounts", "value_usd": -420.0 } ],          // exact Shapley over mechanisms, sums to Δmargin
+  "hypotheses": [ { "name": "Fraud cluster", "explained": 0.94, "verdict": "supported" } ],  // verdict: "supported" | "partial" | "rejected"
+  "l3": {                                                                               // null when no L3 run
+    "summary": { "n_users": 600, "n_flagged": 88, "coherence_flagged": 0.28, "coherence_others": 0.73, "top_devices": ["emulator-x86"] },
+    "points": [ { "coherence": 0.71, "payout_focus": 0.2, "flagged": false } ]
+  },
+  "fixes": [
+    {
+      "id": "block_cluster", "name": "Block cluster", "description": "...",
+      "days": [1,2,3,4,5,6,7], "p10": [], "p50": [], "p90": [],                           // cumulative margin USD
+      "delta_p50_usd": 15000.0,                                                            // day-7 p50 vs do nothing
+      "advertiser_risk": "..."
+    }
+  ],
+  "recommended": "block_cluster",
+  "applied": null,                                                                         // fix id once approved
+  "verification": { "status": "pending", "predicted": [10, 50, 90], "actual": null },       // status: "pending" | "verified" | "missed"
+  "reports": { "ceo": "...", "manager": "...", "engineer": "..." }
+}
+```
+
+### `GET /api/incidents`
+List of the same summaries as `state.incidents`.
+
+### `GET /api/graph`
+`MetricGraph.to_dict()`: `{ nodes, edges, exogenous, levels }`.
+
+### `GET /api/country/{iso}`
+L2 heatmap.
+```jsonc
+{ "iso": "CA", "name": "Canada",
+  "segments": [ { "platform": "android", "category": "fintech",
+                  "kpi_z": { "completions": 7.1, "revenue": 6.0, "rewards": 6.5, "quality_per_completion": -8.2 },
+                  "deviation_usd_h": 310.0 } ] }
+```
+
+### `GET /api/potential`
+```jsonc
+{ "countries": [ { "iso": "DE", "potential_usd_day": 5400.0, "top_categories": ["games", "shopping"], "explain": ["gaming", "commuter"] } ] }
+```
+
+## Write endpoints
+
+| Method & path | Body | Effect / response |
+|---|---|---|
+| `POST /api/step` | `{ "hours": 1 }` | Advance world and agent; returns `/api/state` |
+| `POST /api/reset` | `{}` | New world (14-day history, twin learned); returns `/api/state` |
+| `POST /api/inject` | `{ "type": "promo" \| "bot_farm" \| "tracking_break" \| "data_delay", "country": "CA", "platform": "android" }` (`platform` optional) | Schedules the event at the current hour; returns `{ ok, event }` |
+| `POST /api/incidents/{id}/approve` | `{ "fix_id": "block_cluster" }` | Applies fix to reality; returns the incident detail |
+| `POST /api/metrics` | `{ "name": "...", "description": "..." }` | `{ "node": {...} \| null, "validation": { "ok": true, "checks": [ { "name": "...", "ok": true, "detail": "..." } ] } }` |
+| `POST /api/demo/{scene}` | — | Deterministic (fixed seed) jump to a video scene; returns `{ scene, state, incident_id? }` |
+
+Demo scenes, in order: `start`, `promo`, `bot_farm`, `investigate`, `approve`, `verify`, `new_metric`, `tracking_break`. Each scene advances the session world from wherever the previous scene left it (calling `start` resets).
+
+Errors: `404 {detail}` for unknown incident / country / scene, `400 {detail}` for invalid input.
