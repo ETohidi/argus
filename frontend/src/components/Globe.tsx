@@ -12,6 +12,7 @@ type Props = {
   countries: CountryState[]
   mode: GlobeMode
   selectedIso: string | null
+  insetRight?: number // px covered by the right-hand card; the globe centres in the remaining space
   onSelect: (iso: string | null) => void
 }
 
@@ -42,7 +43,7 @@ function matchExpr(colors: Record<string, string>, fallback: string): any {
 
 const MARKER_STATUSES: CountryStatus[] = ['incident', 'watch', 'explained', 'waiting']
 
-export default function Globe({ countries, mode, selectedIso, onSelect }: Props) {
+export default function Globe({ countries, mode, selectedIso, insetRight = 0, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const loadedRef = useRef(false)
@@ -94,10 +95,10 @@ export default function Globe({ countries, mode, selectedIso, onSelect }: Props)
     map.on('load', () => {
       map.setSky({
         'sky-color': '#02040a',
-        'horizon-color': '#0f2a44',
+        'horizon-color': '#0c1a2a',
         'fog-color': '#081321',
         'fog-ground-blend': 0.6,
-        'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 4, 0.4],
+        'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 0.45, 4, 0.2],
       } as any)
       map.addSource('world', { type: 'geojson', data: world as any })
       map.addLayer({
@@ -204,6 +205,13 @@ export default function Globe({ countries, mode, selectedIso, onSelect }: Props)
     const map = mapRef.current
     if (!map || !loadedRef.current) return
     map.setPaintProperty('watched', 'fill-color', matchExpr(fillColors(countriesRef.current, modeRef.current), BASE_LAND))
+    // Calm Earth: healthy markets stay faint so only the affected country stands out.
+    const opacity =
+      modeRef.current === 'health'
+        ? Object.fromEntries(countriesRef.current.map((c) => [c.iso, c.status === 'ok' ? 0.28 : c.status === 'explained' || c.status === 'waiting' ? 0.6 : 0.95]))
+        : {}
+    const entries = Object.entries(opacity)
+    map.setPaintProperty('watched', 'fill-opacity', entries.length ? (['match', ['get', 'iso'], ...entries.flat(), 0.85] as any) : 0.85)
     syncMarkers()
   }
 
@@ -238,19 +246,27 @@ export default function Globe({ countries, mode, selectedIso, onSelect }: Props)
 
   useEffect(paint, [countries, mode])
 
-  // Fly to the selected country, or back to the whole globe.
+  // Fly to the selected country, or back to the whole globe, keeping clear of the right-hand card.
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
     const run = () => {
       map.setFilter('selected-outline', ['==', ['get', 'iso'], selectedIso ?? '__none__'])
+      const padding = { top: 0, bottom: 0, left: 0, right: insetRight }
       const c = countriesRef.current.find((x) => x.iso === selectedIso)
-      if (c) map.flyTo({ center: [c.lng, c.lat - 4], zoom: ['US', 'CA', 'BR', 'AU'].includes(c.iso) ? 2.3 : ['IN', 'ID', 'MX', 'ZA'].includes(c.iso) ? 2.8 : 3.3, duration: 1800, essential: true })
-      else map.flyTo({ center: [map.getCenter().lng, HOME_VIEW.center[1]], zoom: HOME_VIEW.zoom, duration: 1600, essential: true })
+      if (c)
+        map.flyTo({
+          center: [c.lng, c.lat - 4],
+          zoom: ['US', 'CA', 'BR', 'AU'].includes(c.iso) ? 2.3 : ['IN', 'ID', 'MX', 'ZA'].includes(c.iso) ? 2.8 : 3.3,
+          padding,
+          duration: 1800,
+          essential: true,
+        })
+      else map.flyTo({ center: [map.getCenter().lng, HOME_VIEW.center[1]], zoom: HOME_VIEW.zoom, padding, duration: 1600, essential: true })
     }
     if (loadedRef.current) run()
     else map.once('load', run)
-  }, [selectedIso])
+  }, [selectedIso, insetRight])
 
   // maplibre-gl.css forces position: relative on the container, so size it from a wrapper.
   return (

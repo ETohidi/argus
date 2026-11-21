@@ -29,6 +29,17 @@ export interface CountryState {
   potential_pct?: number // potential as % of the country's current daily margin
 }
 
+// Plain-language issue card (incident.card): short sentences, no model terms.
+export interface IssueCardText {
+  title: string
+  looks_like: string // e.g. "+$85/h of 'growth'"
+  at_stake_7d_usd: number
+  what_happened: string
+  why: string
+  what_to_do: string
+  status_line: string // "Needs a decision" | "Fix applied · verifying" | "Prediction verified" | ...
+}
+
 export interface IncidentSummary {
   id: string
   title: string
@@ -38,6 +49,7 @@ export interface IncidentSummary {
   impact_usd_h: number
   risk_7d_usd?: number // 7-day margin lost by doing nothing vs the recommended fix
   reaction_h?: number | null // hours until advertisers react; 0 = now; null = n/a
+  card?: IssueCardText
 }
 
 export interface ExplainedChange {
@@ -109,6 +121,7 @@ export interface IncidentDetail {
   reaction_h?: number | null
   kind?: string // "fraud" | "tracking" | ...
   root?: string
+  card?: IssueCardText
   country: string
   platform: string
   category: string
@@ -122,7 +135,7 @@ export interface IncidentDetail {
   recommended: string
   applied: string | null
   verification: { status: 'pending' | 'verified' | 'missed'; predicted: number[] | null; actual: number | null }
-  reports: { ceo: string; manager: string; engineer: string }
+  reports: { ceo: string; manager: string; engineer: string; source?: string }
 }
 
 export interface CountryDetail {

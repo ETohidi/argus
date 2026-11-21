@@ -190,6 +190,29 @@ export class MockWorld {
       impact_usd_h: impact,
       risk_7d_usd: inc.kind === 'bot_farm' ? 23_600 : 26_100,
       reaction_h: inc.kind === 'bot_farm' ? 21 : 0,
+      card: this.card(inc, title, status, impact),
+    }
+  }
+
+  card(inc: MockIncident, title: string, status: IncidentStatus, impact: number) {
+    const name = MOCK_COUNTRIES.find((c) => c[0] === inc.country)?.[1] ?? inc.country
+    const fraud = inc.kind === 'bot_farm'
+    const status_line =
+      status === 'open' || status === 'persisting' ? 'Needs a decision' : status === 'fix_applied' ? 'Fix applied · verifying' : status === 'verified' ? 'Prediction verified' : 'Resolved · prediction verified'
+    return {
+      title,
+      looks_like: fraud ? `+$${Math.round(impact)}/h of 'growth'` : `−$${Math.round(impact)}/h of margin`,
+      at_stake_7d_usd: fraud ? 23_600 : 26_100,
+      what_happened: fraud
+        ? `About 88 fake accounts appeared on Android in ${name} and are completing high-paying fintech and strategy-game offers.`
+        : `Advertisers in ${name} confirm only 15% of iOS game completions, so we pay rewards without being paid.`,
+      why: fraud
+        ? "Their stated interests don't match what they do and they share emulator devices (proven, 94% explained)."
+        : 'Completions are normal but confirmations collapsed: a tracking break on the advertiser side (proven, 97% explained).',
+      what_to_do: fraud
+        ? 'Block the cluster: suspend the flagged accounts and their devices. Saves about $23,600 over the next 7 days.'
+        : 'Pause the affected offers and notify the advertiser. Saves about $26,100 over the next 7 days.',
+      status_line,
     }
   }
 
@@ -312,6 +335,7 @@ export class MockWorld {
       reaction_h: s.reaction_h,
       kind: inc.kind === 'bot_farm' ? 'fraud' : 'tracking',
       root: inc.kind === 'bot_farm' ? 'new_accounts' : 'revenue',
+      card: s.card,
     }
     return { ...extra, ...buildIncidentDetail({
       id: inc.id,

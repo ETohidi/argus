@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import AddMetricDialog from './components/AddMetricDialog'
-import CountryPanel from './components/CountryPanel'
+import CountrySheet from './components/CountrySheet'
+import EvidenceView, { type EvidenceTab } from './components/EvidenceView'
 import Globe, { type GlobeMode } from './components/Globe'
-import IncidentDetail, { type Audience } from './components/IncidentDetail'
+import IssueCard from './components/IssueCard'
 import MetricGraphPanel from './components/MetricGraphPanel'
-import IncidentFeed from './components/IncidentFeed'
-import ScenarioMenu from './components/ScenarioMenu'
+import ScenarioMenu, { SCENE_LABEL } from './components/ScenarioMenu'
 import TopBar from './components/TopBar'
 import { api, onBackendChange, type Backend } from './lib/api'
-import { statusSentence } from './lib/incident'
+import { needsDecision, statusSentence } from './lib/incident'
 import { DEMO_SCENES } from './lib/types'
-import type { CountryDetail, DemoScene, IncidentDetail as Detail, InjectType, MetricGraph, MetricResponse, PotentialResponse, WorldState } from './lib/types'
+import type { CountryDetail, DemoScene, IncidentDetail, InjectType, MetricGraph, MetricResponse, PotentialResponse, WorldState } from './lib/types'
 
-// Default targets for the inject buttons (the demo script), overridden by the selected country.
+// Default targets for the inject actions (the demo script), overridden by the selected country.
 const INJECT_DEFAULT: Record<InjectType, { country: string; platform?: string }> = {
   promo: { country: 'DE' },
   bot_farm: { country: 'CA', platform: 'android' },
@@ -20,27 +20,39 @@ const INJECT_DEFAULT: Record<InjectType, { country: string; platform?: string }>
   data_delay: { country: 'FR' },
 }
 
+// Progressive disclosure, mirroring Argus' own abstraction levels:
+// L1 home = the Earth and one status sentence; L2 = one issue card; L3 = the full-screen evidence.
 export default function App() {
   const [state, setState] = useState<WorldState | null>(null)
   const [backend, setBackend] = useState<Backend>('unknown')
   const [mode, setMode] = useState<GlobeMode>('health')
   const [playing, setPlaying] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [incidentId, setIncidentId] = useState<string | null>(null)
-  const [detail, setDetail] = useState<Detail | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+  const [lastScene, setLastScene] = useState<DemoScene | null>(null)
+  // L2: the incident on the issue card, and its full detail (first fetch can take a few seconds).
+  const [cardId, setCardId] = useState<string | null>(null)
+  const [detail, setDetail] = useState<IncidentDetail | null>(null)
+  const [approving, setApproving] = useState(false)
+  // L3 overlays.
+  const [evidence, setEvidence] = useState<{ tab: EvidenceTab } | null>(null)
+  const [graphView, setGraphView] = useState<{ highlight: string[] } | null>(null)
+  const [metricGraph, setMetricGraph] = useState<MetricGraph | null>(null)
+  const [metricOpen, setMetricOpen] = useState(false)
+  const [metricResult, setMetricResult] = useState<MetricResponse | null>(null)
+  // Country side sheet.
   const [countryIso, setCountryIso] = useState<string | null>(null)
   const [countryDetail, setCountryDetail] = useState<CountryDetail | null>(null)
   const [potential, setPotential] = useState<PotentialResponse | null>(null)
-  const [metricOpen, setMetricOpen] = useState(false)
-  const [metricResult, setMetricResult] = useState<MetricResponse | null>(null)
-  const [approving, setApproving] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
-  const [lastScene, setLastScene] = useState<DemoScene | null>(null)
-  const [audience, setAudience] = useState<Audience>('engineer')
-  const [graphView, setGraphView] = useState<{ highlight: string[] } | null>(null)
-  const [metricGraph, setMetricGraph] = useState<MetricGraph | null>(null)
+
   const busyRef = useRef(false)
   const backendRef = useRef<Backend>('unknown')
+  const dismissed = useRef(new Set<string>())
+
+  const flash = useCallback((msg: string) => {
+    setToast(msg)
+    window.setTimeout(() => setToast((t) => (t === msg ? null : t)), 3200)
+  }, [])
 
   useEffect(
     () =>
@@ -51,50 +63,59 @@ export default function App() {
         if (prev === 'live' && b === 'mock') flash('Twin unreachable — showing mock data')
         if (prev === 'mock' && b === 'live') flash('Twin connected')
       }),
-    [],
+    [flash],
   )
 
-  const flash = (msg: string) => {
-    setToast(msg)
-    window.setTimeout(() => setToast((t) => (t === msg ? null : t)), 3200)
+  const closeAll = () => {
+    setCardId(null)
+    setEvidence(null)
+    setGraphView(null)
+    setCountryIso(null)
   }
 
-  // Every state update goes through here so a backend restart (in-memory sessions lost, clock jumps back)
-  // is announced instead of silently swapping the world.
-  // Last clock seen per data source, so an outage that briefly falls back to the mock world
-  // still lets us notice that the live twin came back with a fresh world.
+  // Every state update goes through here. A backend restart (in-memory sessions lost) shows up as the clock
+  // jumping back; announce it instead of silently swapping the world. Clocks are tracked per data source so a
+  // short outage that falls back to the mock world does not hide the restart.
   const lastSeen = useRef<Partial<Record<Backend, number>>>({})
   const expectReset = useRef(false)
-  const applyState = useCallback((next: WorldState) => {
-    const src = backendRef.current
-    const prevT = lastSeen.current[src]
-    const restarted = prevT != null && !expectReset.current && next.clock.t < prevT
-    lastSeen.current[src] = next.clock.t
-    expectReset.current = false
-    if (restarted) {
-      setIncidentId(null)
-      setCountryIso(null)
-      setGraphView(null)
-      setPlaying(false)
-      setLastScene(null)
-      flash(src === 'live' ? 'Twin restarted — world reset' : 'Mock world reset')
-    }
-    setState(next)
-  }, [])
+  const applyState = useCallback(
+    (next: WorldState) => {
+      const src = backendRef.current
+      const prevT = lastSeen.current[src]
+      const restarted = prevT != null && !expectReset.current && next.clock.t < prevT
+      lastSeen.current[src] = next.clock.t
+      expectReset.current = false
+      if (restarted) {
+        setCardId(null)
+        setEvidence(null)
+        setGraphView(null)
+        setCountryIso(null)
+        setPlaying(false)
+        setLastScene(null)
+        dismissed.current.clear()
+        flash(src === 'live' ? 'Twin restarted — world reset' : 'Mock world reset')
+      }
+      setState(next)
+    },
+    [flash],
+  )
 
-  const run = useCallback(async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
-    if (busyRef.current) return
-    busyRef.current = true
-    setBusy(true)
-    try {
-      return await fn()
-    } catch (e) {
-      flash(e instanceof Error ? e.message : String(e))
-    } finally {
-      busyRef.current = false
-      setBusy(false)
-    }
-  }, [])
+  const run = useCallback(
+    async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
+      if (busyRef.current) return
+      busyRef.current = true
+      setBusy(true)
+      try {
+        return await fn()
+      } catch (e) {
+        flash(e instanceof Error ? e.message : String(e))
+      } finally {
+        busyRef.current = false
+        setBusy(false)
+      }
+    },
+    [flash],
+  )
 
   // Initial load + background polling while paused.
   useEffect(() => {
@@ -104,7 +125,7 @@ export default function App() {
       if (!busyRef.current) api.state().then(applyState).catch(() => {})
     }, 4000)
     return () => window.clearInterval(id)
-  }, [])
+  }, [applyState])
 
   // Play: one sim hour every 1.2 s.
   useEffect(() => {
@@ -115,26 +136,33 @@ export default function App() {
     return () => window.clearInterval(id)
   }, [playing, run, applyState])
 
-  // Keep the open incident and country in sync with the world clock.
+  // A new incident that needs a decision gets the card automatically (unless the user closed it).
+  useEffect(() => {
+    if (!state || cardId) return
+    const next = state.incidents.find((i) => needsDecision(i) && !dismissed.current.has(i.id))
+    if (next) setCardId(next.id)
+  }, [state, cardId])
+
+  // Keep the card's detail, the country sheet and the metric graph in sync with the world clock.
   const t = state?.clock.t
   useEffect(() => {
-    if (incidentId)
-      api
-        .incident(incidentId)
-        .then(setDetail)
-        .catch(() => {
-          setDetail(null)
-          setIncidentId(null)
-        })
-    else setDetail(null)
-  }, [incidentId, t])
-  useEffect(() => {
-    if (graphView) api.graph().then(setMetricGraph).catch(() => setMetricGraph(null))
-  }, [graphView, t])
+    if (!cardId) return setDetail(null)
+    let live = true
+    api
+      .incident(cardId)
+      .then((d) => live && setDetail(d))
+      .catch(() => live && setCardId(null))
+    return () => {
+      live = false
+    }
+  }, [cardId, t])
   useEffect(() => {
     if (countryIso) api.country(countryIso).then(setCountryDetail).catch(() => setCountryDetail(null))
     else setCountryDetail(null)
   }, [countryIso, t])
+  useEffect(() => {
+    if (graphView) api.graph().then(setMetricGraph).catch(() => setMetricGraph(null))
+  }, [graphView, t])
   useEffect(() => {
     if (mode === 'potential') api.potential().then(setPotential).catch(() => {})
   }, [mode, t])
@@ -145,63 +173,56 @@ export default function App() {
     run(async () => {
       const target = countryIso ? { country: countryIso, platform: INJECT_DEFAULT[type].platform } : INJECT_DEFAULT[type]
       await api.inject(type, target.country, target.platform)
-      flash(`${type.replace('_', ' ')} scheduled · ${target.country}${target.platform ? ' ' + target.platform : ''}`)
+      flash(`${type.replace('_', ' ')} scheduled in ${target.country}`)
       applyState(await api.state())
     })
 
+  // Each demo scene leaves the screen on the view that tells its part of the story.
   const demo = (scene: DemoScene) =>
     run(async () => {
       if (scene === 'start') expectReset.current = true
       const r = await api.demo(scene)
       applyState(r.state)
       setLastScene(scene)
+      setEvidence(null)
       setGraphView(null)
-      // Leave the right panel on the view that tells this scene's story.
+      setCountryIso(null)
       switch (scene) {
         case 'start':
-        case 'promo':
-          setIncidentId(null)
-          setCountryIso(null)
+          dismissed.current.clear()
+          setCardId(null)
           setMode('health')
           break
-        case 'bot_farm': {
-          // First sighting: fly to the country and show its L2 heatmap; the incident opens on "investigate".
-          const inc = r.state.incidents.find((i) => i.id === r.incident_id)
-          setIncidentId(null)
-          setCountryIso(inc?.country ?? null)
+        case 'promo':
+          setCardId(null)
           break
-        }
         case 'investigate':
-        case 'approve':
-        case 'verify':
-          setAudience('ceo')
-          break
-        case 'tracking_break':
-          setAudience('engineer')
+          if (r.incident_id) setCardId(r.incident_id)
+          setEvidence({ tab: 'graph' })
           break
         case 'new_metric': {
           const node = r.metric?.node as { id?: string } | null | undefined
           setMetricResult(r.metric ?? null)
-          setIncidentId(null)
-          setCountryIso(null)
           setGraphView({ highlight: node?.id ? [node.id] : [] })
           break
         }
+        default: // bot_farm, approve, verify, tracking_break: the issue card
+          if (r.incident_id) {
+            dismissed.current.delete(r.incident_id)
+            setCardId(r.incident_id)
+          }
       }
-      if (r.incident_id && scene !== 'bot_farm') {
-        setCountryIso(null)
-        setIncidentId(r.incident_id)
-      }
-      flash(`Scene · ${scene.replace('_', ' ')}`)
+      flash(SCENE_LABEL[scene])
     })
 
   const approve = async (fixId: string) => {
-    if (!incidentId) return
+    if (!cardId) return
     setApproving(true)
     try {
-      setDetail(await api.approve(incidentId, fixId))
+      setDetail(await api.approve(cardId, fixId))
       applyState(await api.state())
-      flash('Fix approved · applied to reality')
+      setEvidence(null)
+      flash('Fix approved and applied')
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e))
     } finally {
@@ -210,24 +231,32 @@ export default function App() {
   }
 
   const selectCountry = (iso: string | null) => {
-    setIncidentId(null)
+    setEvidence(null)
     setGraphView(null)
     setCountryIso(iso)
   }
   const openIncident = (id: string) => {
     setCountryIso(null)
-    setGraphView(null)
-    setIncidentId(id)
+    dismissed.current.delete(id)
+    setCardId(id)
   }
-
+  const closeCard = () => {
+    if (cardId) dismissed.current.add(cardId)
+    setCardId(null)
+    setEvidence(null)
+  }
   const openAddMetric = () => {
     setMetricResult(null)
     setMetricOpen(true)
   }
 
-  // Keyboard shortcuts for recording without visible controls: 1–8 = demo scenes, Space = play / pause.
-  const demoRef = useRef(demo)
-  demoRef.current = demo
+  // Keyboard: 1–8 demo scenes, Space play / pause, E evidence, Esc closes the top layer.
+  const keys = useRef({ demo, closeTop: () => {}, openEvidence: () => {} })
+  keys.current = {
+    demo,
+    closeTop: () => (evidence ? setEvidence(null) : graphView ? setGraphView(null) : countryIso ? setCountryIso(null) : cardId ? closeCard() : undefined),
+    openEvidence: () => cardId && setEvidence({ tab: 'graph' }),
+  }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null
@@ -236,71 +265,92 @@ export default function App() {
       const n = Number(e.key)
       if (Number.isInteger(n) && n >= 1 && n <= DEMO_SCENES.length) {
         e.preventDefault()
-        demoRef.current(DEMO_SCENES[n - 1])
+        keys.current.demo(DEMO_SCENES[n - 1])
       } else if (e.key === ' ') {
         e.preventDefault()
         setPlaying((p) => !p)
-      }
+      } else if (e.key === 'e' || e.key === 'E') keys.current.openEvidence()
+      else if (e.key === 'Escape') keys.current.closeTop()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  const card = state?.incidents.find((i) => i.id === cardId)
   const country = state?.countries.find((c) => c.iso === countryIso) ?? null
-  const focusIso = countryIso ?? detail?.country ?? null
+  const cardCountry = state?.countries.find((c) => c.iso === card?.country)
+  const focusIso = countryIso ?? card?.country ?? null
+  const sideOpen = !!(country || card)
+  const explained = state?.explained[0]
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="relative flex min-h-0 flex-1">
-        <main className="relative min-w-0 flex-1 overflow-hidden">
-          {state && <Globe countries={state.countries} mode={mode} selectedIso={focusIso} onSelect={selectCountry} />}
-          <TopBar clock={state?.clock.label ?? 'Connecting…'} status={state ? statusSentence(state) : { text: 'Connecting to the twin…', tone: 'neutral' }} mode={mode} onMode={setMode} />
-          <ScenarioMenu
-            state={state}
-            backend={backend}
-            playing={playing}
-            busy={busy}
-            lastScene={lastScene}
-            injectTarget={countryIso ? (state?.countries.find((c) => c.iso === countryIso)?.name ?? countryIso) : 'the demo markets'}
-            onPlay={() => setPlaying((p) => !p)}
-            onStep={step}
-            onDemo={demo}
-            onInject={inject}
-            onAddMetric={openAddMetric}
-          />
-          {toast && (
-            <div className="fade-up absolute left-1/2 top-20 z-30 -translate-x-1/2 rounded-full bg-slate-900/90 px-4 py-2 text-[13px] text-slate-200 ring-1 ring-slate-700/50">
-              {toast}
-            </div>
-          )}
-        </main>
+    <div className="relative h-full overflow-hidden bg-ink-950">
+      {state && <Globe countries={state.countries} mode={mode} selectedIso={focusIso} insetRight={sideOpen ? 460 : 0} onSelect={selectCountry} />}
 
-        <aside className="panel relative z-10 w-[468px] shrink-0 border-l border-slate-700/40">
-          {!state ? (
-            <div className="p-6 text-slate-500">Loading world…</div>
-          ) : incidentId && detail?.id !== incidentId ? (
-            <IncidentLoading onBack={() => setIncidentId(null)} />
-          ) : detail && incidentId ? (
-            <IncidentDetail
-              key={detail.id}
-              detail={detail}
-              onBack={() => setIncidentId(null)}
-              onApprove={approve}
-              approving={approving}
-              aud={audience}
-              onAud={setAudience}
-              countryName={state.countries.find((c) => c.iso === detail.country)?.name}
-            />
-          ) : graphView ? (
-            <MetricGraphPanel graph={metricGraph} highlight={graphView.highlight} result={metricResult} onBack={() => setGraphView(null)} />
-          ) : country ? (
-            <CountryPanel country={country} detail={countryDetail} incidents={state.incidents} potential={potential} onBack={() => selectCountry(null)} onOpenIncident={openIncident} />
-          ) : (
-            <IncidentFeed state={state} onOpen={openIncident} onCountry={selectCountry} />
-          )}
-        </aside>
+      <TopBar clock={state?.clock.label ?? 'Connecting…'} status={state ? statusSentence(state) : { text: 'Connecting to the twin…', tone: 'neutral' }} mode={mode} onMode={setMode} />
+
+      {/* Right column: an explained change as a quiet note, then the issue card or the country sheet. */}
+      <div className="pointer-events-none absolute bottom-8 right-8 top-24 z-20 flex flex-col items-end gap-4 overflow-y-auto">
+        {explained && !country && (
+          <div className="fade-in pointer-events-auto max-w-[420px] text-right text-[13px] leading-relaxed text-slate-500">
+            <span className="mr-2 inline-block h-2 w-2 rounded-full bg-slate-400" />
+            {state?.countries.find((c) => c.iso === explained.country)?.name ?? explained.country}: {explained.event.split(':')[0]}. Expected by the twin, no alert.
+          </div>
+        )}
+        {country ? (
+          <CountrySheet
+            country={country}
+            detail={countryDetail}
+            incident={state?.incidents.find((i) => i.country === country.iso && i.status !== 'resolved')}
+            potential={potential}
+            onOpenIncident={openIncident}
+            onClose={() => setCountryIso(null)}
+          />
+        ) : card ? (
+          <IssueCard
+            key={card.id}
+            summary={card}
+            detail={detail?.id === card.id ? detail : null}
+            countryName={cardCountry?.name ?? card.country}
+            approving={approving}
+            onApprove={approve}
+            onEvidence={() => setEvidence({ tab: 'graph' })}
+            onClose={closeCard}
+          />
+        ) : null}
       </div>
 
+      <ScenarioMenu
+        state={state}
+        backend={backend}
+        playing={playing}
+        busy={busy}
+        lastScene={lastScene}
+        injectTarget={country?.name ?? 'the demo markets'}
+        onPlay={() => setPlaying((p) => !p)}
+        onStep={step}
+        onDemo={demo}
+        onInject={inject}
+        onAddMetric={openAddMetric}
+      />
+
+      {toast && (
+        <div className="fade-up pointer-events-none absolute bottom-8 left-1/2 z-50 -translate-x-1/2 rounded-full bg-slate-900/90 px-5 py-2 text-[13px] text-slate-300 ring-1 ring-slate-700/50">
+          {toast}
+        </div>
+      )}
+
+      {evidence && card && (
+        <EvidenceView
+          detail={detail?.id === card.id ? detail : null}
+          title={card.card?.title ?? card.title}
+          initialTab={evidence.tab}
+          approving={approving}
+          onApprove={approve}
+          onClose={() => setEvidence(null)}
+        />
+      )}
+      {graphView && <MetricGraphPanel graph={metricGraph} highlight={graphView.highlight} result={metricResult} onClose={() => setGraphView(null)} />}
 
       {metricOpen && (
         <AddMetricDialog
@@ -308,28 +358,12 @@ export default function App() {
           onClose={() => setMetricOpen(false)}
           onAdded={(id) => {
             api.state().then(applyState).catch(() => {})
-            setIncidentId(null)
-            setCountryIso(null)
+            setMetricOpen(false)
+            closeAll()
             setGraphView({ highlight: id ? [id] : [] })
           }}
         />
       )}
-    </div>
-  )
-}
-
-// First fetch of an incident can take a few seconds (the backend writes the audience reports with an LLM).
-function IncidentLoading({ onBack }: { onBack: () => void }) {
-  return (
-    <div className="flex h-full flex-col px-5 pt-4">
-      <button onClick={onBack} className="mb-3 self-start text-[11px] text-slate-400 hover:text-slate-200">
-        ← All incidents
-      </button>
-      <div className="h-5 w-3/4 animate-pulse rounded bg-slate-800/70" />
-      <div className="mt-2 h-3 w-1/3 animate-pulse rounded bg-slate-800/50" />
-      <div className="mt-6 h-28 animate-pulse rounded-xl bg-slate-800/40" />
-      <div className="mt-3 h-40 animate-pulse rounded-xl bg-slate-800/30" />
-      <div className="mt-4 text-[12px] text-slate-500">Writing the reports…</div>
     </div>
   )
 }

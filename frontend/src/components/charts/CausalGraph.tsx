@@ -127,18 +127,11 @@ export default function CausalGraph({ nodes, edges, highlight = [], legend = tru
     <div>
       <svg viewBox={`0 0 ${W} ${height}`} className="w-full" style={{ height: 'auto' }}>
         <defs>
-          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="4" result="b" />
-            <feMerge>
-              <feMergeNode in="b" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
           <marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
             <path d="M0,0 L8,4 L0,8 z" fill="#475569" />
           </marker>
           <marker id="arrow-hot" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
-            <path d="M0,0 L8,4 L0,8 z" fill="#fb7185" />
+            <path d="M0,0 L8,4 L0,8 z" fill="#fb923c" />
           </marker>
         </defs>
         {chains
@@ -153,13 +146,13 @@ export default function CausalGraph({ nodes, edges, highlight = [], legend = tru
                 <path
                   d={d}
                   fill="none"
-                  stroke={fresh ? '#2dd4bf' : h ? '#fb7185' : '#334155'}
+                  stroke={fresh ? '#2dd4bf' : h ? '#fb923c' : '#334155'}
                   strokeWidth={h ? 1.8 : 1.1}
                   strokeDasharray={edge.type === 'exogenous' ? '2 4' : edge.type === 'formula' && !h ? '3 3' : undefined}
                   markerEnd={`url(#${h ? 'arrow-hot' : 'arrow'})`}
                   opacity={h ? 0.9 : edge.type === 'exogenous' ? 0.5 : 0.8}
                 />
-                {h && <path d={d} fill="none" stroke={fresh ? '#99f6e4' : '#fecdd3'} strokeWidth={1.4} className="flow" opacity={0.7} />}
+                {h && <path d={d} fill="none" stroke={fresh ? '#99f6e4' : '#fed7aa'} strokeWidth={1.4} className="flow" opacity={0.7} />}
               </g>
             )
           })}
@@ -172,14 +165,13 @@ export default function CausalGraph({ nodes, edges, highlight = [], legend = tru
             const active = n.state !== 'normal' || fresh
             return (
               <g key={p.id} transform={`translate(${p.x - NODE_W / 2},${p.y - NODE_H / 2})`} className="fade-in" style={{ animationDelay: `${i * 50}ms` }}>
-                {(n.state === 'root' || fresh) && <rect width={NODE_W} height={NODE_H} rx={8} fill={c} opacity={0.35} filter="url(#glow)" className={fresh ? 'animate-pulse' : undefined} />}
                 {fresh && (
                   <g transform={`translate(${NODE_W - 26},-7)`}>
                     <rect width={26} height={12} rx={3} fill="#2dd4bf" />
                     <text x={13} y={9} fontSize={8} fontWeight={700} textAnchor="middle" fill="#04070d">NEW</text>
                   </g>
                 )}
-                <rect width={NODE_W} height={NODE_H} rx={8} fill={active ? `${c}22` : '#0e1724'} stroke={c} strokeWidth={active ? 1.4 : 1} />
+                <rect width={NODE_W} height={NODE_H} rx={8} fill={n.state === 'root' ? `${c}55` : active ? `${c}1f` : '#0e1724'} stroke={c} strokeWidth={n.state === 'root' || fresh ? 2 : active ? 1.2 : 1} />
                 <text x={8} y={19} fontSize={10} fill={active ? '#f1f5f9' : '#94a3b8'} fontWeight={n.state === 'root' ? 700 : 500}>
                   {n.label.length > 14 ? n.label.slice(0, 13) + '…' : n.label}
                 </text>
@@ -190,7 +182,7 @@ export default function CausalGraph({ nodes, edges, highlight = [], legend = tru
             )
           })}
       </svg>
-      {legend && <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10.5px] text-slate-400">
+      {legend && <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-slate-400">
         {LEGEND.map(([s, l]) => (
           <span key={s} className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-sm" style={{ background: NODE_COLOR[s] }} />
@@ -198,9 +190,9 @@ export default function CausalGraph({ nodes, edges, highlight = [], legend = tru
           </span>
         ))}
         <span className="flex items-center gap-1.5">
-          <span className="h-0.5 w-4 bg-rose-400" /> propagation
+          <span className="h-0.5 w-4 bg-orange-400" /> How the break spreads
         </span>
-        <span className="text-slate-500">number = z-score</span>
+        <span className="text-slate-500">Numbers: deviation in standard deviations</span>
       </div>}
     </div>
   )

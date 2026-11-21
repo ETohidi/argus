@@ -31,11 +31,6 @@ body,
   font-variant-numeric: tabular-nums;
 }
 
-.panel {
-  background: linear-gradient(180deg, rgba(14, 23, 36, 0.92), rgba(7, 12, 21, 0.94));
-  backdrop-filter: blur(14px);
-}
-
 .card {
   background: rgba(22, 33, 47, 0.55);
   border: 1px solid rgba(148, 163, 184, 0.09);
@@ -43,11 +38,8 @@ body,
 }
 
 .section-title {
-  font-size: 10.5px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-size: 13px;
   color: #7b8ba3;
-  font-weight: 600;
 }
 
 .scroll-thin {
@@ -117,14 +109,13 @@ body,
   width: 20px;
   height: 20px;
   cursor: pointer;
-  --c: #f43f5e;
+  --c: #f97316;
 }
 .argus-marker i {
   position: absolute;
   inset: 5px;
   border-radius: 50%;
   background: var(--c);
-  box-shadow: 0 0 12px var(--c);
 }
 .argus-marker span {
   position: absolute;
@@ -137,17 +128,21 @@ body,
   animation-delay: 1s;
 }
 .argus-marker--watch {
-  --c: #fbbf24;
+  --c: #fdba74;
+}
+/* Only incidents pulse; everything else is a still dot. */
+.argus-marker:not(.argus-marker--incident) span {
+  display: none;
 }
 .argus-marker--explained {
-  --c: #cbd5e1;
+  --c: #94a3b8;
 }
 .argus-marker--explained span,
 .argus-marker--waiting span {
   animation-duration: 3.5s;
 }
 .argus-marker--waiting {
-  --c: #93a4cc;
+  --c: #64748b;
 }
 .argus-marker--explained span:nth-child(2),
 .argus-marker--waiting span:nth-child(2) {
@@ -173,7 +168,7 @@ body,
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 8px;
   padding: 7px 10px;
-  font-size: 12px;
+  font-size: 13px;
   font-family: var(--font-sans);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }

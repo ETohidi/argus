@@ -1,7 +1,7 @@
 import type { Fix } from '../../lib/types'
 import { usd } from '../../lib/theme'
 
-const M = { l: 4, r: 4, t: 8, b: 14 }
+const M = { l: 4, r: 4, t: 8, b: 20 }
 
 type Props = {
   fix: Fix
@@ -20,6 +20,7 @@ export function relativeSeries(fix: Fix, reference: number[]) {
 
 export default function FanChart({ fix, reference, domain, color, width: W = 200, height: H = 96 }: Props) {
   const { p10, p50, p90 } = relativeSeries(fix, reference)
+  const fs = W >= 400 ? 13 : 8.5 // labels stay ~13 px when the chart is drawn large
   const n = p50.length - 1
   const x = (i: number) => M.l + (i / n) * (W - M.l - M.r)
   const y = (v: number) => H - M.b - ((v - domain[0]) / (domain[1] - domain[0] || 1)) * (H - M.t - M.b)
@@ -39,8 +40,8 @@ export default function FanChart({ fix, reference, domain, color, width: W = 200
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
       <defs>
         <linearGradient id={gid} x1="0" x2="1" y1="0" y2="0">
-          <stop offset="0" stopColor={color} stopOpacity={0.15} />
-          <stop offset="1" stopColor={color} stopOpacity={0.45} />
+          <stop offset="0" stopColor={color} stopOpacity={0.28} />
+          <stop offset="1" stopColor={color} stopOpacity={0.28} />
         </linearGradient>
       </defs>
       {[1, 2, 3, 4, 5, 6, 7].map((d) => (
@@ -51,11 +52,11 @@ export default function FanChart({ fix, reference, domain, color, width: W = 200
       <path d={line(p50)} fill="none" stroke={color} strokeWidth={1.8} pathLength={1} className="draw" />
       <circle cx={x(n)} cy={y(end)} r={2.5} fill={color} />
       {[1, 7].map((d) => (
-        <text key={d} x={x(d)} y={H - 3} fontSize={8} fill="#64748b" textAnchor="middle">
-          d{d}
+        <text key={d} x={x(d)} y={H - 3} fontSize={fs} fill="#64748b" textAnchor={d === 7 ? 'end' : 'middle'}>
+          day {d}
         </text>
       ))}
-      <text x={W - M.r - 4} y={Math.max(M.t + 8, Math.min(H - M.b - 4, y(end) + (end >= 0 ? -6 : 12)))} fontSize={8.5} fill="#cbd5e1" textAnchor="end" className="num">
+      <text x={W - M.r - 4} y={Math.max(M.t + 8, Math.min(H - M.b - 4, y(end) + (end >= 0 ? -6 : 12)))} fontSize={fs} fill="#cbd5e1" textAnchor="end" className="num">
         {end >= 0 ? '+' : ''}
         {usd(end)}
       </text>
