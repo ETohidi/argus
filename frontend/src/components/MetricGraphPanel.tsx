@@ -43,7 +43,7 @@ export default function MetricGraphPanel({ graph, highlight, result, onClose }: 
         </p>
         <div className="mt-10 grid grid-cols-[1.4fr_1fr] gap-8">
           <div className="rounded-2xl bg-panel/60 p-8 ring-1 ring-line">
-            {graph ? <CausalGraph nodes={nodes} edges={edges} highlight={lit} legend={false} /> : <div className="h-96 animate-pulse rounded-xl bg-line/50" />}
+            {graph ? <CausalGraph nodes={nodes} edges={edges} roles={Object.fromEntries(lit.map((id) => [id, 'new' as const]))} showWords={false} dims={{ W: 700, nodeW: 150, nodeH: 46, row: 70 }} /> : <div className="h-96 animate-pulse rounded-xl bg-line/50" />}
           </div>
           <div>
             {checks ? (

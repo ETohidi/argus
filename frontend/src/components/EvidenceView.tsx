@@ -1,13 +1,13 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import CausalGraph from './charts/CausalGraph'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import CausalGraph, { defaultRole, type NodeRole } from './charts/CausalGraph'
 import FakeAccountPicture from './charts/FakeAccountPicture'
 import L3Scatter from './charts/L3Scatter'
 import NormalZoneChart from './charts/NormalZoneChart'
 import ShapleyBars from './charts/ShapleyBars'
 import WhichFixChart from './charts/WhichFixChart'
-import { bestHypothesis, isBaseline, isFraud, shortHypothesis } from '../lib/incident'
+import { bestHypothesis, isBaseline, isFraud, metricLabel, shortHypothesis } from '../lib/incident'
 import { VERDICT_COLOR, usd } from '../lib/theme'
-import type { IncidentDetail, Level } from '../lib/types'
+import type { GraphEdge, IncidentDetail, Level } from '../lib/types'
 
 export type EvidenceTab = 'graph' | 'users' | 'proof' | 'fixes' | 'details'
 const TABS: { id: EvidenceTab; label: string }[] = [
@@ -53,7 +53,7 @@ function graphCaption(d: IncidentDetail) {
 function usersCaption(d: IncidentDetail) {
   if (!d.l3) return `No need to look at individual users: the broken link is ${PLAIN[d.root ?? ''] ?? 'a business mechanism'}, not people.`
   const s = d.l3.summary
-  const devices = d.l3.groups?.length ?? 0
+  const devices = d.l3.groups?.filter((g) => g.count >= 2).length ?? 0
   if (devices > 0) return `${s.n_flagged} new accounts on ${devices} shared ${devices === 1 ? 'phone' : 'phones'}; their interests don't match what they do.`
   const emu = s.top_devices.some((x) => /emu|emulator|sdk|generic/i.test(x))
   return `${s.n_flagged} new accounts whose tastes make no sense, ${emu ? 'on shared emulators' : `sharing devices like ${s.top_devices[0]}`}.`
@@ -121,7 +121,7 @@ export default function EvidenceView({ detail: d, title, initialTab = 'graph', a
               onClick={() => setTab(t.id)}
               className={`-mb-px border-b-2 px-4 pb-3 text-[16px] transition ${
                 tab === t.id ? 'border-ok text-fg' : 'border-transparent text-fg-2 hover:text-fg'
-              } ${t.id === 'details' ? 'ml-auto' : ''}`}
+              } ${t.id === 'details' ? 'ml-auto !text-[13px] self-end' : ''}`}
             >
               {t.id !== 'details' && <span className="num mr-2 text-[13px] text-fg-2">{i + 1}</span>}
               {t.label}
@@ -137,20 +137,12 @@ export default function EvidenceView({ detail: d, title, initialTab = 'graph', a
           {!d ? (
             <div className="h-[420px] animate-pulse rounded-2xl bg-panel/60" />
           ) : tab === 'graph' ? (
-            <Frame narrow>
-              <CausalGraph nodes={d.graph.nodes} edges={d.graph.edges} />
-            </Frame>
+            <StoryGraph d={d} />
           ) : tab === 'users' ? (
             d.l3 ? (
-              <div className="space-y-6">
-                <Frame>
-                  <FakeAccountPicture l3={d.l3} />
-                </Frame>
-                <Frame narrow>
-                  <h3 className="mb-4 text-[16px] text-fg">Why they stand out: tastes vs payouts</h3>
-                  <L3Scatter l3={d.l3} />
-                </Frame>
-              </div>
+              <Frame>
+                <FakeAccountPicture l3={d.l3} />
+              </Frame>
             ) : (
               <Empty text="This incident was settled at the segment level (L2); no accounts were sampled." />
             )
@@ -164,6 +156,82 @@ export default function EvidenceView({ detail: d, title, initialTab = 'graph', a
         </div>
       </div>
     </div>
+  )
+}
+
+// The causal story: by default only the path from the broken link to margin; everything else on request.
+const STORY = ['new_accounts', 'active_users', 'starts', 'completions', 'revenue', 'rewards', 'margin']
+const NODE_PLAIN: Record<string, string> = {
+  new_accounts: 'New sign-ups',
+  active_users: 'Active users',
+  impressions: 'Offer views',
+  starts: 'Offer starts',
+  completions: 'Completions',
+  revenue: 'Revenue',
+  rewards: 'Rewards paid',
+  quality: 'Valuable users',
+  margin: 'Margin',
+  quality_per_completion: 'Quality per completion',
+  calendar: 'Planned events',
+}
+
+function StoryGraph({ d }: { d: IncidentDetail }) {
+  const [all, setAll] = useState(false)
+  const { nodes, edges, roles } = useMemo(() => {
+    const root = d.graph.nodes.find((n) => n.state === 'root')
+    const down = new Set<string>()
+    if (root) {
+      const q = [root.id]
+      while (q.length) {
+        const id = q.shift()!
+        for (const e of d.graph.edges) if (e.source === id && !down.has(e.target)) down.add(e.target), q.push(e.target)
+      }
+    }
+    const roles: Record<string, NodeRole> = {}
+    for (const n of d.graph.nodes) {
+      roles[n.id] = defaultRole(n)
+      // Revenue and margin only move because of the root: say so explicitly, matching the caption.
+      if ((n.id === 'revenue' || n.id === 'margin') && down.has(n.id) && roles[n.id] === 'normal') roles[n.id] = 'symptom'
+    }
+    const plainNodes = d.graph.nodes.map((n) => ({ ...n, label: NODE_PLAIN[n.id] ?? n.label }))
+    if (all) return { nodes: plainNodes, edges: d.graph.edges, roles }
+    // Story subset: path nodes from the root's parents downwards (plus the root itself).
+    const rootParents = new Set(d.graph.edges.filter((e) => e.target === root?.id).map((e) => e.source))
+    const keep = new Set(
+      d.graph.nodes.filter((n) => n.id === root?.id || (STORY.includes(n.id) && (down.has(n.id) || rootParents.has(n.id)))).map((n) => n.id),
+    )
+    // Bridge hidden nodes so the path stays connected (e.g. active users → offer starts).
+    const edges: GraphEdge[] = []
+    const seen = new Set<string>()
+    for (const src of keep) {
+      const stack = d.graph.edges.filter((e) => e.source === src).map((e) => ({ to: e.target, type: e.type }))
+      const visited = new Set<string>()
+      while (stack.length) {
+        const { to, type } = stack.pop()!
+        if (visited.has(to)) continue
+        visited.add(to)
+        if (keep.has(to)) {
+          const k = `${src}>${to}`
+          if (!seen.has(k)) seen.add(k), edges.push({ source: src, target: to, type })
+        } else for (const e of d.graph.edges) if (e.source === to) stack.push({ to: e.target, type: e.type })
+      }
+    }
+    return { nodes: plainNodes.filter((n) => keep.has(n.id)), edges, roles }
+  }, [d, all])
+  return (
+    <Frame narrow>
+      <CausalGraph nodes={nodes} edges={edges} roles={roles} />
+      <div className="mt-6 flex items-center justify-between text-[13px] text-fg-2">
+        <span className="flex gap-5">
+          <span className="flex items-center gap-2"><span className="h-3 w-5 rounded bg-problem" /> broke</span>
+          <span className="flex items-center gap-2"><span className="h-3 w-5 rounded border border-dashed border-problem" /> only a symptom</span>
+          <span className="flex items-center gap-2"><span className="h-3 w-5 rounded border border-line" /> normal</span>
+        </span>
+        <button onClick={() => setAll((a) => !a)} className="text-fg-2 hover:text-fg">
+          {all ? 'Show the story only' : 'Show all metrics'}
+        </button>
+      </div>
+    </Frame>
   )
 }
 
@@ -184,7 +252,8 @@ function Proof({ d }: { d: IncidentDetail }) {
   const cfByT = new Map((cf?.series ?? []).map((p) => [p.t, p.value]))
   const cfValues = series.map((p) => cfByT.get(p.t) ?? p.actual)
   const share = cf?.explained_share ?? bestHypothesis(d)?.explained ?? 0
-  const question = cf ? `What would it look like ${cf.label.charAt(0).toLowerCase()}${cf.label.slice(1)}?` : null
+  const cfLabel = cf?.label.replace(/\s*\(.*\)\s*$/, '') ?? ''
+  const question = cf ? `What would it look like ${cfLabel.charAt(0).toLowerCase()}${cfLabel.slice(1)}?` : null
   const hyps = [...d.hypotheses].sort((a, b) => b.explained - a.explained)
   return (
     <div className="space-y-6">
@@ -203,10 +272,10 @@ function Proof({ d }: { d: IncidentDetail }) {
             </button>
           )}
           <div className="mt-6">
-            <NormalZoneChart series={series} leftAt={d.left_zone_at} values={without ? cfValues : undefined} width={896} height={300} fontSize={13} />
+            <NormalZoneChart series={series} leftAt={d.left_zone_at} values={without ? cfValues : undefined} width={896} height={300} fontSize={13} showStart={false} />
           </div>
           <div className="mt-3 flex items-baseline justify-between gap-6 text-[13px] text-fg-2">
-            <span>{d.series_meta?.label ?? 'Alerting metric'} · grey = normal for this hour</span>
+            <span>{metricLabel(d.series_meta)} · grey = normal for this hour</span>
             <span className={`text-[16px] transition-opacity duration-300 ${without ? 'text-ok opacity-100' : 'opacity-0'}`}>
               {Math.round(share * 100)}% of the change disappears{share >= 0.8 ? ' — cause proven' : ''}
             </span>
@@ -252,7 +321,7 @@ function Fixes({ d, approving, onApprove }: { d: IncidentDetail; approving: bool
       )}
       <Frame>
         <WhichFixChart fixes={d.fixes} recommended={d.recommended} applied={d.applied} />
-        <p className="mt-2 text-[13px] text-fg-2">Cumulative margin from now, against keeping today’s daily margin. Bands: p10–p90 of 40 simulated weeks.</p>
+        <p className="mt-2 text-[13px] text-fg-2">Shaded = range of likely outcomes.</p>
         {best && !d.applied && (
           <div className="mt-6 flex items-center gap-6">
             <button
@@ -333,6 +402,12 @@ function Details({ d }: { d: IncidentDetail }) {
           <h3 className="mb-4 text-[16px] font-semibold text-fg">Shapley contributions to the margin change</h3>
           <ShapleyBars items={d.contributions} />
         </div>
+        {d.l3 && (
+          <div>
+            <h3 className="mb-4 text-[16px] font-semibold text-fg">Taste coherence vs payout focus</h3>
+            <L3Scatter l3={d.l3} />
+          </div>
+        )}
       </section>
     </div>
   )

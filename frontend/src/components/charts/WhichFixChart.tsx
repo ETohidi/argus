@@ -21,7 +21,8 @@ export default function WhichFixChart({ fixes, recommended, applied, width: W = 
   const pad = (hi - lo) * 0.08 || 1
   lo -= pad
   hi += pad
-  const M = { l: 104, r: 230, t: 16, b: FS + 16 }
+  const events = base.events ?? []
+  const M = { l: 16, r: 230, t: 16 + events.length * (FS + 8), b: FS + 16 }
   const n = base.days.length
   const x = (day: number) => M.l + (day / n) * (W - M.l - M.r)
   const y = (v: number) => H - M.b - ((v - lo) / (hi - lo)) * (H - M.t - M.b)
@@ -45,18 +46,10 @@ export default function WhichFixChart({ fixes, recommended, applied, width: W = 
     const k = d - i
     return i >= n ? arr[n] : arr[i] + (arr[i + 1] - arr[i]) * k
   }
-  const ticks = [lo + pad, 0, hi - pad].filter((v, i, a) => a.findIndex((w) => Math.abs(w - v) < (hi - lo) * 0.1) === i)
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Cumulative margin of each fix over the next week">
-      {ticks.map((v) => (
-        <g key={v}>
-          <line x1={M.l} x2={W - M.r} y1={y(v)} y2={y(v)} stroke={AURORA.line} strokeDasharray={v === 0 ? undefined : '2 4'} />
-          <text x={M.l - 10} y={y(v) + 4} fontSize={FS} fill={AURORA.fg2} textAnchor="end">
-            {v === 0 ? 'today’s pace' : usd(Math.round(v / 1000) * 1000)}
-          </text>
-        </g>
-      ))}
+      <line x1={M.l} x2={W - M.r} y1={y(0)} y2={y(0)} stroke={AURORA.line} />
       {[0, 1, 2, 3, 4, 5, 6, 7].map((d) => (
         <text key={d} x={x(d)} y={H - 4} fontSize={FS} fill={AURORA.fg2} textAnchor={d === 0 ? 'start' : 'middle'}>
           {d === 0 ? 'now' : `day ${d}`}
@@ -75,16 +68,16 @@ export default function WhichFixChart({ fixes, recommended, applied, width: W = 
             </g>
           )
         })}
-      {/* Advertiser reactions on the do-nothing route */}
+      {/* Advertiser reactions on the do-nothing route: dots on the line, labels in a row at the top. */}
       {(base.events ?? []).map((e, i) => {
         const vx = x(Math.min(n, e.after_h / 24))
         const vy = y(valueAtHour(lines.find((l) => l.f.id === base.id)!.p50, e.after_h))
-        const above = i % 2 === 0
+        const ly = FS + i * (FS + 8) // label rows above the plot area
         return (
           <g key={e.label}>
+            <line x1={vx} x2={vx} y1={ly + 6} y2={vy - 7} stroke={PINK} strokeOpacity={0.45} strokeDasharray="2 3" />
             <circle cx={vx} cy={vy} r={5} fill={AURORA.bg} stroke={PINK} strokeWidth={2} />
-            <line x1={vx} x2={vx} y1={vy + (above ? -8 : 8)} y2={vy + (above ? -30 : 30)} stroke={PINK} strokeOpacity={0.5} />
-            <text x={vx + 6} y={vy + (above ? -34 : 44)} fontSize={FS} fill="#FF8FB7">
+            <text x={vx + 6} y={ly + 4} fontSize={FS} fill="#FF8FB7">
               {e.label} · {Math.round(e.after_h)} h
             </text>
           </g>

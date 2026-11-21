@@ -61,7 +61,8 @@ function opacityExpr(countries: CountryState[], pulse: number): unknown {
   return ['match', ['get', 'iso'], ...entries.flat(), 0.85]
 }
 
-const MARKER_STATUSES: CountryStatus[] = ['incident', 'watch', 'explained', 'waiting']
+// Only issues get a marker; explained / waiting markets are already told apart by their fill.
+const MARKER_STATUSES: CountryStatus[] = ['incident', 'watch']
 
 export default function Globe({ countries, mode, selectedIso, insetRight = 0, utcHour, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)

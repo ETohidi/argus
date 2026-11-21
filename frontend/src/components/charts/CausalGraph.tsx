@@ -1,17 +1,19 @@
 import { useMemo } from 'react'
-import { NODE_COLOR } from '../../lib/theme'
-import type { GraphEdge, GraphNode, NodeState } from '../../lib/types'
+import { AURORA, MINT, PINK, PINK_SOFT } from '../../lib/theme'
+import type { GraphEdge, GraphNode } from '../../lib/types'
 
-const W = 460
-const NODE_W = 128
-const NODE_H = 30
-const ROW = 50
-const PAD = 8
+// What each node is in the story, shown as a word instead of a z-score.
+export type NodeRole = 'broke' | 'symptom' | 'normal' | 'new'
+export const ROLE_WORD: Record<NodeRole, string> = { broke: 'broke', symptom: 'only a symptom', normal: 'normal', new: 'new' }
+
+type Dims = { W: number; nodeW: number; nodeH: number; row: number; pad: number }
+const DEFAULT_DIMS: Dims = { W: 640, nodeW: 196, nodeH: 52, row: 84, pad: 10 }
 
 type Placed = { id: string; x: number; y: number; dummy: boolean; node?: GraphNode }
 
 // Sugiyama-lite: longest-path layering, dummy nodes for long edges, one barycenter pass.
-function layout(nodes: GraphNode[], edges: GraphEdge[]) {
+function layout(nodes: GraphNode[], edges: GraphEdge[], dims: Dims) {
+  const { W, nodeW, nodeH, row, pad } = dims
   const ids = new Set(nodes.map((n) => n.id))
   const es = edges.filter((e) => ids.has(e.source) && ids.has(e.target))
   const layer = new Map<string, number>()
@@ -28,7 +30,6 @@ function layout(nodes: GraphNode[], edges: GraphEdge[]) {
   nodes.forEach((n) => depth(n.id))
   const nLayers = Math.max(0, ...layer.values()) + 1
 
-  // Split long edges into chains through dummy nodes.
   const rows: Placed[][] = Array.from({ length: nLayers }, () => [])
   const byId = new Map<string, Placed>()
   nodes.forEach((n) => {
@@ -54,15 +55,15 @@ function layout(nodes: GraphNode[], edges: GraphEdge[]) {
   const preds = new Map<string, string[]>()
   chains.forEach((c) => c.path.slice(1).forEach((id, k) => preds.set(id, [...(preds.get(id) ?? []), c.path[k]])))
 
-  rows.forEach((row, l) => {
+  rows.forEach((r, l) => {
     if (l > 0) {
       const bary = (p: Placed) => {
         const ps = preds.get(p.id) ?? []
         return ps.length ? ps.reduce((s, q) => s + byId.get(q)!.x, 0) / ps.length : W / 2
       }
-      // Sort by barycenter; within a tie, dummies go to the middle so long edges pass between nodes.
+      // Within a tie, dummies go to the middle so long edges pass between nodes.
       const groups = new Map<number, Placed[]>()
-      row.forEach((p) => {
+      r.forEach((p) => {
         const k = Math.round(bary(p))
         groups.set(k, [...(groups.get(k) ?? []), p])
       })
@@ -71,31 +72,30 @@ function layout(nodes: GraphNode[], edges: GraphEdge[]) {
         const mid = Math.ceil(real.length / 2)
         return [...real.slice(0, mid), ...g.filter((p) => p.dummy), ...real.slice(mid)]
       })
-      row.splice(0, row.length, ...sorted)
+      r.splice(0, r.length, ...sorted)
     }
-    const units = row.reduce((s, p) => s + (p.dummy ? 0.2 : 1), 0)
-    const unit = Math.min((W - 2 * PAD) / units, NODE_W + 30)
+    const units = r.reduce((s, p) => s + (p.dummy ? 0.2 : 1), 0)
+    const unit = Math.min((W - 2 * pad) / units, nodeW + 36)
     let x = (W - unit * units) / 2
-    row.forEach((p) => {
+    r.forEach((p) => {
       const w = unit * (p.dummy ? 0.2 : 1)
       p.x = x + w / 2
-      p.y = PAD + l * ROW + NODE_H / 2
+      p.y = pad + l * row + nodeH / 2
       x += w
     })
   })
-  return { byId, chains, height: PAD * 2 + (nLayers - 1) * ROW + NODE_H }
+  return { byId, chains, height: pad * 2 + (nLayers - 1) * row + nodeH }
 }
 
-function pathFor(points: Placed[]) {
+function pathFor(points: Placed[], nodeH: number) {
   const a = points[0]
   const b = points[points.length - 1]
-  const start: [number, number] = [a.x, a.y + NODE_H / 2]
-  const end: [number, number] = [b.x, b.y - NODE_H / 2]
+  const start: [number, number] = [a.x, a.y + nodeH / 2]
+  const end: [number, number] = [b.x, b.y - nodeH / 2]
   if (points.length === 2) {
     const my = (start[1] + end[1]) / 2
     return `M${start[0]},${start[1]} C${start[0]},${my} ${end[0]},${my} ${end[0]},${end[1]}`
   }
-  // Long edge: smooth Catmull-Rom curve through the dummy waypoints.
   const pts: [number, number][] = [start, ...points.slice(1, -1).map((p) => [p.x, p.y] as [number, number]), end]
   let d = `M${start[0]},${start[1]}`
   for (let i = 0; i < pts.length - 1; i++) {
@@ -103,97 +103,108 @@ function pathFor(points: Placed[]) {
     const p1 = pts[i]
     const p2 = pts[i + 1]
     const p3 = pts[Math.min(pts.length - 1, i + 2)]
-    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6]
-    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6]
-    d += ` C${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${p2[0]},${p2[1]}`
+    d += ` C${p1[0] + (p2[0] - p0[0]) / 6},${p1[1] + (p2[1] - p0[1]) / 6} ${p2[0] - (p3[0] - p1[0]) / 6},${p2[1] - (p3[1] - p1[1]) / 6} ${p2[0]},${p2[1]}`
   }
   return d
 }
 
-const LEGEND: [NodeState, string][] = [
-  ['root', 'Root cause'],
-  ['broken', 'Broken mechanism'],
-  ['symptom', 'Symptom'],
-  ['normal', 'Normal'],
-]
+// Full names, wrapped onto at most two lines.
+function wrap(label: string, max = 22): string[] {
+  if (label.length <= max) return [label]
+  const lines = ['']
+  for (const w of label.split(' ')) {
+    const cur = lines[lines.length - 1]
+    if ((cur + ' ' + w).trim().length > max && cur) lines.push(w)
+    else lines[lines.length - 1] = (cur + ' ' + w).trim()
+  }
+  return lines.length > 2 ? [lines[0], lines.slice(1).join(' ')] : lines
+}
 
-export default function CausalGraph({ nodes, edges, highlight = [], legend = true }: { nodes: GraphNode[]; edges: GraphEdge[]; highlight?: string[]; legend?: boolean }) {
-  const { byId, chains, height } = useMemo(() => layout(nodes, edges), [nodes, edges])
-  const state = (id: string) => byId.get(id)?.node?.state ?? 'normal'
-  const isNew = (id: string) => highlight.includes(id)
-  const hot = (e: GraphEdge) => (state(e.source) !== 'normal' && state(e.target) !== 'normal') || isNew(e.target)
+// Dark text on filled pink: white on #FF4D8D would fail the 4.5:1 contrast rule.
+const ROLE_STYLE: Record<NodeRole, { fill: string; stroke: string; dash?: string; text: string; word: string }> = {
+  broke: { fill: PINK, stroke: PINK, text: AURORA.bg, word: AURORA.bg },
+  symptom: { fill: AURORA.panel, stroke: PINK, dash: '5 4', text: AURORA.fg, word: PINK_SOFT },
+  normal: { fill: AURORA.panel, stroke: '#3A3F6B', text: AURORA.fg2, word: AURORA.fg2 },
+  new: { fill: AURORA.panel, stroke: MINT, text: AURORA.fg, word: MINT },
+}
+
+type Props = {
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+  roles?: Record<string, NodeRole> // defaults from node.state
+  showWords?: boolean
+  dims?: Partial<Dims>
+}
+
+export function defaultRole(n: GraphNode): NodeRole {
+  return n.state === 'root' || n.state === 'broken' ? 'broke' : n.state === 'symptom' ? 'symptom' : 'normal'
+}
+
+export default function CausalGraph({ nodes, edges, roles = {}, showWords = true, dims: dimsIn }: Props) {
+  const dims = { ...DEFAULT_DIMS, ...dimsIn }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const { byId, chains, height } = useMemo(() => layout(nodes, edges, dims), [nodes, edges, dims.W, dims.nodeW, dims.nodeH, dims.row])
+  const roleOf = (id: string): NodeRole => roles[id] ?? (byId.get(id)?.node ? defaultRole(byId.get(id)!.node!) : 'normal')
+  const hot = (e: GraphEdge) => roleOf(e.source) !== 'normal' && roleOf(e.target) !== 'normal' && roleOf(e.target) !== 'new'
+  const { W, nodeW, nodeH } = dims
 
   return (
-    <div>
-      <svg viewBox={`0 0 ${W} ${height}`} className="w-full" style={{ height: 'auto' }}>
-        <defs>
-          <marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
-            <path d="M0,0 L8,4 L0,8 z" fill="#3A3F6B" />
-          </marker>
-          <marker id="arrow-hot" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
-            <path d="M0,0 L8,4 L0,8 z" fill="#FF6FA3" />
-          </marker>
-        </defs>
-        {chains
-          .slice()
-          .sort((a, b) => Number(hot(a.edge)) - Number(hot(b.edge)))
-          .map(({ edge, path }) => {
-            const d = pathFor(path.map((id) => byId.get(id)!))
-            const h = hot(edge)
-            const fresh = isNew(edge.target)
-            return (
-              <g key={`${edge.source}-${edge.target}`}>
-                <path
-                  d={d}
-                  fill="none"
-                  stroke={fresh ? '#3CF2C4' : h ? '#FF6FA3' : '#2A2F5C'}
-                  strokeWidth={h ? 1.8 : 1.1}
-                  strokeDasharray={edge.type === 'exogenous' ? '2 4' : edge.type === 'formula' && !h ? '3 3' : undefined}
-                  markerEnd={`url(#${h ? 'arrow-hot' : 'arrow'})`}
-                  opacity={h ? 0.9 : edge.type === 'exogenous' ? 0.5 : 0.8}
-                />
-                {h && <path d={d} fill="none" stroke={fresh ? '#A8FBE6' : '#FFC2D8'} strokeWidth={1.4} className="flow" opacity={0.7} />}
-              </g>
-            )
-          })}
-        {[...byId.values()]
-          .filter((p) => !p.dummy)
-          .map((p, i) => {
-            const n = p.node!
-            const fresh = isNew(n.id)
-            const c = fresh ? '#3CF2C4' : NODE_COLOR[n.state]
-            const active = n.state !== 'normal' || fresh
-            return (
-              <g key={p.id} transform={`translate(${p.x - NODE_W / 2},${p.y - NODE_H / 2})`} className="fade-in" style={{ animationDelay: `${i * 50}ms` }}>
-                {fresh && (
-                  <g transform={`translate(${NODE_W - 26},-7)`}>
-                    <rect width={26} height={12} rx={3} fill="#3CF2C4" />
-                    <text x={13} y={9} fontSize={8} fontWeight={700} textAnchor="middle" fill="#05060D">NEW</text>
-                  </g>
-                )}
-                <rect width={NODE_W} height={NODE_H} rx={8} fill={n.state === 'root' ? `${c}55` : active ? `${c}1f` : '#0E1020'} stroke={c} strokeWidth={n.state === 'root' || fresh ? 2 : active ? 1.2 : 1} />
-                <text x={8} y={19} fontSize={10} fill={active ? '#F1F0FF' : '#7B7FA8'} fontWeight={n.state === 'root' ? 700 : 500}>
-                  {n.label.length > 14 ? n.label.slice(0, 13) + '…' : n.label}
+    <svg viewBox={`0 0 ${W} ${height}`} className="w-full" style={{ height: 'auto' }} role="img" aria-label="Causal graph of the business metrics">
+      <defs>
+        <marker id="cg-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L8,4 L0,8 z" fill="#3A3F6B" />
+        </marker>
+        <marker id="cg-arrow-hot" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L8,4 L0,8 z" fill={PINK} />
+        </marker>
+        <marker id="cg-arrow-new" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L8,4 L0,8 z" fill={MINT} />
+        </marker>
+      </defs>
+      {chains
+        .slice()
+        .sort((a, b) => Number(hot(a.edge)) - Number(hot(b.edge)))
+        .map(({ edge, path }) => {
+          const d = pathFor(path.map((id) => byId.get(id)!), nodeH)
+          const fresh = roleOf(edge.target) === 'new'
+          const h = hot(edge)
+          return (
+            <path
+              key={`${edge.source}-${edge.target}`}
+              d={d}
+              fill="none"
+              stroke={fresh ? MINT : h ? PINK : '#2A2F5C'}
+              strokeWidth={h ? 2 : 1.2}
+              strokeDasharray={edge.type === 'exogenous' ? '2 4' : edge.type === 'formula' && !h && !fresh ? '3 3' : undefined}
+              markerEnd={`url(#${fresh ? 'cg-arrow-new' : h ? 'cg-arrow-hot' : 'cg-arrow'})`}
+              opacity={h || fresh ? 0.95 : 0.8}
+            />
+          )
+        })}
+      {[...byId.values()]
+        .filter((p) => !p.dummy)
+        .map((p, i) => {
+          const n = p.node!
+          const role = roleOf(n.id)
+          const st = ROLE_STYLE[role]
+          const lines = wrap(n.label.replace(/\s*\(.*\)$/, ''))
+          const textTop = showWords ? (lines.length === 2 ? 17 : 22) : lines.length === 2 ? 22 : 31
+          return (
+            <g key={p.id} transform={`translate(${p.x - nodeW / 2},${p.y - nodeH / 2})`} className="fade-in" style={{ animationDelay: `${i * 40}ms` }}>
+              <rect width={nodeW} height={nodeH} rx={10} fill={st.fill} stroke={st.stroke} strokeWidth={role === 'normal' ? 1 : 1.6} strokeDasharray={st.dash} />
+              {lines.map((line, k) => (
+                <text key={k} x={nodeW / 2} y={textTop + k * 15} fontSize={13} fontWeight={role === 'broke' ? 600 : 500} fill={st.text} textAnchor="middle">
+                  {line}
                 </text>
-                <text x={NODE_W - 7} y={19} fontSize={10} textAnchor="end" fill={active ? c : '#7B7FA8'} className="num" fontWeight={600}>
-                  {!legend ? '' : Math.abs(n.z) >= 0.05 ? (n.z > 0 ? '+' : '−') + Math.abs(n.z).toFixed(1) : '0'}
+              ))}
+              {showWords && (
+                <text x={nodeW / 2} y={nodeH - 8} fontSize={12} fill={st.word} textAnchor="middle" fontWeight={role === 'broke' ? 600 : 400}>
+                  {ROLE_WORD[role]}
                 </text>
-              </g>
-            )
-          })}
-      </svg>
-      {legend && <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-fg-2">
-        {LEGEND.map(([s, l]) => (
-          <span key={s} className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-sm" style={{ background: NODE_COLOR[s] }} />
-            {l}
-          </span>
-        ))}
-        <span className="flex items-center gap-1.5">
-          <span className="h-0.5 w-4 bg-problem" /> How the break spreads
-        </span>
-        <span className="text-fg-2">Numbers: deviation in standard deviations</span>
-      </div>}
-    </div>
+              )}
+            </g>
+          )
+        })}
+    </svg>
   )
 }

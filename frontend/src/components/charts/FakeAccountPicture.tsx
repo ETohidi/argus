@@ -4,6 +4,13 @@ import type { L3Result } from '../../lib/types'
 
 type Props = { l3: L3Result; width?: number; height?: number }
 
+// "Emu-A1" → "Emulator A"; other names stay as they are.
+function deviceName(device: string) {
+  if (device === 'other') return 'Other devices'
+  const m = device.match(/^emu[-_ ]?([a-z])/i)
+  return m ? `Emulator ${m[1].toUpperCase()}` : device
+}
+
 function rng(seed: number) {
   return () => {
     seed = (seed * 1664525 + 1013904223) % 4294967296
@@ -23,11 +30,15 @@ export default function FakeAccountPicture({ l3, width: W = 896, height: H = 400
   const layout = useMemo(() => {
     const r = rng(17)
     const split = W * 0.58
-    // Loose positions from the data itself: taste coherence across, payout focus up, with jitter.
-    const loose = l3.points.map((p) => {
-      const jx = (r() + r() - 1) * 26
-      const jy = (r() + r() - 1) * 26
-      return [30 + p.coherence * (split - 60) + jx, 34 + (1 - p.payout_focus) * (H - 68) + jy] as [number, number]
+    // Real users: a calm, evenly spread disc (sunflower layout); position carries no meaning.
+    const n = l3.points.length
+    const R = Math.min(split - 60, H - 60) / 2
+    const cx0 = (split + 10) / 2
+    const cy0 = H / 2 + 8
+    const loose = l3.points.map((_, i) => {
+      const rad = R * Math.sqrt((i + 0.5) / n)
+      const a = i * 2.39996 + (r() - 0.5) * 0.08
+      return [cx0 + Math.cos(a) * rad, cy0 + Math.sin(a) * rad] as [number, number]
     })
     // Device groups for flagged accounts (largest first); accounts without a group go to "other".
     const flaggedIdx = l3.points.map((p, i) => (p.flagged ? i : -1)).filter((i) => i >= 0)
@@ -65,11 +76,11 @@ export default function FakeAccountPicture({ l3, width: W = 896, height: H = 400
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Sampled accounts; flagged accounts clustered by shared device">
       <text x={20} y={14} fontSize={13} fill={AURORA.fg2}>
-        Real users · interests match what they do
+        Real users
       </text>
       {layout.groups.length > 0 && (
         <text x={layout.split + 60} y={14} fontSize={13} fill="#FF8FB7">
-          Flagged · grouped by shared device
+          Fake accounts, grouped by the phone they share
         </text>
       )}
       {/* device links */}
@@ -99,7 +110,7 @@ export default function FakeAccountPicture({ l3, width: W = 896, height: H = 400
           <g key={device} style={{ opacity: pulled ? 1 : 0, transition: 'opacity 400ms ease-out 900ms' }}>
             <circle cx={cx} cy={cy} r={rad} fill="none" stroke={PINK} strokeOpacity={0.35} strokeDasharray="3 4" />
             <text x={cx} y={cy + rad + 16} fontSize={13} fill={AURORA.fg} textAnchor="middle">
-              {device === 'other' ? 'Other devices' : device} · {members.length}
+              {deviceName(device)} · {members.length} {members.length === 1 ? 'account' : 'accounts'}
             </text>
           </g>
         )
