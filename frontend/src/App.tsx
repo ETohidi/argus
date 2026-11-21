@@ -10,7 +10,8 @@ import TopBar from './components/TopBar'
 import WhatIfCard from './components/WhatIfCard'
 import { potentialColor } from './lib/theme'
 import { api, onBackendChange, type Backend } from './lib/api'
-import { eventName, needsDecision, shortTitle, statusSentence } from './lib/incident'
+import { explainedLine, foundLine, needsDecision, shortTitle, statusSentence } from './lib/incident'
+import { PLATFORM_LABEL } from './lib/theme'
 import { toOutcome, type MetricOutcome } from './lib/metrics'
 import { DEMO_SCENES } from './lib/types'
 import type { LaunchForecast, CountryDetail, DemoScene, IncidentDetail, InjectType, MetricGraph, PotentialResponse, TimelineEvent, WorldState } from './lib/types'
@@ -52,6 +53,8 @@ export default function App() {
   // What-if launch: 'flying' (dark country, eye investigating) → 'shown' (colour, arcs, card). Read-only.
   const [launch, setLaunch] = useState<{ phase: 'flying' | 'shown'; forecast: LaunchForecast | null } | null>(null)
   const launchRun = useRef(0)
+  // Fading breadcrumb whenever the camera flies into a country; for an issue it waits (≤ 6.5 s) for the account check.
+  const [crumb, setCrumb] = useState<{ iso: string; key: number; out: boolean } | null>(null)
 
   const busyRef = useRef(false)
   const backendRef = useRef<Backend>('unknown')
@@ -294,6 +297,25 @@ export default function App() {
     setLaunch(null)
   }
 
+  const flyIso = launch ? null : (countryIso ?? state?.incidents.find((i) => i.id === cardId)?.country ?? null)
+  const flyCard = !countryIso ? state?.incidents.find((i) => i.id === cardId) : undefined
+  const crumbReady = !flyCard || detail?.id === flyCard.id // the issue's detail (with its account check) has arrived
+  useEffect(() => {
+    if (!flyIso) return setCrumb(null)
+    setCrumb({ iso: flyIso, key: Date.now(), out: false })
+  }, [flyIso])
+  useEffect(() => {
+    if (!crumb || crumb.out) return
+    const fade = () => setCrumb((c) => (c && c.key === crumb.key ? { ...c, out: true } : c))
+    const t = window.setTimeout(fade, crumbReady ? 1800 : 6500)
+    return () => window.clearTimeout(t)
+  }, [crumb?.key, crumb?.out, crumbReady])
+  useEffect(() => {
+    if (!crumb?.out) return
+    const t = window.setTimeout(() => setCrumb((c) => (c?.key === crumb.key ? null : c)), 600)
+    return () => window.clearTimeout(t)
+  }, [crumb?.out, crumb?.key])
+
   const keys = useRef({ demo, closeTop: () => {}, openEvidence: () => {} })
   keys.current = {
     demo,
@@ -323,6 +345,21 @@ export default function App() {
   const country = state?.countries.find((c) => c.iso === countryIso) ?? null
   const cardCountry = state?.countries.find((c) => c.iso === card?.country)
   const focusIso = countryIso ?? card?.country ?? null
+  const nameOf = (iso: string) => state?.countries.find((c) => c.iso === iso)?.name ?? iso
+  // Planned events: one neutral line per country, for the globe tooltip (and the status sentence).
+  const notes = Object.fromEntries((state?.explained ?? []).map((e) => [e.country, explainedLine(e, nameOf(e.country))]))
+  // Breadcrumb while the camera flies in: Earth → Canada → Android → 600 users checked.
+  const crumbDetail = crumb && card?.country === crumb.iso && detail?.id === card.id ? detail : null
+  const crumbIssue = crumb && card?.country === crumb.iso ? card : undefined
+  const crumbPlatform = crumbDetail?.platform ?? crumbIssue?.title.match(/\((iOS|Android)\b/i)?.[1]
+  const crumbParts = crumb
+    ? [
+        'Earth',
+        nameOf(crumb.iso),
+        ...(crumbPlatform ? [PLATFORM_LABEL[crumbPlatform] ?? crumbPlatform] : []),
+        ...(crumbDetail?.l3?.summary.n_users ? [`${crumbDetail.l3.summary.n_users.toLocaleString('en-US')} users checked`] : []),
+      ]
+    : []
   const sideOpen = !!(country || card || launch?.phase === 'shown')
   const status = state ? statusSentence(state) : { text: 'Connecting…', tone: 'neutral' as const, mood: 'calm' as const }
   const lf = launch?.forecast
@@ -343,7 +380,7 @@ export default function App() {
 
   return (
     <div className="relative h-full overflow-hidden bg-bg">
-      {state && <Globe countries={state.countries} mode={mode} selectedIso={launch ? null : focusIso} launch={launchView} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
+      {state && <Globe countries={state.countries} mode={mode} selectedIso={launch ? null : focusIso} launch={launchView} notes={notes} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
 
       <TopBar clock={state ? shortClock(state.clock) : 'Connecting…'} status={launch?.phase === 'flying' ? { ...status, mood: 'investigating' } : status} mode={mode} onMode={setMode} />
 
@@ -351,10 +388,10 @@ export default function App() {
       <div className="pointer-events-none absolute bottom-8 right-8 top-24 z-20 flex flex-col items-end gap-4 overflow-y-auto">
         {launch?.phase === 'shown' && lf ? (
           <WhatIfCard f={lf} onClose={closeLaunch} />
-        ) : launch ? null : explained && !country && !card && (
+        ) : launch ? null : explained && !country && !card && explainedLine(explained, nameOf(explained.country)) !== status.text && (
           <div className="fade-in pointer-events-auto max-w-[420px] text-right text-[13px] leading-relaxed text-fg-2">
             <span className="mr-2 inline-block h-2 w-2 rounded-full bg-fg-2" />
-            {state?.countries.find((c) => c.iso === explained.country)?.name ?? explained.country}: {eventName(explained.event)}, as planned
+            {explainedLine(explained, nameOf(explained.country))}
           </div>
         )}
         {country ? (
@@ -372,6 +409,7 @@ export default function App() {
             summary={card}
             detail={detail?.id === card.id ? detail : null}
             countryName={cardCountry?.name ?? card.country}
+            foundLine={state ? foundLine(card.found_line ?? (detail?.id === card.id ? detail.found_line : undefined), card.detected_at ?? (detail?.id === card.id ? detail.detected_at : undefined), card.reaction_h ?? (detail?.id === card.id ? detail.reaction_h : undefined), state.clock) : undefined}
             approving={approving}
             onApprove={approve}
             onEvidence={() => setEvidence({ tab: 'graph' })}
@@ -408,6 +446,17 @@ export default function App() {
       />
 
       <div className="pointer-events-none absolute bottom-1.5 right-8 z-10 text-[13px] text-fg-2">Earth imagery: NASA Visible Earth</div>
+
+      {crumb && (
+        <div key={crumb.key} className={`crumb pointer-events-none absolute left-8 top-[76px] z-20 flex items-center gap-1.5 text-[13px] text-fg-2${crumb.out ? ' crumb--out' : ''}`} aria-hidden>
+          {crumbParts.map((p, i) => (
+            <span key={p} className="crumb-part" style={{ animationDelay: `${i * 220}ms` }}>
+              {i > 0 && <span className="mr-1.5 text-fg-2/60">→</span>}
+              <span className={i === crumbParts.length - 1 ? 'text-fg' : ''}>{p}</span>
+            </span>
+          ))}
+        </div>
+      )}
 
       {toast && (
         <div className="fade-up pointer-events-none absolute left-1/2 top-24 z-50 -translate-x-1/2 rounded-full bg-panel/90 px-5 py-2 text-[13px] text-fg ring-1 ring-line/50">

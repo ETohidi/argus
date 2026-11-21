@@ -51,12 +51,16 @@ export interface IncidentSummary {
   reaction_h?: number | null // hours until advertisers react; 0 = now; null = n/a
   status_label?: string // "Open" | "Still going" | "Fix applied" | "Fix verified" | "Resolved"
   card?: IssueCardText
+  detected_at?: number
+  found_line?: string // "Found by Argus at 06:00, nobody asked · advertisers would react in ~22 h"
 }
 
 export interface ExplainedChange {
   t: number
   country: string
   event: string
+  change_pct?: number // KPI move explained by the planned event
+  line?: string // "Germany +31% · planned promo, no alarm"
   naive_z: number
   twin_z: number
 }
@@ -128,6 +132,7 @@ export interface SeriesPoint {
 export interface IncidentDetail {
   id: string
   title: string
+  found_line?: string
   status: IncidentStatus
   severity?: Severity
   impact_usd_h?: number

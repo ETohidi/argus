@@ -31,6 +31,7 @@ type Props = {
   insetRight?: number // px covered by the right-hand card; the globe centres in the remaining space
   utcHour?: number // drives the day/night shading
   launch?: LaunchView | null
+  notes?: Record<string, string> // per-country tooltip line, e.g. "Germany +31% · planned promo, no alarm"
   onSelect: (iso: string | null) => void
 }
 
@@ -120,7 +121,7 @@ function shimmer(head: number, fade: number): any {
 
 const MARKER_STATUSES: CountryStatus[] = ['incident', 'watch']
 
-export default function Globe({ countries, mode, selectedIso, insetRight = 0, utcHour, launch = null, onSelect }: Props) {
+export default function Globe({ countries, mode, selectedIso, insetRight = 0, utcHour, launch = null, notes = {}, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const loadedRef = useRef(false)
@@ -148,6 +149,8 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
     map.setPaintProperty('ocean', 'background-color', `rgb(${key})`)
   }
   launchRef.current = launch
+  const notesRef = useRef(notes)
+  notesRef.current = notes
   countriesRef.current = countries
   modeRef.current = mode
   selectedRef.current = selectedIso
@@ -347,7 +350,9 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
       canvas.style.cursor = 'pointer'
       const line =
         modeRef.current === 'health'
-          ? `<span style="color:${STATUS_COLOR[c.status]}">● ${STATUS_LABEL[c.status]}</span>`
+          ? notesRef.current[c.iso]
+            ? `<span style="color:${AURORA.fg2}">● ${notesRef.current[c.iso].startsWith(c.name) ? notesRef.current[c.iso].slice(c.name.length).trim() : notesRef.current[c.iso]}</span>`
+            : `<span style="color:${STATUS_COLOR[c.status]}">● ${STATUS_LABEL[c.status]}</span>`
           : `Opportunity: <b>+${usd(c.potential_usd_day)}</b> a day if offers matched local tastes`
       popup.setLngLat(e.lngLat).setHTML(`<div class="font-semibold">${c.name}</div><div>${line}</div>`).addTo(map)
     })

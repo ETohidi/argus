@@ -1,6 +1,6 @@
 // Plain-language summaries derived from an incident detail (shared by the issue card and evidence view).
 import { PLATFORM_LABEL, usd } from './theme'
-import type { Fix, IncidentDetail, IncidentSummary, WorldState } from './types'
+import type { ExplainedChange, Fix, IncidentDetail, IncidentSummary, WorldState } from './types'
 
 export const isBaseline = (f: Fix) => f.id === 'none' || f.id === 'do_nothing' || /do nothing/i.test(f.name)
 
@@ -71,7 +71,7 @@ export function statusSentence(state: WorldState): StatusSentence {
   const explained = state.countries.filter((c) => c.status === 'explained')
   if (explained.length === 1) {
     const ev = state.explained.find((e) => e.country === explained[0].iso)
-    return { text: `${explained[0].name}: ${ev ? eventName(ev.event) : 'planned change'}, as planned`, tone: 'neutral', mood: 'calm' }
+    return { text: ev ? explainedLine(ev, explained[0].name) : `${explained[0].name}: planned change, no alarm`, tone: 'neutral', mood: 'calm' }
   }
   if (explained.length) return { text: `${explained.length} planned changes, as expected`, tone: 'neutral', mood: 'calm' }
   return { text: `All ${state.countries.length} countries as expected`, tone: 'ok', mood: 'calm' }
@@ -115,4 +115,24 @@ export function metricLabel(meta: { kpi: string; unit: string } | undefined) {
   if (!meta) return ''
   const name = KPI_PLAIN[meta.kpi] ?? meta.kpi
   return `${name} ${/usd/i.test(meta.unit) ? '($) ' : ''}per hour`
+}
+
+// "Found by Argus at 06:00, nobody asked · advertisers would react in ~22 h". The backend's found_line when present,
+// otherwise composed from the detection hour and reaction_h.
+export function foundLine(found: string | undefined, detectedAt: number | undefined, reactionH: number | null | undefined, clock: WorldState['clock']) {
+  if (found) return found
+  if (detectedAt == null) return ''
+  const hourNow = clock.utc_hour ?? clock.t % 24
+  const h = (((hourNow - (clock.t - detectedAt)) % 24) + 24) % 24
+  const first = `Found by Argus at ${String(h).padStart(2, '0')}:00, nobody asked`
+  if (reactionH == null) return first
+  return `${first} · ${reactionH <= 0 ? 'losses are happening now' : `advertisers would react in ~${Math.round(reactionH)} h`}`
+}
+
+// "Germany +31% · planned promo, no alarm": the backend's line when present.
+export function explainedLine(e: ExplainedChange, name: string) {
+  if (e.line) return e.line
+  const pct = e.change_pct != null ? ` ${e.change_pct > 0 ? '+' : '−'}${Math.abs(Math.round(e.change_pct))}%` : ''
+  const noun = /promo|boost|sale|campaign/i.test(e.event) ? 'planned promo' : `planned ${eventName(e.event).toLowerCase()}`
+  return `${name}${pct} · ${noun}, no alarm`
 }

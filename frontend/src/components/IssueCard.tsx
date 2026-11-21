@@ -7,6 +7,7 @@ type Props = {
   summary: IncidentSummary
   detail: IncidentDetail | null // arrives later (the first fetch can take a few seconds)
   countryName: string
+  foundLine?: string // "Found by Argus at 06:00, nobody asked · advertisers would react in ~22 h"
   approving: boolean
   onApprove: (fixId: string) => void
   onEvidence: () => void
@@ -20,7 +21,7 @@ function amountOf(s: string): string {
 }
 
 // L2 / manager: one decision, in plain words. No charts here; the evidence is one click away.
-export default function IssueCard({ summary, detail, countryName, approving, onApprove, onEvidence, onClose }: Props) {
+export default function IssueCard({ summary, detail, countryName, foundLine, approving, onApprove, onEvidence, onClose }: Props) {
   const card = summary.card ?? detail?.card
   const status = summary.status
   const decided = status !== 'open' && status !== 'persisting'
@@ -39,6 +40,7 @@ export default function IssueCard({ summary, detail, countryName, approving, onA
         <div>
           <span className={`inline-block rounded-full px-2.5 py-0.5 text-[13px] ${chip}`}>{label}</span>
           <h2 className="mt-2 text-[24px] font-semibold leading-tight text-fg">{shortTitle(card?.title ?? summary.title)}</h2>
+          {foundLine && <p className="mt-1.5 text-[13px] leading-snug text-fg-2">{foundLine}</p>}
         </div>
         <button onClick={onClose} aria-label="Close" className="-mr-2 -mt-1 rounded-full px-2 text-[16px] text-fg-2 hover:text-fg">
           ×
