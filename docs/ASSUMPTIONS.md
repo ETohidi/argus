@@ -1,10 +1,14 @@
 # Simulation assumptions
 
-Argus runs against a simulated marketplace (`backend/argus/reality.py`). All numbers are invented to look like a
-rewarded user-acquisition business; none are Almedia data. The assumptions that shape what the demo shows:
+Argus runs against a simulated marketplace (`backend/argus/reality.py`). Scale, country mix, platform split and payout
+levels are calibrated to public data; everything else is invented. No private Almedia data is used. The assumptions that shape what the demo shows:
 
 ## Marketplace
-- 20 countries, 2 platforms, 6 advertiser categories; ~$1.53M advertiser revenue and ~43% contribution margin per day.
+- 20 countries, 2 platforms, 6 advertiser categories; ~43% contribution margin.
+- **Calibrated to public data** (details and sources in [DATA_SOURCES.md](DATA_SOURCES.md)): ~$2.74M advertiser revenue
+  per day (= Almedia's $1B run rate / 365); share of user rewards by country matches published lifetime payout shares
+  (US 57.9%, DE 9.7%, GB 8.2%, CA 3.7%, FR 3.2%); iOS share per country from StatCounter (Oct 2026); payout level per
+  country and an iOS payout premium (×1.54) from AppsFlyer puzzle-game CPI benchmarks (Q3 2026).
 - Users get 55% of the advertiser payout as reward; advertisers confirm 97% of completions.
 - Hourly noise: lognormal 3% plus Poisson-like counting noise on impressions, starts and completions; 6% on sign-ups.
 - **Offer mix:** payout per completion varies by offer within a category (lognormal σ = 0.06 per segment-hour), and the

@@ -175,7 +175,7 @@ class Reality:
         alloc = self.alloc[:, None, :] * alloc_mult
         sr = self.start_rate(self.alloc)[:, None, :] * start_mult
         cr = cfg.COMPLETION_RATE[None, None, :] * cfg.PLATFORM_COMPLETION[None, :, None]
-        payout = cfg.PAYOUT[None, None, :] * self.value[:, None, None]
+        payout = cfg.PAYOUT[None, None, :] * self.value[:, None, None] * cfg.PLATFORM_PAYOUT[None, :, None]
 
         def noisy(x: np.ndarray, base: float = 0.03) -> np.ndarray:
             sigma = np.sqrt(base ** 2 + 1.0 / np.maximum(x, 1.0))

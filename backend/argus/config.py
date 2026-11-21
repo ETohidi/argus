@@ -1,8 +1,10 @@
 """Static description of the simulated Freecash-like rewarded-ad marketplace.
 
-All numbers are invented for the demo. They are shaped to look like a rewarded
-user-acquisition business (advertisers pay per completed offer, users get a
-share as reward), not taken from Almedia data.
+Calibrated to public data where it exists (see docs/DATA_SOURCES.md); everything else is invented for the demo.
+Each constant is marked "public" (taken or derived from a cited source) or "simulated" (a modelling choice).
+Calibration targets (public, Almedia release 15 Oct 2026): ~$1B annual revenue run rate (= ~$2.74M/day) and the
+lifetime payout shares US 57.9%, DE 9.7%, GB 8.2%, CA 3.7%, FR 3.2%; the other 15 countries share the remaining
+17.3% in proportion to their earlier simulated sizes.
 """
 from __future__ import annotations
 
@@ -17,34 +19,34 @@ class Country:
     name: str
     lat: float
     lng: float
-    dau: int          # daily active users (simulated)
-    ios_share: float  # share of users on iOS
-    value: float      # advertiser payout multiplier vs. US
-    tz: int           # UTC offset used for the daily rhythm
+    dau: int          # simulated: user scale, calibrated so the share of rewards matches published payout shares
+    ios_share: float  # public: StatCounter mobile OS share, October 2026
+    value: float      # public/simulated: advertiser payout multiplier vs. US (Android CPI ratio, AppsFlyer Q3 2026)
+    tz: int           # simulated: UTC offset used for the daily rhythm
     region: str
 
 
 COUNTRIES: list[Country] = [
-    Country("US", "United States", 39.8, -98.6, 900_000, 0.55, 1.00, -6, "North America"),
-    Country("CA", "Canada", 56.1, -106.3, 140_000, 0.45, 0.90, -5, "North America"),
-    Country("MX", "Mexico", 23.6, -102.5, 200_000, 0.20, 0.30, -6, "Latin America"),
-    Country("BR", "Brazil", -14.2, -51.9, 300_000, 0.15, 0.30, -3, "Latin America"),
-    Country("GB", "United Kingdom", 54.0, -2.0, 250_000, 0.50, 0.85, 0, "Europe"),
-    Country("DE", "Germany", 51.2, 10.4, 200_000, 0.38, 0.85, 1, "Europe"),
-    Country("FR", "France", 46.6, 2.2, 150_000, 0.35, 0.70, 1, "Europe"),
-    Country("NL", "Netherlands", 52.1, 5.3, 70_000, 0.40, 0.80, 1, "Europe"),
-    Country("ES", "Spain", 40.5, -3.7, 110_000, 0.25, 0.55, 1, "Europe"),
-    Country("IT", "Italy", 41.9, 12.6, 100_000, 0.30, 0.55, 1, "Europe"),
-    Country("PL", "Poland", 51.9, 19.1, 90_000, 0.20, 0.40, 1, "Europe"),
-    Country("SE", "Sweden", 60.1, 18.6, 50_000, 0.50, 0.80, 1, "Europe"),
-    Country("TR", "Türkiye", 39.0, 35.2, 100_000, 0.15, 0.20, 3, "Europe"),
-    Country("ZA", "South Africa", -30.6, 22.9, 60_000, 0.20, 0.25, 2, "Africa"),
-    Country("IN", "India", 20.6, 78.9, 350_000, 0.05, 0.12, 5, "Asia"),
-    Country("ID", "Indonesia", -0.8, 113.9, 180_000, 0.10, 0.15, 7, "Asia"),
-    Country("PH", "Philippines", 12.9, 121.8, 160_000, 0.12, 0.15, 8, "Asia"),
-    Country("JP", "Japan", 36.2, 138.3, 120_000, 0.65, 0.90, 9, "Asia"),
-    Country("KR", "South Korea", 35.9, 127.8, 80_000, 0.35, 0.70, 9, "Asia"),
-    Country("AU", "Australia", -25.3, 133.8, 90_000, 0.55, 0.85, 10, "Oceania"),
+    Country("US", "United States", 39.8, -98.6, 1_922_000, 0.5196, 1.000, -6, "North America"),  # value public: AppsFlyer puzzle Android CPI / US
+    Country("CA", "Canada", 56.1, -106.3, 151_000, 0.6474, 0.753, -5, "North America"),  # value public: AppsFlyer puzzle Android CPI / US
+    Country("MX", "Mexico", 23.6, -102.5, 585_000, 0.2589, 0.091, -6, "Latin America"),  # value public: AppsFlyer puzzle Android CPI / US
+    Country("BR", "Brazil", -14.2, -51.9, 779_000, 0.2623, 0.102, -3, "Latin America"),  # value public: AppsFlyer puzzle Android CPI / US
+    Country("GB", "United Kingdom", 54.0, -2.0, 382_000, 0.5014, 0.717, 0, "Europe"),  # value public: AppsFlyer puzzle Android CPI / US
+    Country("DE", "Germany", 51.2, 10.4, 579_000, 0.2770, 0.644, 1, "Europe"),  # value public: AppsFlyer puzzle Android CPI / US
+    Country("FR", "France", 46.6, 2.2, 361_000, 0.3583, 0.324, 1, "Europe"),  # value public: AppsFlyer puzzle Android CPI / US
+    Country("NL", "Netherlands", 52.1, 5.3, 93_000, 0.3155, 0.534, 1, "Europe"),  # value simulated: no public CPI, scaled by the Europe CPI ratio (0.667)
+    Country("ES", "Spain", 40.5, -3.7, 146_000, 0.2725, 0.367, 1, "Europe"),  # value simulated: no public CPI, scaled by the Europe CPI ratio (0.667)
+    Country("IT", "Italy", 41.9, 12.6, 126_000, 0.3804, 0.367, 1, "Europe"),  # value simulated: no public CPI, scaled by the Europe CPI ratio (0.667)
+    Country("PL", "Poland", 51.9, 19.1, 111_000, 0.3896, 0.267, 1, "Europe"),  # value simulated: no public CPI, scaled by the Europe CPI ratio (0.667)
+    Country("SE", "Sweden", 60.1, 18.6, 59_000, 0.5559, 0.534, 1, "Europe"),  # value simulated: no public CPI, scaled by the Europe CPI ratio (0.667)
+    Country("TR", "Türkiye", 39.0, 35.2, 135_000, 0.2322, 0.133, 3, "Europe"),  # value simulated: no public CPI, scaled by the Europe CPI ratio (0.667)
+    Country("ZA", "South Africa", -30.6, 22.9, 177_000, 0.1821, 0.081, 2, "Africa"),  # value simulated: no public CPI, scaled by the Latin America CPI ratio
+    Country("IN", "India", 20.6, 78.9, 2_022_000, 0.0510, 0.021, 5, "Asia"),  # value public: AppsFlyer puzzle Android CPI / US
+    Country("ID", "Indonesia", -0.8, 113.9, 452_000, 0.2128, 0.054, 7, "Asia"),  # value public: AppsFlyer puzzle Android CPI / US
+    Country("PH", "Philippines", 12.9, 121.8, 380_000, 0.1371, 0.060, 8, "Asia"),  # value public: AppsFlyer puzzle Android CPI / US
+    Country("JP", "Japan", 36.2, 138.3, 174_000, 0.5380, 0.499, 9, "Asia"),  # value public: AppsFlyer puzzle Android CPI / US
+    Country("KR", "South Korea", 35.9, 127.8, 121_000, 0.3932, 0.388, 9, "Asia"),  # value simulated: no public CPI, scaled by the JP CPI ratio
+    Country("AU", "Australia", -25.3, 133.8, 61_000, 0.6209, 0.944, 10, "Oceania"),  # value public: AppsFlyer puzzle Android CPI / US
 ]
 C = len(COUNTRIES)
 ISO_INDEX = {c.iso: i for i, c in enumerate(COUNTRIES)}
@@ -58,17 +60,20 @@ CATEGORIES = ["Casual games", "Strategy games", "Fintech apps", "Streaming apps"
 CATEGORY_KEYS = ["casual", "strategy", "fintech", "streaming", "shopping", "surveys"]
 K = len(CATEGORIES)
 
-PAYOUT = np.array([3.0, 6.0, 14.0, 4.0, 2.0, 0.9])            # advertiser pays per completion (USD, US level)
-START_RATE = np.array([0.060, 0.040, 0.020, 0.050, 0.050, 0.080])  # starts per impression
-COMPLETION_RATE = np.array([0.35, 0.22, 0.30, 0.45, 0.40, 0.70])   # completions per start
-QUALITY = np.array([0.30, 0.38, 0.50, 0.40, 0.25, 0.60])          # valuable users delivered per completion
-REWARD_SHARE = 0.55            # share of advertiser payout that goes to the user
-ACCEPTANCE = 0.97              # share of completions the advertiser confirms and pays
-IMPRESSIONS_PER_ACTIVE = 6.0   # offer-wall impressions per active user-hour
-NEW_ACCOUNT_STAY = 3           # a new account stays active for ~3 hours on day one
-PLATFORM_COMPLETION = np.array([1.08, 0.95])  # iOS users finish slightly more often
+PAYOUT = np.array([3.0, 6.0, 14.0, 4.0, 2.0, 0.9])            # simulated: payout per completion (USD, US Android)
+START_RATE = np.array([0.060, 0.040, 0.020, 0.050, 0.050, 0.080])  # simulated: starts per impression
+COMPLETION_RATE = np.array([0.35, 0.22, 0.30, 0.45, 0.40, 0.70])   # simulated: completions per start
+QUALITY = np.array([0.30, 0.38, 0.50, 0.40, 0.25, 0.60])          # simulated: valuable users per completion
+REWARD_SHARE = 0.55            # simulated: share of advertiser payout that goes to the user
+ACCEPTANCE = 0.97              # simulated: share of completions the advertiser confirms and pays
+IMPRESSIONS_PER_ACTIVE = 6.0   # simulated: offer-wall impressions per active user-hour
+NEW_ACCOUNT_STAY = 3           # simulated: a new account stays active for ~3 hours on day one
+PLATFORM_COMPLETION = np.array([1.08, 0.95])  # simulated: iOS users finish slightly more often
+# public (derived): iOS/Android payout multiplier = geometric mean of puzzle CPI ratios iOS/Android in US, DE, GB,
+# CA, FR, AU (1.33-1.97), AppsFlyer Q3 2026. Android = 1.
+PLATFORM_PAYOUT = np.array([1.538, 1.0])
 
-# Taste archetypes (life-signal based personas) and their affinity to each advertiser category.
+# simulated: taste archetypes (life-signal based personas) and their affinity to each advertiser category.
 ARCHETYPES = ["Puzzle commuter", "Competitive gamer", "Money-minded", "Binge watcher", "Bargain hunter", "Quick earner"]
 ARCHETYPE_AFFINITY = np.array([
     # casual strategy fintech streaming shopping surveys
@@ -82,7 +87,7 @@ ARCHETYPE_AFFINITY = np.array([
 A = len(ARCHETYPES)
 
 # Archetype mixture per country (invented, regionally plausible flavour).
-# Archetype mixture per region (invented). Order: puzzle commuter (casual), competitive gamer (strategy),
+# simulated: archetype mixture per region (invented). Order: puzzle commuter (casual), competitive gamer (strategy),
 # money-minded (fintech), binge watcher (streaming), bargain hunter (shopping), quick earner (surveys).
 # North America / Europe / Oceania lean streaming + fintech; Latin America / Africa / Asia lean casual games +
 # surveys; Japan and South Korea have a strong strategy-games audience. See docs/ASSUMPTIONS.md.
@@ -110,12 +115,12 @@ def country_archetype_mix() -> np.ndarray:
     return mix
 
 
-# Life signals collected at onboarding (the recommender's inputs).
+# simulated: life signals collected at onboarding (the recommender's inputs).
 SIGNALS = ["commutes daily", "plays console games", "reads finance news", "watches series weekly",
            "uses coupons", "student", "parent", "night owl", "follows esports", "travels often",
            "has a side hustle", "listens to podcasts"]
 S = len(SIGNALS)
-# Probability that an archetype shows each life signal.
+# simulated: probability that an archetype shows each life signal.
 ARCHETYPE_SIGNALS = np.array([
     [0.80, 0.15, 0.20, 0.40, 0.30, 0.30, 0.40, 0.20, 0.05, 0.30, 0.20, 0.60],
     [0.30, 0.80, 0.10, 0.40, 0.10, 0.50, 0.15, 0.70, 0.75, 0.15, 0.15, 0.30],
@@ -125,4 +130,9 @@ ARCHETYPE_SIGNALS = np.array([
     [0.40, 0.15, 0.15, 0.25, 0.40, 0.55, 0.25, 0.40, 0.05, 0.10, 0.60, 0.20],
 ])
 
-HISTORY_HOURS = 14 * 24
+HISTORY_HOURS = 14 * 24          # simulated: learning window of the twin
+
+# public: calibration targets (Almedia release, 15 Oct 2026); used by tests and /api/meta
+PUBLISHED_PAYOUT_SHARE = {"US": 0.579, "DE": 0.097, "GB": 0.082, "CA": 0.037, "FR": 0.032}
+PUBLISHED_RUN_RATE_USD = 1_000_000_000
+TARGET_REVENUE_DAY = PUBLISHED_RUN_RATE_USD / 365
