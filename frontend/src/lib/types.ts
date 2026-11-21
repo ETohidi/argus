@@ -61,7 +61,7 @@ export interface ExplainedChange {
 }
 
 export interface WorldState {
-  clock: { t: number; label: string }
+  clock: { t: number; label: string; utc_hour?: number; day_of_week?: string; day?: number }
   countries: CountryState[]
   incidents: IncidentSummary[]
   explained: ExplainedChange[]
@@ -97,6 +97,8 @@ export interface Fix {
   p50: number[]
   p90: number[]
   delta_p50_usd: number
+  delta_daily?: { p10: number[]; p50: number[]; p90: number[] } // cumulative margin vs do nothing, days 1..7
+  events?: { after_h: number; label: string; probability: number }[] // advertiser reactions in the simulated future
   advertiser_risk: string
 }
 
@@ -108,7 +110,9 @@ export interface L3Result {
     coherence_others: number
     top_devices: string[]
   }
-  points: { coherence: number; payout_focus: number; flagged: boolean }[]
+  points: { coherence: number; payout_focus: number; flagged: boolean; device?: string; account_age_days?: number }[]
+  links?: { a: number; b: number }[] // flagged accounts sharing a device (indices into points)
+  groups?: { device: string; count: number }[] // flagged accounts per device, largest first
 }
 
 export interface SeriesPoint {
@@ -183,6 +187,14 @@ export interface MetricGraph {
   edges: GraphEdge[]
   exogenous: { id: string; label: string }[]
   levels: Record<string, string>
+}
+
+export interface TimelineEvent {
+  t: number
+  time_label: string
+  kind: 'planned' | 'anomaly' | 'detected' | 'waiting' | 'approved' | 'verified' | 'explained'
+  country: string
+  label: string
 }
 
 export interface DemoResponse {

@@ -1,11 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import CausalGraph from './charts/CausalGraph'
-import FanChart, { relativeSeries } from './charts/FanChart'
 import L3Scatter from './charts/L3Scatter'
 import NormalZoneChart from './charts/NormalZoneChart'
 import ShapleyBars from './charts/ShapleyBars'
+import WhichFixChart from './charts/WhichFixChart'
 import { bestHypothesis, isBaseline, isFraud, shortHypothesis } from '../lib/incident'
-import { MINT, NEUTRAL, VERDICT_COLOR, usd } from '../lib/theme'
+import { VERDICT_COLOR, usd } from '../lib/theme'
 import type { IncidentDetail, Level } from '../lib/types'
 
 export type EvidenceTab = 'graph' | 'users' | 'proof' | 'fixes' | 'details'
@@ -227,16 +227,13 @@ function Proof({ d }: { d: IncidentDetail }) {
 }
 
 function Fixes({ d, approving, onApprove }: { d: IncidentDetail; approving: boolean; onApprove: (id: string) => void }) {
-  const baseline = d.fixes.find(isBaseline) ?? d.fixes[0]
-  const reference = baseline.p50
-  const rel = d.fixes.map((f) => relativeSeries(f, reference))
-  const lo = Math.min(0, ...rel.flatMap((r) => r.p10))
-  const hi = Math.max(0, ...rel.flatMap((r) => r.p90))
   const v = d.verification
+  const best = d.fixes.find((f) => f.id === d.recommended)
+  const others = d.fixes.filter((f) => f.id !== d.recommended && !isBaseline(f))
   return (
-    <div>
+    <div className="space-y-6">
       {d.applied && (
-        <div className={`mb-6 rounded-2xl p-5 text-[16px] ring-1 ${v.status === 'verified' ? 'text-ok ring-ok/40' : v.status === 'missed' ? 'text-problem ring-problem/40' : 'text-fg ring-line'}`}>
+        <div className={`rounded-2xl p-5 text-[16px] ring-1 ${v.status === 'verified' ? 'bg-ok/10 text-ok ring-ok/40' : v.status === 'missed' ? 'bg-problem/15 text-problem ring-problem/40' : 'text-fg ring-line'}`}>
           {v.status === 'verified'
             ? `Prediction verified: actual first-day margin ${usd(v.actual ?? 0)} landed inside the band.`
             : v.status === 'missed'
@@ -244,38 +241,42 @@ function Fixes({ d, approving, onApprove }: { d: IncidentDetail; approving: bool
               : `${d.fixes.find((f) => f.id === d.applied)?.name ?? 'Fix'} applied. Verifying the prediction after 24 h.`}
         </div>
       )}
-      <div className="grid grid-cols-2 gap-5">
-        {d.fixes.map((f) => {
-          const best = f.id === d.recommended
-          const applied = d.applied === f.id
-          const base = isBaseline(f)
-          return (
-            <div key={f.id} className={`rounded-2xl p-6 ring-1 ${best || applied ? 'bg-panel/80 ring-ok/50' : 'bg-panel/50 ring-line'}`}>
-              <div className="flex items-baseline justify-between gap-4">
-                <div className="text-[16px] font-semibold text-fg">{f.name}</div>
-                <div className={`num text-[16px] ${base ? 'text-fg-2' : f.delta_p50_usd >= 0 ? 'text-ok' : 'text-problem'}`}>
-                  {base ? 'baseline' : `${f.delta_p50_usd >= 0 ? '+' : ''}${usd(f.delta_p50_usd)}`}
-                </div>
-              </div>
-              <div className="mt-1 text-[13px] text-fg-2">{best ? 'Best option' : applied ? 'Applied' : f.advertiser_risk}</div>
-              <div className="mt-4">
-                <FanChart fix={f} reference={reference} domain={[lo, hi]} color={best || applied ? MINT : NEUTRAL} width={420} height={170} />
-              </div>
-              <p className="mt-3 text-[13px] leading-relaxed text-fg-2">{f.description}</p>
-              {!d.applied && !base && (
-                <button
-                  disabled={approving}
-                  onClick={() => onApprove(f.id)}
-                  className={`mt-4 rounded-xl px-4 py-2 text-[13px] font-semibold disabled:opacity-50 ${best ? 'bg-ok text-bg hover:bg-ok' : 'bg-line text-fg hover:bg-line'}`}
-                >
-                  {approving ? 'Applying…' : 'Approve'}
-                </button>
-              )}
-            </div>
-          )
-        })}
-      </div>
-      <p className="mt-6 text-[13px] text-fg-2">Margin gained vs doing nothing over 7 days. Band: p10–p90 of 40 simulated futures; line: median.</p>
+      <Frame>
+        <WhichFixChart fixes={d.fixes} recommended={d.recommended} applied={d.applied} />
+        <p className="mt-2 text-[13px] text-fg-2">Cumulative margin from now, against keeping today’s daily margin. Bands: p10–p90 of 40 simulated weeks.</p>
+        {best && !d.applied && (
+          <div className="mt-6 flex items-center gap-6">
+            <button
+              disabled={approving}
+              onClick={() => onApprove(best.id)}
+              className="rounded-xl bg-ok px-6 py-3 text-[16px] font-semibold text-bg hover:brightness-110 disabled:opacity-50"
+            >
+              {approving ? 'Applying…' : `Approve: ${best.name.toLowerCase()}`}
+            </button>
+            <span className="text-[13px] text-fg-2">{best.description}</span>
+          </div>
+        )}
+      </Frame>
+      {others.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-[13px] text-fg-2">Other options</h3>
+          <ul className="divide-y divide-line rounded-2xl bg-panel/60 ring-1 ring-line">
+            {others.map((f) => (
+              <li key={f.id} className="flex items-center gap-6 px-6 py-4 text-[13px]">
+                <span className="w-44 shrink-0 text-fg">{f.name}</span>
+                <span className="num w-20 shrink-0 text-fg">{f.delta_p50_usd >= 0 ? '+' : ''}{usd(f.delta_p50_usd)}</span>
+                <span className="flex-1 text-fg-2">{f.advertiser_risk}</span>
+                {!d.applied && (
+                  <button disabled={approving} onClick={() => onApprove(f.id)} className="rounded-lg bg-line px-3 py-1.5 text-fg hover:ring-1 hover:ring-accent/60 disabled:opacity-50">
+                    Approve
+                  </button>
+                )}
+                {d.applied === f.id && <span className="text-ok">Applied</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }

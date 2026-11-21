@@ -132,6 +132,10 @@ export function buildIncidentDetail(a: Args): IncidentDetail {
         description: 'Leave the cluster running. Advertiser chargebacks expected after ~24 h, fintech budget cut after ~48 h.',
         ...fan(11, daily, [900, -2600, -4300, -4600, -4700, -4700, -4700], 0.07),
         advertiser_risk: 'High: chargeback at ~24 h (p50), budget cut at ~48 h',
+        events: [
+          { after_h: 21, label: 'Advertisers start reclaiming money', probability: 1 },
+          { after_h: 45, label: 'Advertiser cuts the budget', probability: 1 },
+        ],
       },
       {
         id: 'block_cluster',
