@@ -11,6 +11,7 @@ import type {
   MetricGraph,
   MetricResponse,
   PotentialResponse,
+  TimelineEvent,
   WorldState,
 } from './types'
 
@@ -88,6 +89,7 @@ export const api = {
   country: (iso: string) => request<CountryDetail>('GET', `/country/${iso}`),
   potential: () => request<PotentialResponse>('GET', '/potential'),
   graph: () => request<MetricGraph>('GET', '/graph'),
+  timeline: () => request<{ events: TimelineEvent[] }>('GET', '/timeline'),
   step: (hours: number) => request<WorldState>('POST', '/step', { hours }),
   reset: () => request<WorldState>('POST', '/reset', {}),
   inject: (type: InjectType, country: string, platform?: string) =>

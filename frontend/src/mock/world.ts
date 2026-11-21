@@ -12,6 +12,7 @@ import type {
   InjectType,
   Kpis,
   MetricGraph,
+  TimelineEvent,
   MetricResponse,
   PotentialResponse,
   WorldState,
@@ -350,6 +351,25 @@ export class MockWorld {
       hoursSinceApply: inc.appliedAt == null ? null : this.t - inc.appliedAt,
       impact: this.impact(inc),
     }) }
+  }
+
+  timeline(): { events: TimelineEvent[] } {
+    const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    const lab = (t: number) => `${DAYS[Math.floor(t / 24) % 7]} ${String(t % 24).padStart(2, '0')}:00`
+    const out: TimelineEvent[] = []
+    for (const ev of this.events) {
+      if (ev.type === 'promo') out.push({ t: ev.start, time_label: lab(ev.start), kind: 'planned', country: ev.country, label: 'Planned: Weekend Boost (games)' })
+      if (ev.type === 'data_delay') out.push({ t: ev.start, time_label: lab(ev.start), kind: 'waiting', country: ev.country, label: 'Data arrived incomplete: waiting, no alert' })
+    }
+    for (const inc of this.incidents) {
+      const s = this.summary(inc)
+      out.push({ t: inc.detectedAt - 2, time_label: lab(inc.detectedAt - 2), kind: 'anomaly', country: inc.country, label: 'First unusual hour: the alerting metric left the normal zone' })
+      out.push({ t: inc.detectedAt, time_label: lab(inc.detectedAt), kind: 'detected', country: inc.country, label: `Detected: ${s.title}` })
+      if (inc.appliedAt != null) out.push({ t: inc.appliedAt, time_label: lab(inc.appliedAt), kind: 'approved', country: inc.country, label: `Approved: ${inc.applied}` })
+      if (inc.appliedAt != null && this.t - inc.appliedAt >= 24)
+        out.push({ t: inc.appliedAt + 24, time_label: lab(inc.appliedAt + 24), kind: 'verified', country: inc.country, label: 'Prediction verified' })
+    }
+    return { events: out.filter((e) => e.t <= this.t).sort((a, b) => a.t - b.t) }
   }
 
   graph(): MetricGraph {

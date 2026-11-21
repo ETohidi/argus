@@ -6,11 +6,12 @@ import Globe, { type GlobeMode } from './components/Globe'
 import IssueCard from './components/IssueCard'
 import MetricGraphPanel from './components/MetricGraphPanel'
 import ScenarioMenu, { SCENE_LABEL } from './components/ScenarioMenu'
+import TimelineStrip from './components/TimelineStrip'
 import TopBar from './components/TopBar'
 import { api, onBackendChange, type Backend } from './lib/api'
 import { needsDecision, statusSentence } from './lib/incident'
 import { DEMO_SCENES } from './lib/types'
-import type { CountryDetail, DemoScene, IncidentDetail, InjectType, MetricGraph, MetricResponse, PotentialResponse, WorldState } from './lib/types'
+import type { CountryDetail, DemoScene, IncidentDetail, InjectType, MetricGraph, MetricResponse, PotentialResponse, TimelineEvent, WorldState } from './lib/types'
 
 // Default targets for the inject actions (the demo script), overridden by the selected country.
 const INJECT_DEFAULT: Record<InjectType, { country: string; platform?: string }> = {
@@ -44,6 +45,7 @@ export default function App() {
   const [countryIso, setCountryIso] = useState<string | null>(null)
   const [countryDetail, setCountryDetail] = useState<CountryDetail | null>(null)
   const [potential, setPotential] = useState<PotentialResponse | null>(null)
+  const [timeline, setTimeline] = useState<TimelineEvent[]>([])
 
   const busyRef = useRef(false)
   const backendRef = useRef<Backend>('unknown')
@@ -166,6 +168,17 @@ export default function App() {
   useEffect(() => {
     if (mode === 'potential') api.potential().then(setPotential).catch(() => {})
   }, [mode, t])
+  useEffect(() => {
+    if (t != null) api.timeline().then((r) => setTimeline(r.events)).catch(() => setTimeline([]))
+  }, [t])
+
+  // Timeline click: incident events open that market's card; others just say what happened.
+  const openTimelineEvent = (e: TimelineEvent) => {
+    const incs = (state?.incidents ?? []).filter((i) => i.country === e.country)
+    const inc = incs.find((i) => i.status !== 'resolved') ?? incs[incs.length - 1]
+    if (inc && ['anomaly', 'detected', 'approved', 'verified'].includes(e.kind)) openIncident(inc.id)
+    else flash(e.label)
+  }
 
   const step = (h: number) => run(() => api.step(h).then(applyState))
 
@@ -320,6 +333,17 @@ export default function App() {
         ) : null}
       </div>
 
+      {state && (
+        <div className="pointer-events-none absolute bottom-6 left-40 z-20 transition-[right] duration-300 ease-out" style={{ right: sideOpen ? 480 : 40 }}>
+          <TimelineStrip
+            events={timeline}
+            now={state.clock.t}
+            countryName={(iso) => state.countries.find((c) => c.iso === iso)?.name ?? iso}
+            onOpen={openTimelineEvent}
+          />
+        </div>
+      )}
+
       <ScenarioMenu
         state={state}
         backend={backend}
@@ -335,7 +359,7 @@ export default function App() {
       />
 
       {toast && (
-        <div className="fade-up pointer-events-none absolute bottom-8 left-1/2 z-50 -translate-x-1/2 rounded-full bg-panel/90 px-5 py-2 text-[13px] text-fg ring-1 ring-line/50">
+        <div className="fade-up pointer-events-none absolute left-1/2 top-24 z-50 -translate-x-1/2 rounded-full bg-panel/90 px-5 py-2 text-[13px] text-fg ring-1 ring-line/50">
           {toast}
         </div>
       )}

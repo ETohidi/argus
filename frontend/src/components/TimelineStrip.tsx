@@ -1,0 +1,70 @@
+import { useState } from 'react'
+import { AURORA, MINT, PINK } from '../lib/theme'
+import type { TimelineEvent } from '../lib/types'
+
+type Props = {
+  events: TimelineEvent[]
+  now: number
+  hours?: number
+  countryName: (iso: string) => string
+  onOpen: (e: TimelineEvent) => void
+}
+
+const KIND_COLOUR: Record<TimelineEvent['kind'], string> = {
+  anomaly: PINK,
+  detected: PINK,
+  verified: MINT,
+  approved: AURORA.fg2,
+  planned: AURORA.neutral,
+  explained: AURORA.neutral,
+  waiting: AURORA.neutral,
+}
+
+// A thin, quiet record of the last 72 hours: what Argus noticed and decided. Hover for the label; click an
+// incident event to open its card.
+export default function TimelineStrip({ events, now, hours = 72, countryName, onOpen }: Props) {
+  const [active, setActive] = useState<number | null>(null)
+  const start = now - hours
+  const visible = events.filter((e) => e.t >= start && e.t <= now)
+  const pos = (t: number) => ((t - start) / hours) * 100
+  // Same-hour events sit side by side instead of on top of each other.
+  const seen = new Map<number, number>()
+  const placed = visible.map((e) => {
+    const k = seen.get(e.t) ?? 0
+    seen.set(e.t, k + 1)
+    return { e, left: pos(e.t), offset: k * 12 }
+  })
+  const days = [...Array(Math.floor(hours / 24) + 1).keys()].map((d) => now - (now % 24) - d * 24).filter((t) => t >= start)
+  return (
+    <div className="pointer-events-auto relative h-10 w-full select-none" onMouseLeave={() => setActive(null)}>
+      <div className="absolute inset-x-0 top-5 h-px bg-line" />
+      {days.map((t) => (
+        <div key={t} className="absolute top-[14px] h-3 w-px bg-line" style={{ left: `${pos(t)}%` }} />
+      ))}
+      <div className="absolute right-0 top-7 text-[13px] text-fg-2">now</div>
+      <div className="absolute left-0 top-7 text-[13px] text-fg-2">72 h ago</div>
+      {placed.map(({ e, left, offset }, i) => (
+        <button
+          key={`${e.t}-${e.kind}-${i}`}
+          onMouseEnter={() => setActive(i)}
+          onFocus={() => setActive(i)}
+          onClick={() => onOpen(e)}
+          aria-label={`${e.time_label}: ${e.label}`}
+          className="absolute top-5 -translate-x-1/2 -translate-y-1/2 p-1.5"
+          style={{ left: `calc(${left}% + ${offset}px)` }}
+        >
+          <span className="block h-2 w-2 rounded-full transition-transform duration-300 ease-out" style={{ background: KIND_COLOUR[e.kind], transform: active === i ? 'scale(1.8)' : undefined }} />
+        </button>
+      ))}
+      {active != null && placed[active] && (
+        <div
+          className="fade-in pointer-events-none absolute bottom-9 w-max max-w-[360px] -translate-x-1/2 rounded-lg bg-panel px-3 py-2 text-[13px] text-fg ring-1 ring-line"
+          style={{ left: `clamp(120px, calc(${placed[active].left}% + ${placed[active].offset}px), calc(100% - 120px))` }}
+        >
+          <span className="num text-fg-2">{placed[active].e.time_label}</span> · {countryName(placed[active].e.country)}
+          <div>{placed[active].e.label}</div>
+        </div>
+      )}
+    </div>
+  )
+}
