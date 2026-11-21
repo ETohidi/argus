@@ -50,6 +50,46 @@ observed metric stream, the public marketing calendar, unlabeled user samples an
   noise, the incidents, advertiser reactions and fix effects. See [`docs/ASSUMPTIONS.md`](docs/ASSUMPTIONS.md).
 - No private Almedia data is used.
 
+## How Argus answers the Almedia brief
+
+Track: **"Eye of the System: Fully Agentic Monitoring"**: an autonomous analyst that holds a graph of business
+metrics and runs watch → detect → investigate → explain on its own.
+
+| Brief component | What Argus does | Where to see it |
+|---|---|---|
+| **1. Metric graph** | 10 core metrics plus added ones. Four typed edges, each used for a different kind of reasoning: **formula** (margin = revenue − rewards) → exact decomposition; **breakdown** (country → platform → offer category) → find the segment; **possible cause** (new accounts → active users → impressions → starts → completions → revenue / rewards / quality) → root cause given parents; **known event** (marketing calendar) → explain innocent changes. A tree view lists outcomes, their formula inputs and their causes. | Graph view; `GET /api/graph`, `GET /api/graph/tree` |
+| **2. Automatic extension** | Type `margin_per_signup = margin / signups`. Argus maps words to metrics (`signups` → new accounts), refuses to guess when a word is **ambiguous** (`users`: active or new?), rejects unknown names with "did you mean", checks the **units** (USD per new account; USD + completions is refused), checks it **computes on 14 days of data** at every breakdown level, works out how it **aggregates** (ratio of sums), refuses **duplicates** (same formula, or the same values on the data), **places** it under its inputs with the breakdowns they share, **starts monitoring** it with a seasonal baseline, and writes an "Added because…" note. Nobody places it by hand. | Add-metric flow; `POST /api/metrics` |
+| **3. Continuous monitoring** | Every simulated hour: 20 countries × 6 KPIs (+ added metrics) against the twin's baseline by **hour of day × weekday/weekend** per country and platform. **Data freshness/completeness**: a country delivering < 90% of rows is "waiting for data", never an alert; the backfill is logged. **Planned events**: the calendar is part of the forecast, and a naive detector runs alongside, so a promo shows as "explained" instead of an alarm. | Globe statuses; Germany promo; data delay |
+| **4. Autonomous investigation** | Opens the breakdown (platform × offer category covering 80% of the change), walks possible-cause edges upstream testing each link **given its parents**, separates the **first cause** from **symptoms**, quantifies contributions (**exact Shapley** over the mechanisms, plus segment shares), checks **calendar** and **data gaps** as rival explanations, descends to individual users only when impact × uncertainty is high, compares **five competing explanations** by counterfactual replay, and stops when one explains ≥ 80% and the others are rejected. | Decision trail and evidence view of an issue |
+| **5. Communication and state** | Each alert carries numbers (how it looks vs what is at stake), the investigation trail, business impact over 7 days, and remaining uncertainty (explained share, p10–p90 bands, "proven / likely / unclear"). Reports for CEO, manager and engineer. Issues are tracked **Open → Still going → Fix applied → Resolved**; later alerts for the same problem are merged (`alerts_merged`), a problem that disappears on its own resolves itself, and a returning one links to the earlier issue. | Issue card, status line, `GET /api/state` → incidents |
+
+**The three demo moments** (all autonomous after the click):
+
+| Moment | Scene | What Argus does on its own |
+|---|---|---|
+| **Inject a FAULT** | `bot_farm` (also `tracking_break`) | Sign-ups in Canada (Android) leave the normal zone at 04:00 while revenue *rises*; at 06:00 it opens a high-severity issue, finds the root (new accounts), checks 600 users (fake-account cluster on 2 emulators), proves it (99% explained), rejects four alternatives, tests four fixes 7 days ahead and recommends one |
+| **Inject an INNOCENT CHANGE** | `promo` (also `data_delay`) | Germany's Weekend Boost moves rewards; the naive detector would alert, Argus marks it "explained by the calendar". A late data delivery is "waiting for data", not an alert |
+| **ADD A NEW METRIC** | `new_metric` | `margin_per_signup = margin / signups` is resolved, validated, placed under margin and new accounts, and monitored in 20 countries, with an "Added because…" note; `margin / users` gets a clear "ambiguous, pick one" answer |
+
+**How it decides** (the questions the judges ask):
+
+- **What to watch, at which granularity.** Always the cheap level: every country × 6 business KPIs (+ added metrics),
+  hourly, in 3-hour windows, as z-scores against the seasonal twin forecast with backtest uncertainty by time of day.
+  Amber at |z| ≥ 4 for one hour; an issue only if it persists 2 h *and* matters (impact > $150/h, or |z| ≥ 8).
+  Finer levels (platform × offer category, then users) are opened only for countries that alert.
+- **Which edges to follow.** Known-event edges first (is a planned event explaining it?), then breakdown edges to
+  localise, then possible-cause edges upstream from the alerting KPI inside the top segment, testing each link given
+  its observed parents. Formula edges are used to decompose the money change exactly (Shapley over the mechanisms).
+- **Which segments to open.** The platform × offer-category segments that together carry 80% of the absolute money
+  deviation (when sign-ups alert, the platform with the strongest sign-up signal). Individual users only when the
+  root is on the user side and impact ≥ $50/h: impact × uncertainty.
+- **When the evidence is enough.** When one hypothesis explains ≥ 80% of the change in a counterfactual replay and the
+  alternatives are rejected (< 30%); a fraud verdict also needs the user-level cluster. Otherwise it is reported as
+  "likely" or "unclear" and Argus keeps watching. After a fix, it checks 24 h later whether its prediction held.
+
+**Limits worth stating:** the causal graph is specified from how the business works (its parameters are learned); one
+unresolved issue per country at a time; the marketplace and its faults are simulated (see below).
+
 ## Technical approach
 
 Plain numpy and a ridge regression: no deep learning, no learned causal structure. The graph is specified from how the
@@ -89,7 +129,7 @@ calling a later scene first runs the earlier ones.
 | `investigate` | Decision trail: country → Android × fintech/strategy → root cause new accounts → user-level taste check → counterfactual (~94% explained) |
 | `approve` | Human approves the recommended fix (verify new accounts); Canada returns to green within ~2 h |
 | `verify` | 24 h later: actual margin lands inside the predicted band → "Prediction verified" |
-| `new_metric` | "Reward cost per completed offer" is added in plain words, validated and monitored |
+| `new_metric` | `margin_per_signup = margin / signups` is resolved, validated (units, data, aggregation), placed in the graph and monitored, with an "Added because…" note |
 | `tracking_break` | Advertisers stop confirming UK iOS game completions: root cause revenue, no user-level run needed, pause + notify |
 
 Keyboard shortcuts (**coming**): `1`–`8` jump to the scenes above and `Space` plays/pauses. They arrive with the
