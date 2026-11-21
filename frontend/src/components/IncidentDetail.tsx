@@ -27,7 +27,8 @@ export const STATUS_STYLE: Record<IncidentStatus, string> = {
   resolved: 'bg-slate-500/20 text-slate-300',
 }
 
-const FIX_COLORS = ['#94a3b8', '#2dd4bf', '#38bdf8', '#a78bfa']
+const FIX_COLORS = ['#94a3b8', '#2dd4bf', '#38bdf8', '#a78bfa', '#f472b6']
+const isBaseline = (f: Fix) => f.id === 'none' || f.id === 'do_nothing' || /do nothing/i.test(f.name)
 
 type Props = {
   detail: Detail
@@ -186,7 +187,7 @@ function Hypotheses({ d }: { d: Detail }) {
 
 function Fixes({ d, ceo, onApprove, approving }: { d: Detail; ceo: boolean; onApprove: (id: string) => void; approving: boolean }) {
   const all = d.fixes
-  const baseline = all.find((f) => f.id === 'do_nothing') ?? all[0]
+  const baseline = all.find(isBaseline) ?? all[0]
   const reference = baseline.p50
   const rel = all.map((f) => relativeSeries(f, reference))
   const lo = Math.min(0, ...rel.flatMap((r) => r.p10))
@@ -228,7 +229,7 @@ function FixCard(p: {
 }) {
   const { f } = p
   const isApplied = p.applied === f.id
-  const canApprove = !p.applied && f.id !== 'do_nothing'
+  const canApprove = !p.applied && !isBaseline(f)
   return (
     <div
       className={`relative rounded-lg border p-2.5 ${
@@ -242,7 +243,7 @@ function FixCard(p: {
         {isApplied && <span className="shrink-0 rounded bg-teal-400/20 px-1 text-[9px] font-bold uppercase text-teal-200">Applied</span>}
       </div>
       <div className={`num text-[11px] ${f.delta_p50_usd > 0 ? 'text-teal-300' : f.delta_p50_usd < 0 ? 'text-rose-300' : 'text-slate-500'}`}>
-        {f.id === 'do_nothing' ? 'baseline' : `${f.delta_p50_usd >= 0 ? '+' : ''}${usd(f.delta_p50_usd)} vs do nothing`}
+        {isBaseline(f) ? 'baseline' : `${f.delta_p50_usd >= 0 ? '+' : ''}${usd(f.delta_p50_usd)} vs do nothing`}
       </div>
       <FanChart fix={f} reference={p.reference} domain={p.domain} color={p.color} {...(p.big ? { width: 400, height: 150 } : {})} />
       {p.big && <p className="mb-2 text-[11.5px] leading-snug text-slate-300">{f.description}</p>}
@@ -268,7 +269,7 @@ function Verification({ d }: { d: Detail }) {
   if (!d.applied) return null
   const v = d.verification
   const fix = d.fixes.find((f) => f.id === d.applied)
-  const [p10, p50, p90] = v.predicted
+  const [p10, p50, p90] = v.predicted ?? [fix?.p10[0] ?? 0, fix?.p50[0] ?? 0, fix?.p90[0] ?? 0]
   const tone =
     v.status === 'verified' ? 'border-teal-400/50 bg-teal-400/10 text-teal-200' : v.status === 'missed' ? 'border-rose-400/50 bg-rose-400/10 text-rose-200' : 'border-amber-400/40 bg-amber-400/5 text-amber-200'
   const pos = v.actual != null && p90 > p10 ? Math.max(0, Math.min(1, (v.actual - p10) / (p90 - p10))) : null

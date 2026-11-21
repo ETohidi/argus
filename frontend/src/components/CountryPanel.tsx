@@ -37,8 +37,8 @@ export default function CountryPanel({ country, detail, incidents, potential, on
   }
   const k = country.kpis
   const tiles = [
-    ['New accounts', k.new_accounts.toLocaleString(), '/h'],
-    ['Completions', k.completions.toLocaleString(), '/h'],
+    ['New accounts', Math.round(k.new_accounts).toLocaleString(), '/h'],
+    ['Completions', Math.round(k.completions).toLocaleString(), '/h'],
     ['Revenue', usd(k.revenue), '/h'],
     ['Rewards', usd(k.rewards), '/h'],
     ['Margin', usd(k.margin), '/h'],
@@ -107,8 +107,8 @@ export default function CountryPanel({ country, detail, incidents, potential, on
             <div className="grid gap-1" style={{ gridTemplateColumns: `58px repeat(${categories.length}, 1fr)` }}>
               <div />
               {categories.map((c) => (
-                <div key={c} className="truncate pb-1 text-center text-[10px] capitalize text-slate-400">
-                  {c}
+                <div key={c} className="truncate pb-1 text-center text-[10px] capitalize text-slate-400" title={c}>
+                  {c.replace(/ (games|apps|cashback)$/i, '')}
                 </div>
               ))}
               {platforms.map((p) => (

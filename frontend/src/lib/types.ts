@@ -112,7 +112,7 @@ export interface IncidentDetail {
   fixes: Fix[]
   recommended: string
   applied: string | null
-  verification: { status: 'pending' | 'verified' | 'missed'; predicted: number[]; actual: number | null }
+  verification: { status: 'pending' | 'verified' | 'missed'; predicted: number[] | null; actual: number | null }
   reports: { ceo: string; manager: string; engineer: string }
 }
 

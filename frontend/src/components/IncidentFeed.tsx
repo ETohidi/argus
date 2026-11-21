@@ -86,11 +86,11 @@ export default function IncidentFeed({ state, onOpen, onCountry }: { state: Worl
             {state.explained.map((e, i) => (
               <div key={i} className="fade-up mb-1.5 rounded-lg border border-slate-600/30 bg-slate-500/5 px-3 py-2 text-[11.5px]">
                 <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-slate-400" />
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-slate-400" />
                   <span className="font-medium text-slate-200">{name(e.country)}</span>
-                  <span className="text-slate-400">· {e.event}</span>
                   <span className="num ml-auto text-[10px] text-slate-500">h{e.t}</span>
                 </div>
+                <div className="mt-0.5 text-slate-300">{e.event}</div>
                 <div className="mt-1 text-slate-400">
                   Naive detector <span className="num text-amber-300">z {e.naive_z.toFixed(1)}</span> would alert; twin with calendar{' '}
                   <span className="num text-teal-300">z {e.twin_z.toFixed(1)}</span>. No alert.
