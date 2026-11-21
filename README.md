@@ -6,3 +6,14 @@ HackLab #2 Berlin Robotics & AI Hackathon, Almedia track ("Eye of the System"), 
 Argus watches every metric of a Freecash-like marketplace, finds the broken link in the causal graph, proves the cause with a counterfactual in the twin, tests fixes in the twin before acting, and explains it to the CEO, the manager and the engineer, on a 3D globe.
 
 Status: work in progress. See [`docs/HANDOFF.md`](docs/HANDOFF.md) for the design and the build plan.
+
+## Run the backend
+```bash
+cd backend
+python -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/python -m pytest -q          # unit + end-to-end demo tests
+.venv/bin/uvicorn argus.api:app --reload --port 8000
+```
+API contract: [`docs/API.md`](docs/API.md). Jump to a video scene with `POST /api/demo/{scene}`
+(`start`, `promo`, `bot_farm`, `investigate`, `approve`, `verify`, `new_metric`, `tracking_break`).
+Optional LLM (OpenAI-compatible): set `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`; deterministic templates otherwise.

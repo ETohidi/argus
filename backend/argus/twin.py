@@ -405,6 +405,12 @@ class Twin:
         ex_rew[p0] = (o("rewards") - e("rewards"))[p0]
         ex_co[p0] = np.maximum((o("completions") - e("completions"))[p0], 0)
         acc_ratio = np.clip(o("revenue") / np.maximum(e("revenue"), 1e-9), 0, 1.5)      # (P,K)
+        # Attack trajectory: fake activity scales with the farm's accounts, i.e. the cumulative excess sign-ups.
+        ex_new = [float(self.rows[t]["new_accounts"][c, p0] - self.forecast(t)["new_accounts"][c, p0])
+                  for t in range(now - 23, now + 1) if t in self.rows]
+        onset = ctx.get("elapsed", 3) + 2
+        acc_so_far = max(sum(max(x, 0.0) for x in ex_new[-onset:]), 1.0)
+        rate = max(float(np.mean(ex_new[-3:])) if ex_new else 0.0, 0.0)
         sig = float(self.l1_sigma[c, :, 4].mean())
         hrs = np.arange(H)
         results = []
@@ -423,7 +429,12 @@ class Twin:
                 rev = hum_rev * bias
                 rew = hum_rew * bias
                 if ctx["kind"] == "fraud":
-                    ramp = 1 + (growth - 1) * np.minimum(hrs / 12, 1)                 # (H,)
+                    more_h = rng.uniform(3, 12)                                       # remaining creation time
+                    trend = (acc_so_far + rate * more_h) / acc_so_far
+                    if trend > growth:
+                        ramp = 1 + (trend - 1) * np.minimum(hrs / more_h, 1)
+                    else:
+                        ramp = 1 + (growth - 1) * np.minimum(hrs / 12, 1)             # (H,)
                     fm = np.ones(H)
                     human = np.ones((H, P, K))
                     rew_scale = np.ones((H, P, K))

@@ -326,8 +326,7 @@ class Agent:
                           "finding": f"Skipped (impact × uncertainty low): {why}"})
 
         # --- hypotheses (counterfactuals in the twin)
-        money = ["revenue", "rewards", "margin"]
-        kpi = money[int(np.argmax([abs(z[KPIS.index(m)]) for m in money]))]
+        kpi = max(alerting, key=lambda kk: abs(z[KPIS.index(kk)]))         # explain the change that alerted
         ki = KPIS.index(kpi)
         delta = float(dl[ki])
         e_user = tw.explained_share(c, ts, {p: USER_SIDE}, kpi)
@@ -370,8 +369,9 @@ class Agent:
             kind = "tracking"
         elif kind == "fraud":
             kind = "user"
+        dtxt = _signed_usd(delta / WINDOW) if kpi in ("revenue", "rewards", "margin") else f"{delta / WINDOW:+,.1f}"
         trail.append({"t": t, "level": "L2", "action": f"Test hypotheses by counterfactual in the twin "
-                                                      f"(Δ{kpi} {_signed_usd(delta / WINDOW)}/h)",
+                                                      f"(Δ {KPI_LABEL[kpi]} {dtxt}/h)",
                       "finding": "; ".join(f"{h['name'].split(' (')[0]}: {h['explained']:.0%} {h['verdict']}"
                                            for h in hyps)})
 
@@ -505,7 +505,8 @@ class Agent:
         none = fixes[0]
         ok = [f for f in fixes if f["p10"][-1] >= none["p10"][-1]]
         if kind in ("fraud", "user"):
-            ok = [f for f in ok if RESIDUAL_FRAUD.get(f["id"], 0.0) <= 0.2] or ok
+            removes = [f for f in fixes if RESIDUAL_FRAUD.get(f["id"], 0.0) <= 0.2]
+            ok = [f for f in ok if f in removes] or removes or ok
         best = max(ok, key=lambda f: f["p50"][-1])
         return best["id"]
 
