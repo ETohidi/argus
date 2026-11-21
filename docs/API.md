@@ -74,7 +74,8 @@ After approval `what_to_do` becomes "Done: <fix> applied."
   "contributions": [ { "mechanism": "new_accounts", "value_usd": -420.0 } ],          // exact Shapley over mechanisms, sums to Δmargin
   "hypotheses": [ { "name": "Fraud cluster", "explained": 0.94, "verdict": "supported" } ],  // verdict: "supported" | "partial" | "rejected"
   "l3": {                                                                               // null when no L3 run
-    "summary": { "n_users": 600, "n_flagged": 88, "coherence_flagged": 0.28, "coherence_others": 0.73, "top_devices": ["emulator-x86"] },
+    "summary": { "n_users": 600, "n_flagged": 28, "estimated_total": 103,   // estimated_total: from excess sign-ups (same number as the card)
+                  "coherence_flagged": 0.28, "coherence_others": 0.73, "top_devices": ["emulator-x86"] },
     "points": [ { "coherence": 0.71, "payout_focus": 0.2, "flagged": false, "device": "Phone 12", "account_age_days": 140 } ],
     "links": [ { "a": 22, "b": 34 } ],               // flagged accounts sharing a device (indices into points; ≤120)
     "groups": [ { "device": "Emu-A1", "count": 15 } ] // flagged accounts per device, largest first
@@ -103,7 +104,7 @@ After approval `what_to_do` becomes "Done: <fix> applied."
   ],
   "left_zone_at": { "t": 344, "label": "Mon 08:00" },  // first hour of the excursion that led to detection; null if none
   "counterfactual": {                             // twin replay with the supported cause removed; null if no supported cause
-    "label": "Without the 28 flagged fake accounts",   // number = accounts flagged in the L3 sample
+    "label": "Without the fake accounts (28 flagged in a sample of 600, about 103 in total)",  // sample count + estimated total
     "series": [ { "t": 344, "value": 47.5 } ],          // same hours as `series`; equals `actual` before left_zone_at
     "explained_share": 0.942
   }

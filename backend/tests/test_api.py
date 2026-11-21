@@ -159,7 +159,11 @@ def test_incident_counterfactual_removes_the_cause():
     d = client.get(f"/api/incidents/{inc_id}", headers=S).json()
     cf = d["counterfactual"]
     keys(cf, ["label", "series", "explained_share"])
-    assert cf["label"] == f"Without the {d['l3']['summary']['n_flagged']} flagged fake accounts"
+    s = d["l3"]["summary"]
+    assert cf["label"] == (f"Without the fake accounts ({s['n_flagged']} flagged in a sample of {s['n_users']}, "
+                           f"about {s['estimated_total']} in total)")
+    assert f"About {s['estimated_total']} fake accounts" in d["card"]["what_happened"]
+    assert f"about {s['estimated_total']} in total" in d["hypotheses"][0]["name"]
     assert [p["t"] for p in cf["series"]] == [p["t"] for p in d["series"]]
     assert cf["explained_share"] == d["hypotheses"][0]["explained"] >= 0.8
     last_actual, last_cf = d["series"][-1], cf["series"][-1]

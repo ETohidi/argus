@@ -97,6 +97,11 @@ def hour_label(t: int) -> str:
     return f"{DOW[day % 7]} {hour:02d}:00"
 
 
+def fake_count_phrase(n_flagged: int, n_sample: int, total: int) -> str:
+    """One wording everywhere: the sample count and the estimated total."""
+    return f"{n_flagged} flagged in a sample of {n_sample}, about {total} in total"
+
+
 def _fmt_usd(x: float) -> str:
     return f"${x:,.0f}" if abs(x) >= 1 else f"${x:,.2f}"
 
@@ -320,6 +325,7 @@ class Agent:
         # --- L3 (adaptive abstraction)
         l3 = None
         cluster = False
+        est_total = self._excess_accounts(c, p, t)        # fake accounts in total, from excess sign-ups
         if root in ("new_accounts", "active_users") and impact >= L3_MIN_IMPACT:
             users = self.view.sample_users(c, p, 600)
             sc = self.taste.score_users(users)
@@ -328,7 +334,7 @@ class Agent:
             cluster = (sc["n_flagged"] >= 5 and sc["device_concentration"] >= 0.6 and cf is not None
                        and cf < co - 0.2)
             devs = [d for d, _ in sc["top_devices"]]
-            l3 = {"summary": {"n_users": sc["n_users"], "n_flagged": sc["n_flagged"],
+            l3 = {"summary": {"n_users": sc["n_users"], "n_flagged": sc["n_flagged"], "estimated_total": est_total,
                               "coherence_flagged": None if cf is None else round(cf, 2),
                               "coherence_others": round(co, 2), "top_devices": devs,
                               "payout_focus_flagged": None if sc["payout_focus_flagged"] is None
@@ -339,8 +345,8 @@ class Agent:
                              for pt in sc["points"] if pt["coherence"] is not None]}
             l3["links"], l3["groups"] = self._device_links(l3["points"])
             if cluster:
-                finding = (f"Cluster of {sc['n_flagged']} new accounts ({sc['n_flagged'] / sc['n_users']:.0%} of the "
-                           f"sample): taste coherence {cf:.2f} vs {co:.2f} for everyone else, payout focus "
+                finding = (f"Fake-account cluster ({fake_count_phrase(sc['n_flagged'], sc['n_users'], est_total)}): "
+                           f"taste coherence {cf:.2f} vs {co:.2f} for everyone else, payout focus "
                            f"{sc['payout_focus_flagged']:.2f} vs {sc['payout_focus_others']:.2f}, shared devices "
                            f"{', '.join(devs)}")
             else:
@@ -377,8 +383,9 @@ class Agent:
 
         plat = cfg.PLATFORMS[p]
         if l3 and cluster:
-            user_name, kind = (f"Fake-account cluster on {plat} ({l3['summary']['n_flagged']} sampled accounts on "
-                               f"{', '.join(l3['summary']['top_devices'][:2])})"), "fraud"
+            user_name, kind = (f"Fake-account cluster on {plat} ("
+                               f"{fake_count_phrase(l3['summary']['n_flagged'], l3['summary']['n_users'], est_total)}; "
+                               f"devices {', '.join(l3['summary']['top_devices'][:2])})"), "fraud"
         elif l3:
             user_name, kind = f"Organic growth: new real users on {plat}", "organic"
         else:
@@ -441,7 +448,7 @@ class Agent:
                "symptoms": symptoms, "delta_usd_h": round(delta / WINDOW, 1),
                "delta_revenue_usd_h": round(float(dl[KPIS.index("revenue")]) / WINDOW, 1),
                "delta_margin_usd_h": round(float(dl[KPIS.index("margin")]) / WINDOW, 1),
-               "excess_accounts": self._excess_accounts(c, p, t), "cause_spec": cause_spec}
+               "excess_accounts": est_total, "cause_spec": cause_spec}
         inc["fixes"] = self._fixes(inc, opts, t)
         inc["recommended"] = self._recommend(inc["fixes"], kind)
         rec_fix = next(f for f in inc["fixes"] if f["id"] == inc["recommended"])
@@ -705,7 +712,8 @@ class Agent:
         l3 = ""
         if inc["l3"]:
             s = inc["l3"]["summary"]
-            l3 = (f" L3: {s['n_flagged']}/{s['n_users']} sampled users flagged, coherence {s['coherence_flagged']} vs "
+            l3 = (f" L3: {fake_count_phrase(s['n_flagged'], s['n_users'], inc['excess_accounts'])}; coherence "
+                  f"{s['coherence_flagged']} vs "
                   f"{s['coherence_others']}, devices {', '.join(s['top_devices'])}.")
         engineer = (f"Window t={inc['detected_at'] - WINDOW + 1}..{inc['detected_at']} (3 h). L1 z: "
                     + ", ".join(f"{k} {v:+.1f}" for k, v in inc["z"].items())
@@ -734,6 +742,8 @@ class Agent:
             "mechanism_z": inc["mechanism_z"], "l1_z": inc["z"],
             "hypotheses": [{k: h[k] for k in ("name", "explained", "verdict")} for h in inc["hypotheses"]],
             "user_level_check": inc["l3"]["summary"] if inc["l3"] else None,
+            "fake_accounts": (fake_count_phrase(inc["l3"]["summary"]["n_flagged"], inc["l3"]["summary"]["n_users"],
+                                                inc["excess_accounts"]) if inc["kind"] == "fraud" and inc["l3"] else None),
             "fixes": [{"name": f["name"], "description": f["description"],
                        "margin_7d_vs_doing_nothing_usd": f["delta_p50_usd"], "risk": f["advertiser_risk"]}
                       for f in inc["fixes"]],
@@ -749,7 +759,8 @@ class Agent:
             "follow-up), engineer (max 5 sentences: mechanisms and z-scores, root vs symptoms, counterfactual "
             "results, what was queried). 'root_mechanism' is the cause; 'broken' are other mechanisms that are "
             "themselves abnormal; only 'symptoms' are symptoms. If 'applied' is set the decision has been taken: report "
-            "it and the verification status instead of asking for approval. Plain text, no markdown.",
+            "it and the verification status instead of asking for approval. When you mention how many fake accounts "
+            "there are, use exactly the 'fake_accounts' wording. Plain text, no markdown.",
             json.dumps({"facts": facts, "template_drafts": drafts}, default=str), max_tokens=1200)
         if not out or not all(isinstance(out.get(k), str) and 20 <= len(out[k]) <= 2000 for k in drafts):
             return None
@@ -1089,7 +1100,8 @@ class Agent:
             pts.append({"t": t, "value": round(v, 3)})
         top = inc["hypotheses"][0]
         if inc["kind"] == "fraud" and inc["l3"]:
-            label = f"Without the {inc['l3']['summary']['n_flagged']} flagged fake accounts"
+            s = inc["l3"]["summary"]
+            label = f"Without the fake accounts ({fake_count_phrase(s['n_flagged'], s['n_users'], inc['excess_accounts'])})"
         elif inc["kind"] == "tracking":
             label = "Without the tracking break"
         else:
