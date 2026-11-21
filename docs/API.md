@@ -75,7 +75,9 @@ After approval `what_to_do` becomes "Done: <fix> applied."
   "hypotheses": [ { "name": "Fraud cluster", "explained": 0.94, "verdict": "supported" } ],  // verdict: "supported" | "partial" | "rejected"
   "l3": {                                                                               // null when no L3 run
     "summary": { "n_users": 600, "n_flagged": 88, "coherence_flagged": 0.28, "coherence_others": 0.73, "top_devices": ["emulator-x86"] },
-    "points": [ { "coherence": 0.71, "payout_focus": 0.2, "flagged": false } ]
+    "points": [ { "coherence": 0.71, "payout_focus": 0.2, "flagged": false, "device": "Phone 12", "account_age_days": 140 } ],
+    "links": [ { "a": 22, "b": 34 } ],               // flagged accounts sharing a device (indices into points; ≤120)
+    "groups": [ { "device": "Emu-A1", "count": 15 } ] // flagged accounts per device, largest first
   },
   "fixes": [
     {

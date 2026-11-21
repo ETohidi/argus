@@ -332,7 +332,9 @@ class Agent:
                               else round(sc["payout_focus_flagged"], 2),
                               "payout_focus_others": round(sc["payout_focus_others"], 2)},
                   "points": [{"coherence": pt["coherence"], "payout_focus": pt["payout_focus"],
-                              "flagged": pt["flagged"]} for pt in sc["points"] if pt["coherence"] is not None]}
+                              "flagged": pt["flagged"], "device": pt["device"], "account_age_days": pt["age"]}
+                             for pt in sc["points"] if pt["coherence"] is not None]}
+            l3["links"], l3["groups"] = self._device_links(l3["points"])
             if cluster:
                 finding = (f"Cluster of {sc['n_flagged']} new accounts ({sc['n_flagged'] / sc['n_users']:.0%} of the "
                            f"sample): taste coherence {cf:.2f} vs {co:.2f} for everyone else, payout focus "
@@ -458,6 +460,24 @@ class Agent:
         inc["reports"] = self._reports(inc)
         self.incidents.append(inc)
         return inc
+
+    @staticmethod
+    def _device_links(points: list[dict], cap: int = 120) -> tuple[list[dict], list[dict]]:
+        """Links between flagged accounts that share a device (indices into points), and flagged counts per device."""
+        by_dev: dict[str, list[int]] = {}
+        for i, pt in enumerate(points):
+            if pt["flagged"]:
+                by_dev.setdefault(pt["device"], []).append(i)
+        groups = sorted(({"device": d, "count": len(ix)} for d, ix in by_dev.items()), key=lambda g: -g["count"])
+        links: list[dict] = []
+        for g in groups:
+            ix = by_dev[g["device"]]
+            pairs = [(ix[i], ix[i + 1]) for i in range(len(ix) - 1)] + [(ix[0], ix[i]) for i in range(2, len(ix))]
+            for a, b in pairs:
+                if len(links) >= cap:
+                    return links, groups
+                links.append({"a": a, "b": b})
+        return links, groups
 
     def _marginal_z(self, c: int, p: int, k: int, ts: list[int]) -> dict:
         """z of each node vs the twin's marginal forecast in segment (c,p,k)."""

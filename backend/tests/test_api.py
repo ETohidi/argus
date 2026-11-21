@@ -181,3 +181,18 @@ def test_fix_routes_and_do_nothing_events():
     assert labels == ["Advertisers start reclaiming money", "Advertiser cuts the budget"]
     assert 0 < ev[0]["after_h"] < ev[1]["after_h"] <= 168
     assert fixes["block_cluster"]["events"] == []
+
+
+def test_l3_fake_account_picture():
+    S = {"X-Session": "l3pic"}
+    inc_id = client.post("/api/demo/bot_farm", headers=S).json()["incident_id"]
+    l3 = client.get(f"/api/incidents/{inc_id}", headers=S).json()["l3"]
+    keys(l3, ["summary", "points", "links", "groups"])
+    keys(l3["points"][0], ["coherence", "payout_focus", "flagged", "device", "account_age_days"])
+    pts = l3["points"]
+    assert 0 < len(l3["links"]) <= 120
+    for ln in l3["links"]:
+        a, b = pts[ln["a"]], pts[ln["b"]]
+        assert a["flagged"] and b["flagged"] and a["device"] == b["device"] and ln["a"] != ln["b"]
+    assert sum(g["count"] for g in l3["groups"]) == sum(p["flagged"] for p in pts)
+    assert l3["groups"][0]["count"] >= 5
