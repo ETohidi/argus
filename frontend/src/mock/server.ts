@@ -81,6 +81,7 @@ function route(method: string, path: string, body: any): unknown {
     }
     if (p === '/potential') return world.potentialResponse()
     if (p === '/graph') return world.graph()
+    if (p === '/graph/tree') return world.graphTree()
     if (p === '/timeline') return world.timeline()
   }
   if (method === 'POST') {

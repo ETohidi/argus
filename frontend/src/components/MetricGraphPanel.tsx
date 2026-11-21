@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import CausalGraph from './charts/CausalGraph'
 import { api } from '../lib/api'
 import { plainMetric, replaceWord, splitNameFormula, toOutcome, type ChoiceOption, type MetricOutcome } from '../lib/metrics'
-import type { GraphEdge, GraphNode, GraphTreeRow, MetricGraph } from '../lib/types'
+import type { EdgeType, GraphEdge, GraphNode, GraphTreeRow, MetricGraph } from '../lib/types'
 
 const EXAMPLES = [
   { name: 'margin_per_signup', formula: 'margin / signups' },
@@ -17,10 +17,6 @@ type Props = {
   onAdded: (id: string) => void
   onClose: () => void
 }
-
-// Users have no offer category, so breakdowns that involve them stop at platform.
-const breakdownOf = (id: string, parents: string[] = []) =>
-  [id, ...parents].some((p) => p === 'new_accounts' || p === 'active_users') ? ['country', 'platform'] : ['country', 'platform', 'offer']
 
 export default function MetricGraphPanel({ graph, highlight, outcome: initial, openForm, onAdded, onClose }: Props) {
   const [formOpen, setFormOpen] = useState(!!openForm || !!initial)
@@ -123,7 +119,7 @@ export default function MetricGraphPanel({ graph, highlight, outcome: initial, o
             ) : (
               <div className="h-96 animate-pulse rounded-xl bg-line/50" />
             )}
-            <Legend />
+            <Legend types={graph?.edge_types} />
           </div>
 
           <div>
@@ -181,7 +177,7 @@ export default function MetricGraphPanel({ graph, highlight, outcome: initial, o
           </div>
         </div>
 
-        {graph && <MetricTree graph={graph} fresh={addedId} breakdown={outcome?.kind === 'added' ? outcome.breakdown : []} />}
+        {graph && <MetricTree graph={graph} fresh={addedId} />}
       </div>
     </div>
   )
@@ -240,36 +236,44 @@ function Outcome({ outcome, stage, onChoose, onShow }: { outcome: MetricOutcome 
           </li>
         ) : null,
       )}
+      {stage > 2 && outcome.note && <li className="fade-up pl-5 text-[13px] leading-relaxed text-fg-2">{outcome.note}</li>}
     </ol>
   )
 }
 
-function Legend() {
+const LEGEND_FALLBACK: EdgeType[] = [
+  { type: 'formula', label: 'Formula' },
+  { type: 'mechanism', label: 'Possible cause' },
+  { type: 'exogenous', label: 'Known event' },
+  { type: 'breakdown', label: 'Breakdown' },
+]
+
+function Legend({ types }: { types?: EdgeType[] }) {
+  const items = types?.length ? types : LEGEND_FALLBACK
+  const glyph = (t: string) =>
+    t === 'formula' ? (
+      <line x1="1" y1="4" x2="25" y2="4" stroke="#6B6F9E" strokeWidth="1.6" />
+    ) : t === 'breakdown' ? null : (
+      <>
+        <line x1="1" y1="4" x2="20" y2="4" stroke="#4A4E78" strokeWidth="1.2" strokeDasharray={t === 'exogenous' ? '1.5 3' : '4 3'} />
+        <path d="M19,1 L25,4 L19,7 z" fill="#4A4E78" />
+      </>
+    )
   return (
     <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-[13px] text-fg-2">
-      <span className="flex items-center gap-2">
-        <svg width="26" height="8" aria-hidden>
-          <line x1="1" y1="4" x2="25" y2="4" stroke="#6B6F9E" strokeWidth="1.6" />
-        </svg>
-        formula
-      </span>
-      <span className="flex items-center gap-2">
-        <svg width="26" height="8" aria-hidden>
-          <line x1="1" y1="4" x2="20" y2="4" stroke="#4A4E78" strokeWidth="1.2" strokeDasharray="4 3" />
-          <path d="M19,1 L25,4 L19,7 z" fill="#4A4E78" />
-        </svg>
-        possible cause
-      </span>
-      <span className="flex items-center gap-2">
-        <span>└</span>
-        breakdown by country, platform, offer (list below)
-      </span>
+      {items.map((t) => (
+        <span key={t.type} className="flex items-center gap-2" title={t.meaning}>
+          {t.type === 'breakdown' ? <span>└</span> : <svg width="26" height="8" aria-hidden>{glyph(t.type)}</svg>}
+          {t.label}
+          {t.type === 'breakdown' && ' (list below)'}
+        </span>
+      ))}
     </div>
   )
 }
 
-// Browsable tree from GET /api/graph/tree (depth-first rows); falls back to a tree built from the graph.
-function MetricTree({ graph, fresh, breakdown }: { graph: MetricGraph; fresh: string | null; breakdown: string[] }) {
+// Browsable tree from GET /api/graph/tree (depth-first rows).
+function MetricTree({ graph, fresh }: { graph: MetricGraph; fresh: string | null }) {
   const [open, setOpen] = useState(false)
   const [rows, setRows] = useState<GraphTreeRow[] | null>(null)
   useEffect(() => {
@@ -282,28 +286,13 @@ function MetricTree({ graph, fresh, breakdown }: { graph: MetricGraph; fresh: st
       live = false
     }
   }, [graph])
-  const inputs = (id: string) => graph.edges.filter((e) => e.target === id)
-  // Top level: metrics nothing else is built from (edges into added metrics don't count, so Margin stays on top).
-  const added = new Set(graph.nodes.filter((n) => n.origin === 'extension').map((n) => n.id))
-  const isInput = new Set(graph.edges.filter((e) => !added.has(e.target)).map((e) => e.source))
-  const tops = graph.nodes.filter((n) => !isInput.has(n.id))
-  const nodeById = new Map(graph.nodes.map((n) => [n.id, n]))
   return (
     <section className="mt-8 rounded-2xl bg-panel/50 ring-1 ring-line">
       <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center justify-between px-6 py-4 text-left text-[16px] text-fg">
         All metrics
         <span className="text-[13px] text-fg-2">{open ? 'Hide' : 'Show'}</span>
       </button>
-      {open &&
-        (rows ? (
-          <ServerTree rows={rows} fresh={fresh} />
-        ) : (
-          <ul className="px-6 pb-5 text-[13px]">
-            {tops.map((n) => (
-              <TreeRow key={n.id} id={n.id} depth={0} inputs={inputs} nodeById={nodeById} fresh={fresh} freshBreakdown={breakdown} seen={new Set()} />
-            ))}
-          </ul>
-        ))}
+      {open && (rows ? <ServerTree key={rows.length} rows={rows} fresh={fresh} /> : <p className="px-6 pb-5 text-[13px] text-fg-2">The metric list is not available yet.</p>)}
     </section>
   )
 }
@@ -344,42 +333,5 @@ function ServerTree({ rows, fresh }: { rows: GraphTreeRow[]; fresh: string | nul
         )
       })}
     </ul>
-  )
-}
-
-function TreeRow(p: {
-  id: string
-  depth: number
-  edgeType?: string
-  inputs: (id: string) => GraphEdge[]
-  nodeById: Map<string, MetricGraph['nodes'][number]>
-  fresh: string | null
-  freshBreakdown: string[]
-  seen: Set<string>
-}) {
-  const [open, setOpen] = useState(p.depth === 0 && p.id === p.fresh)
-  const node = p.nodeById.get(p.id)
-  const kids = p.seen.has(p.id) ? [] : p.inputs(p.id)
-  const seen = new Set(p.seen).add(p.id)
-  const by = p.id === p.fresh && p.freshBreakdown.length ? p.freshBreakdown.filter((b) => b !== 'global') : breakdownOf(p.id, node?.parents)
-  return (
-    <li>
-      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 py-1.5 text-left hover:text-fg" style={{ paddingLeft: p.depth * 20 }}>
-        <span className="w-3 text-fg-2">{open ? '▾' : '▸'}</span>
-        <span className={p.id === p.fresh ? 'text-ok' : 'text-fg'}>{plainMetric(p.id, node?.label)}</span>
-        {node?.expr && <span className="num text-fg-2">= {node.expr}</span>}
-        {p.edgeType && p.edgeType !== 'formula' && <span className="text-fg-2">· possible cause</span>}
-      </button>
-      {open && (
-        <ul>
-          <li className="py-1 text-fg-2" style={{ paddingLeft: (p.depth + 1) * 20 + 20 }}>
-            └ by {by.join(' › ')}
-          </li>
-          {kids.map((e) => (
-            <TreeRow key={e.source} {...p} id={e.source} depth={p.depth + 1} edgeType={e.type} seen={seen} />
-          ))}
-        </ul>
-      )}
-    </li>
   )
 }

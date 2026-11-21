@@ -49,6 +49,7 @@ export interface IncidentSummary {
   impact_usd_h: number
   risk_7d_usd?: number // 7-day margin lost by doing nothing vs the recommended fix
   reaction_h?: number | null // hours until advertisers react; 0 = now; null = n/a
+  status_label?: string // "Open" | "Still going" | "Fix applied" | "Fix verified" | "Resolved"
   card?: IssueCardText
 }
 
@@ -182,9 +183,16 @@ export interface MetricResponse {
   validation: { ok: boolean; checks: { name: string; ok: boolean; detail: string }[] }
 }
 
+export interface EdgeType {
+  type: string // 'formula' | 'breakdown' | 'mechanism' | 'exogenous'
+  label: string // 'Formula' | 'Breakdown' | 'Possible cause' | 'Known event'
+  meaning?: string
+}
+
 export interface MetricGraph {
-  nodes: { id: string; label: string; parents: string[]; edge: string; origin?: string; expr?: string | null }[]
-  edges: GraphEdge[]
+  nodes: { id: string; label: string; parents: string[]; edge: string; origin?: string; expr?: string | null; note?: string }[]
+  edges: (GraphEdge & { label?: string })[]
+  edge_types?: EdgeType[]
   exogenous: { id: string; label: string }[]
   levels: Record<string, string>
 }

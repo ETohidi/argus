@@ -28,18 +28,16 @@ export default function IssueCard({ summary, detail, countryName, approving, onA
   const amount = amountOf(card?.looks_like ?? `${usd(summary.impact_usd_h)}`)
   const atStake = card?.at_stake_7d_usd ?? summary.risk_7d_usd ?? 0
   const [line1, line2] = cardLines(card, detail ? isFraud(detail) : /fake/i.test(card?.title ?? summary.title))
-  // Status chips: pink on 15% pink for problems, mint for verified, neutral while waiting.
-  const chip = !decided
-    ? 'bg-problem/15 text-problem'
-    : detail?.verification.status === 'verified' || status === 'verified' || status === 'resolved'
-      ? 'bg-ok/15 text-ok'
-      : 'bg-neutral/15 text-fg-2'
+  // Status chip from the issue tracker: pink only while open, mint once verified or resolved.
+  const recovered = status === 'resolved' && detail != null && !detail.applied
+  const label = recovered ? 'Recovered without action' : (summary.status_label ?? card?.status_line ?? 'Open')
+  const chip = !decided ? 'bg-problem/15 text-problem' : status === 'verified' || status === 'resolved' ? 'bg-ok/15 text-ok' : 'bg-neutral/15 text-fg-2'
 
   return (
     <section className="fade-up pointer-events-auto w-[420px] rounded-3xl bg-panel/95 p-7 ring-1 ring-line backdrop-blur">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <span className={`inline-block rounded-full px-2.5 py-0.5 text-[13px] ${chip}`}>{card?.status_line ?? 'Needs a decision'}</span>
+          <span className={`inline-block rounded-full px-2.5 py-0.5 text-[13px] ${chip}`}>{label}</span>
           <h2 className="mt-2 text-[24px] font-semibold leading-tight text-fg">{shortTitle(card?.title ?? summary.title)}</h2>
         </div>
         <button onClick={onClose} aria-label="Close" className="-mr-2 -mt-1 rounded-full px-2 text-[16px] text-fg-2 hover:text-fg">
@@ -73,7 +71,7 @@ export default function IssueCard({ summary, detail, countryName, approving, onA
           </button>
         </>
       ) : (
-        <Outcome detail={detail} countryName={countryName} statusLine={card?.status_line} />
+        <Outcome detail={detail} countryName={countryName} statusLine={card?.status_line} recovered={recovered} />
       )}
 
       <button onClick={onEvidence} className="mt-5 text-[13px] text-fg-2 hover:text-fg">
@@ -95,7 +93,14 @@ function Big({ label, value, note, tone = 'text-fg' }: { label: string; value: s
 
 
 // After approval: the verification state replaces the decision.
-function Outcome({ detail, countryName, statusLine }: { detail: IncidentDetail | null; countryName: string; statusLine?: string }) {
+function Outcome({ detail, countryName, statusLine, recovered }: { detail: IncidentDetail | null; countryName: string; statusLine?: string; recovered?: boolean }) {
+  if (recovered)
+    return (
+      <div className="mt-6">
+        <div className="text-[24px] font-semibold leading-snug text-ok">{countryName} is back to normal.</div>
+        <p className="mt-2 text-[13px] text-fg-2">It recovered on its own; no action was needed.</p>
+      </div>
+    )
   const v = detail?.verification
   const fix = detail ? recommendedFix(detail) : undefined
   const band = v?.predicted ?? (fix ? [fix.p10[0], fix.p50[0], fix.p90[0]] : null)

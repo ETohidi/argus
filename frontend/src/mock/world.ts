@@ -11,6 +11,7 @@ import type {
   IncidentSummary,
   InjectType,
   Kpis,
+  GraphTreeRow,
   MetricGraph,
   TimelineEvent,
   MetricResponse,
@@ -193,6 +194,7 @@ export class MockWorld {
       impact_usd_h: impact,
       risk_7d_usd: inc.kind === 'bot_farm' ? 23_600 : 26_100,
       reaction_h: inc.kind === 'bot_farm' ? 21 : 0,
+      status_label: { open: 'Open', persisting: 'Still going', fix_applied: 'Fix applied', verified: 'Fix verified', resolved: 'Resolved' }[status],
       card: this.card(inc, title, status, impact),
     }
   }
@@ -353,6 +355,33 @@ export class MockWorld {
       hoursSinceApply: inc.appliedAt == null ? null : this.t - inc.appliedAt,
       impact: this.impact(inc),
     }) }
+  }
+
+  // Same shape as GET /api/graph/tree: outcomes and added metrics at the top, then inputs, depth-first.
+  graphTree(): { roots: string[]; rows: GraphTreeRow[] } {
+    const g = this.graph()
+    const added = new Set(g.nodes.filter((n) => n.origin === 'extension').map((n) => n.id))
+    const isInput = new Set(g.edges.filter((e) => !added.has(e.target)).map((e) => e.source))
+    const roots = g.nodes.filter((n) => !isInput.has(n.id)).map((n) => n.id)
+    const byId = new Map(g.nodes.map((n) => [n.id, n]))
+    const rows: GraphTreeRow[] = []
+    const seen = new Set<string>()
+    const users = (ids: string[]) => ids.some((x) => x === 'new_accounts' || x === 'active_users')
+    const walk = (id: string, depth: number, relation: string | null) => {
+      const n = byId.get(id)
+      const repeat = seen.has(id)
+      seen.add(id)
+      rows.push({
+        depth, id, label: n?.label ?? id, relation,
+        relation_label: relation === 'formula' ? 'Formula' : relation === 'mechanism' ? 'Possible cause' : relation ? 'Known event' : null,
+        expr: n?.expr ?? null, origin: n?.origin,
+        breakdown: users([id, ...(n?.parents ?? [])]) ? 'global → country → platform' : 'global → country → platform → offer category',
+        repeat,
+      })
+      if (!repeat) for (const e of g.edges.filter((e) => e.target === id)) walk(e.source, depth + 1, e.type)
+    }
+    roots.forEach((r) => walk(r, 0, null))
+    return { roots, rows }
   }
 
   timeline(): { events: TimelineEvent[] } {

@@ -62,7 +62,7 @@ export function resolveLocally(formula: string, known: string[]) {
 
 export type ChoiceOption = { id: string; label: string; formula?: string }
 export type MetricOutcome =
-  | { kind: 'added'; id: string; label: string; expr: string; typed: string; readAs: [string, string][]; parents: string[]; breakdown: string[]; fit: string; countries: number; checks: { name: string; ok: boolean; detail: string }[] }
+  | { kind: 'added'; id: string; label: string; expr: string; typed: string; readAs: [string, string][]; parents: string[]; breakdown: string[]; fit: string; countries: number; note: string; checks: { name: string; ok: boolean; detail: string }[] }
   | { kind: 'choose'; message: string; word: string; options: ChoiceOption[] }
   | { kind: 'exists'; message: string; id: string } // same as a metric Argus already watches
   | { kind: 'error'; message: string }
@@ -76,6 +76,7 @@ type Raw = MetricResponse & {
   unknown?: Record<string, string[]>
   placement?: { parents?: string[]; breakdown?: string[] }
   monitoring?: { countries?: number }
+  note?: string // "Added because you asked for …"
   fit?: { text?: string; share?: number } | string
 }
 
@@ -91,7 +92,7 @@ function fitText(raw: Raw): string {
 const askWhich = (word: string, ids: string[]) => `“${word}” could mean ${ids.map((o) => plainMetric(o).toLowerCase()).join(' or ')}. Which one?`
 
 export function toOutcome(raw: Raw, formula: string, known: string[]): MetricOutcome {
-  const node = raw.node as { id?: string; label?: string; expr?: string; formula?: string; parents?: string[]; breakdown?: string[] } | null
+  const node = raw.node as { id?: string; label?: string; expr?: string; formula?: string; parents?: string[]; breakdown?: string[]; note?: string } | null
   if (node?.id && (raw.status === 'duplicate' || (!raw.status && raw.validation?.checks.some((c) => c.name === 'duplicate' && !c.ok))))
     return { kind: 'exists', id: node.id, message: `Argus already watches this as ${plainMetric(node.id, node.label)}.` }
   if (node?.id && (raw.status === 'added' || !raw.status)) {
@@ -111,6 +112,7 @@ export function toOutcome(raw: Raw, formula: string, known: string[]): MetricOut
       breakdown: raw.placement?.breakdown ?? node.breakdown ?? [],
       fit: fitText(raw),
       countries: raw.monitoring?.countries ?? 20,
+      note: raw.note ?? (raw.node as { note?: string } | null)?.note ?? '',
       checks: raw.validation?.checks ?? [],
     }
   }

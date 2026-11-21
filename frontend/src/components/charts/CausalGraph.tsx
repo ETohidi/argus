@@ -180,7 +180,7 @@ export default function CausalGraph({ nodes, edges, roles = {}, showWords = true
                 fill="none"
                 stroke={fresh ? MINT : formula ? '#6B6F9E' : '#4A4E78'}
                 strokeWidth={fresh ? 2 : formula ? 1.6 : 1.2}
-                strokeDasharray={formula ? undefined : '5 4'}
+                strokeDasharray={formula ? undefined : edge.type === 'exogenous' ? '1.5 4' : '5 4'}
                 markerEnd={formula && !fresh ? undefined : `url(#${fresh ? 'cg-arrow-new' : 'cg-arrow'})`}
                 className={fresh ? 'draw' : undefined}
                 pathLength={fresh ? 1 : undefined}
