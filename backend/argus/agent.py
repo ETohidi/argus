@@ -1175,7 +1175,8 @@ class Agent:
                 "potential_pct": pct.get(country.iso, 0.0),
             })
         return {
-            "clock": {"t": t, "label": f"Day {day + 1} · {dow} {hour:02d}:00 UTC"},
+            "clock": {"t": t, "label": f"Day {day + 1} · {dow} {hour:02d}:00 UTC", "utc_hour": hour,
+                      "day_of_week": dow, "day": day + 1},
             "countries": countries,
             "incidents": [self.incident_summary(i) for i in self.incidents],
             "explained": list(self.explained),

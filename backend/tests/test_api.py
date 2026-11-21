@@ -18,7 +18,9 @@ def test_state_contract():
     assert r.status_code == 200
     st = client.get("/api/state", headers=H).json()
     keys(st, ["clock", "countries", "incidents", "explained", "attention"])
-    keys(st["clock"], ["t", "label"])
+    keys(st["clock"], ["t", "label", "utc_hour", "day_of_week", "day"])
+    assert 0 <= st["clock"]["utc_hour"] <= 23 and st["clock"]["day_of_week"] in ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+    assert st["clock"]["utc_hour"] == st["clock"]["t"] % 24
     assert len(st["countries"]) == 20
     c = st["countries"][0]
     keys(c, ["iso", "name", "lat", "lng", "status", "health_z", "kpis", "potential_usd_day"])

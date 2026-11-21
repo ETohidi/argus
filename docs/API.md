@@ -13,7 +13,7 @@ The built frontend (`frontend/dist`) is served at `/` when it exists.
 Globe state.
 ```jsonc
 {
-  "clock": { "t": 336, "label": "Day 15 · Sun 00:00 UTC" },
+  "clock": { "t": 336, "label": "Day 15 · Mon 00:00 UTC", "utc_hour": 0, "day_of_week": "Mon", "day": 15 },  // simulated UTC; for day/night
   "countries": [
     {
       "iso": "CA", "name": "Canada", "lat": 56.1, "lng": -106.3,
