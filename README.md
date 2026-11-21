@@ -50,6 +50,31 @@ observed metric stream, the public marketing calendar, unlabeled user samples an
   noise, the incidents, advertiser reactions and fix effects. See [`docs/ASSUMPTIONS.md`](docs/ASSUMPTIONS.md).
 - No private Almedia data is used.
 
+## Technical approach
+
+Plain numpy and a ridge regression: no deep learning, no learned causal structure. The graph is specified from how the
+business works; the twin learns its parameters from 14 days of observed data. Code paths are in `backend/argus/`.
+
+| Method | What it means here | Where |
+|---|---|---|
+| **Autonomous agent with a causal world model** | Every simulated hour the agent observes, detects, investigates and recommends, using the twin as its model of the business | `agent.py` `Agent.on_hour`, `twin.py` `Twin` |
+| **Structural causal model (SCM)** | Hand-specified DAG: new accounts → active users → impressions → starts → completions → revenue / rewards / quality; each mechanism is a learned ratio with log-normal noise, plus calendar and action effects | `graph.py` `MetricGraph`, `twin.py` `Twin.learn`, `Twin.factors` |
+| **Causal root-cause analysis (residual given parents)** | Each mechanism's observed child is compared with its expectation *given its observed parents*; the root is the most upstream mechanism with abs(z) > 3, downstream deviations that are normal given their parents are symptoms | `twin.py` `Twin.given_parents`, `agent.py` `Agent.investigate` (DAG walk) |
+| **Counterfactual simulation / interventions (do-operator)** | Proof: replay the window with do(cause mechanisms := twin baseline) while every other mechanism keeps its observed residual; explained share = removed change / total change (absolute) | `twin.py` `Twin.chain`, `Twin.explained_share`, `agent.py` `Agent.counterfactual` |
+| **Exact Shapley-value attribution** | Δmargin split across the 8 mechanisms of the root segment by evaluating all 2^8 coalitions | `twin.py` `Twin.shapley` |
+| **Monte Carlo scenario rollouts (simulation-in-the-loop)** | Every candidate fix is run 7 days ahead, 40 paths each, with common random numbers so options are compared on the same futures; includes the advertiser-reaction model | `twin.py` `Twin.fast_forward`, `agent.py` `Agent._fixes` |
+| **Uncertainty quantification, prediction intervals** | Leave-one-out backtest σ per country × KPI × time of day (inflated ×1.3 out of sample); ±2σ normal-zone bands; p10/p50/p90 for every fix and for paired deltas vs doing nothing | `twin.py` `Twin.learn` (`l1_sigma`), `agent.py` `Agent.series`, `Twin.fast_forward` |
+| **Multi-fidelity hierarchical digital twin, adaptive fidelity** | L1 business (country KPIs), L2 segment (platform × offer category mechanisms), L3 users (on demand). The agent descends to L3 only when impact × uncertainty is high: root on the user side and impact ≥ $50/h | `twin.py` `Twin.l1_z` / `given_parents`, `taste.py`, `agent.py` `Agent.investigate` |
+| **Closed-loop self-calibration** | 24 h after an approved fix, actual margin is compared with the predicted band; a miss widens that country's uncertainty (×1.2) | `agent.py` `Agent._verify` |
+| **Human-on-the-loop approval** | Argus recommends; nothing touches the marketplace until a person approves a fix | `agent.py` `Agent.approve`, `POST /api/incidents/{id}/approve` |
+| **Agent trace** | Every investigation records its steps (L1 → L2 → L3 → hypotheses → fixes → approval → verification) | incident `trail`, `GET /api/timeline` |
+| **Grounded generation** | The LLM only rewrites tool results: it receives the facts as JSON, and every number in its output is checked against them; any unmatched number → deterministic template instead | `llm.py`, `agent.py` `Agent._llm_reports`, `ungrounded_numbers` |
+| **Evaluation harness** | Seeds × injected faults (promo, bot farm, tracking break, data delay); detection latency, explained share, recommended fix, verification, false alarms in clean weeks | `argus/evaluate.py` (`python -m argus.evaluate`), `tests/test_e2e.py` |
+| **Taste coherence as a behavioural-consistency anomaly signal** | Real people's completions match the tastes their life signals predict; fake accounts don't. Low coherence + payout focus + shared devices form the fraud cluster | `taste.py` `TasteModel.score_users` |
+
+Latest harness run (seeds 42, 1–8): bot farm detected 9/9 in 3–4 h, 88–99% explained, all predictions verified;
+tracking break 9/9 in 3–4 h; 0 false incidents in 9 clean weeks.
+
 ## Demo scenes
 
 The **Demo** menu in the top bar (or `POST /api/demo/{scene}`) jumps a fixed-seed world to each part of the story;

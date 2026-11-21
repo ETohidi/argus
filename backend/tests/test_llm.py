@@ -32,3 +32,10 @@ def test_unreachable_endpoint_falls_back(monkeypatch):
     monkeypatch.setenv("LLM_MODEL", "none")
     assert llm.configured()
     assert llm.chat("s", "u", timeout=1.0) is None
+
+
+def test_grounding_check_rejects_invented_numbers():
+    from argus.agent import ungrounded_numbers
+    src = '{"risk_7d_usd": 233743, "explained": 0.988, "impact_usd_h": 85.1, "reaction_h": 28}'
+    assert ungrounded_numbers("Risk $233,743; 98.8% explained; about $85/h; reclaims in 28 h.", src) == []
+    assert ungrounded_numbers("Risk $250,000 and 42% explained.", src) == [250000.0, 42.0]

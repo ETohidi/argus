@@ -101,6 +101,35 @@ def hour_label(t: int) -> str:
     return f"{DOW[day % 7]} {hour:02d}:00"
 
 
+_NUM = re.compile(r"\d[\d,]*(?:\.\d+)?")
+
+
+def _numbers(text: str) -> list[float]:
+    out = []
+    for m in _NUM.finditer(text):
+        try:
+            out.append(float(m.group().replace(",", "")))
+        except ValueError:
+            continue
+    return out
+
+
+def ungrounded_numbers(text: str, source: str) -> list[float]:
+    """Numbers in generated text that do not appear in the source (facts + templates), allowing for rounding,
+    percent <-> fraction and USD/h <-> USD per 3 h window. Small counts (<= 24, e.g. hours, sentences) are allowed."""
+    allowed: set[float] = set()
+    for v in _numbers(source):
+        allowed.update({v, round(v), round(v, 1), round(v * 100), round(v * 100, 1), round(v / 100, 3)})
+    bad = []
+    for x in _numbers(text):
+        if x <= 24 or x in allowed:
+            continue
+        if any(abs(x - a) <= max(0.5, 0.006 * abs(a)) for a in allowed):
+            continue
+        bad.append(x)
+    return bad
+
+
 def fake_count_phrase(n_flagged: int, n_sample: int, total: int) -> str:
     """One wording everywhere: the sample count and the estimated total."""
     return f"{n_flagged} flagged in a sample of {n_sample}, about {total} in total"
@@ -145,6 +174,7 @@ class Agent:
         self.waiting = np.zeros(cfg.C, dtype=bool)
         self.explaining = np.zeros(cfg.C, dtype=bool)
         self.extensions: dict[str, dict] = {}
+        self.llm_rejections: list[dict] = []           # LLM reports that failed the grounding check
         self.investigations = 0
         self.l3_runs = 0
         self.last: dict | None = None
@@ -716,15 +746,20 @@ class Agent:
         l3 = ""
         if inc["l3"]:
             s = inc["l3"]["summary"]
-            l3 = (f" L3: {fake_count_phrase(s['n_flagged'], s['n_users'], inc['excess_accounts'])}; coherence "
-                  f"{s['coherence_flagged']} vs "
-                  f"{s['coherence_others']}, devices {', '.join(s['top_devices'])}.")
-        engineer = (f"Window t={inc['detected_at'] - WINDOW + 1}..{inc['detected_at']} (3 h). L1 z: "
+            l3 = (f" L3 behavioural-consistency check (taste coherence): "
+                  f"{fake_count_phrase(s['n_flagged'], s['n_users'], inc['excess_accounts'])}; coherence "
+                  f"{s['coherence_flagged']} vs {s['coherence_others']}, devices {', '.join(s['top_devices'])}.")
+        top_h = inc["hypotheses"][0]
+        cf = (f" Counterfactual replay (do(cause mechanisms := twin baseline), other residuals kept): "
+              f"{top_h['name'].split(' (')[0]} explains {top_h['explained']:.1%} of Δ{inc['kpi']} "
+              f"({top_h['verdict']}; threshold {SUPPORTED:.0%}).")
+        engineer = (f"Window t={inc['detected_at'] - WINDOW + 1}..{inc['detected_at']} (3 h). L1 z vs twin forecast: "
                     + ", ".join(f"{k} {v:+.1f}" for k, v in inc["z"].items())
-                    + f". Mechanism z given parents ({inc['platform']}, {inc['category']}): "
+                    + f". Causal root-cause analysis on the SCM, residual z given parents ({inc['platform']}, "
+                      f"{inc['category']}): "
                     + ", ".join(f"{m} {v:+.1f}" for m, v in inc["mechanism_z"].items())
-                    + f". Root: {inc['root']}. Shapley Δmargin: {shap}.{l3} Hypothesis test KPI: {inc['kpi']}; "
-                      f"supported if explained ≥ {SUPPORTED:.0%}.")
+                    + f". Root: {inc['root']}. Exact Shapley attribution of Δmargin (2^8 coalitions): {shap}.{l3}{cf} "
+                      f"Fixes: Monte Carlo rollouts, 40 paths × 7 days, p10–p90 prediction intervals.")
         return {"ceo": ceo, "manager": manager, "engineer": engineer, "source": "template"}
 
     def reports_for(self, inc: dict) -> dict:
@@ -768,7 +803,13 @@ class Agent:
             json.dumps({"facts": facts, "template_drafts": drafts}, default=str), max_tokens=1200)
         if not out or not all(isinstance(out.get(k), str) and 20 <= len(out[k]) <= 2000 for k in drafts):
             return None
-        return {**{k: out[k].strip() for k in drafts}, "source": "llm", "model": llm.model()}
+        source_text = json.dumps({"facts": facts, "drafts": drafts}, default=str)
+        unmatched = sorted({x for k in drafts for x in ungrounded_numbers(out[k], source_text)})
+        if unmatched:                                  # grounded generation: any number not in the tool results
+            self.llm_rejections.append({"incident": inc["id"], "unmatched": unmatched[:10]})
+            return None                                # -> deterministic template
+        return {**{k: out[k].strip() for k in drafts}, "source": "llm", "model": llm.model(),
+                "grounding": "every number checked against the tool results"}
 
     # ================================================================== metric extension
     def _known(self) -> set[str]:
