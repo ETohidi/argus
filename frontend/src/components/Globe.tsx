@@ -3,6 +3,8 @@ import maplibregl, { type Map as MapLibreMap } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { buildWorldGeoJson } from '../lib/countryGeometry'
 import { geometryContains, isOnGlobe } from '../lib/globeHit'
+import { nightCells } from '../lib/daynight'
+import type { GeoJSONSource } from 'maplibre-gl'
 import { AURORA, STATUS_COLOR, STATUS_LABEL, potentialColor, usd } from '../lib/theme'
 import type { CountryState, CountryStatus } from '../lib/types'
 
@@ -13,6 +15,7 @@ type Props = {
   mode: GlobeMode
   selectedIso: string | null
   insetRight?: number // px covered by the right-hand card; the globe centres in the remaining space
+  utcHour?: number // drives the day/night shading
   onSelect: (iso: string | null) => void
 }
 
@@ -41,9 +44,26 @@ function matchExpr(colors: Record<string, string>, fallback: string): any {
   return ['match', ['get', 'iso'], ...entries.flat(), fallback]
 }
 
+// Health-mode fill opacity. Healthy markets: intensity by revenue share (US strongest), kept faint.
+// During an incident every other market dims and the affected one carries `pulse`.
+function opacityExpr(countries: CountryState[], pulse: number): unknown {
+  const maxRev = Math.max(1, ...countries.map((c) => c.kpis.revenue))
+  const anyIncident = countries.some((c) => c.status === 'incident')
+  const entries = countries.map((c) => {
+    let o: number
+    if (c.status === 'incident') o = pulse
+    else if (c.status === 'watch') o = 0.85
+    else if (c.status === 'explained' || c.status === 'waiting') o = 0.55
+    else o = 0.14 + 0.46 * Math.sqrt(c.kpis.revenue / maxRev)
+    if (anyIncident && c.status !== 'incident') o *= 0.4
+    return [c.iso, Math.round(o * 100) / 100]
+  })
+  return ['match', ['get', 'iso'], ...entries.flat(), 0.85]
+}
+
 const MARKER_STATUSES: CountryStatus[] = ['incident', 'watch', 'explained', 'waiting']
 
-export default function Globe({ countries, mode, selectedIso, insetRight = 0, onSelect }: Props) {
+export default function Globe({ countries, mode, selectedIso, insetRight = 0, utcHour, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const loadedRef = useRef(false)
@@ -52,6 +72,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, on
   const modeRef = useRef(mode)
   const selectedRef = useRef(selectedIso)
   const onSelectRef = useRef(onSelect)
+  const hourRef = useRef(utcHour ?? 12)
   countriesRef.current = countries
   modeRef.current = mode
   selectedRef.current = selectedIso
@@ -77,6 +98,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, on
     let lastInteraction = -Infinity
     let prev = performance.now()
     let frame = 0
+    let lastPulse = 0
     const note = () => (lastInteraction = performance.now())
     const spin = (now: number) => {
       const dt = Math.min(now - prev, 100)
@@ -84,6 +106,11 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, on
       if (!selectedRef.current && now - lastInteraction > 12_000 && !map.isMoving()) {
         const c = map.getCenter()
         map.jumpTo({ center: [c.lng + dt * 0.0035, c.lat] })
+      }
+      // Pulse the affected country (≈15 fps is plenty for a slow breathe).
+      if (loadedRef.current && now - lastPulse > 66 && countriesRef.current.some((c) => c.status === 'incident') && modeRef.current === 'health') {
+        lastPulse = now
+        map.setPaintProperty('watched', 'fill-opacity', opacityExpr(countriesRef.current, 0.7 + 0.25 * Math.sin(now / 420)) as any)
       }
       frame = requestAnimationFrame(spin)
     }
@@ -126,6 +153,14 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, on
         source: 'world',
         filter: ['!=', ['get', 'iso'], ''],
         paint: { 'line-color': AURORA.fg2, 'line-opacity': 0.25, 'line-width': 0.5 },
+      })
+      // Night side: soft dark overlay from the sun's elevation (updated when the hour changes).
+      map.addSource('night', { type: 'geojson', data: nightCells(hourRef.current) as any })
+      map.addLayer({
+        id: 'night',
+        type: 'fill',
+        source: 'night',
+        paint: { 'fill-color': AURORA.bg, 'fill-opacity': ['get', 'o'], 'fill-antialias': false },
       })
       map.addLayer({
         id: 'hover-outline',
@@ -205,13 +240,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, on
     const map = mapRef.current
     if (!map || !loadedRef.current) return
     map.setPaintProperty('watched', 'fill-color', matchExpr(fillColors(countriesRef.current, modeRef.current), BASE_LAND))
-    // Calm Earth: healthy markets stay faint so only the affected country stands out.
-    const opacity =
-      modeRef.current === 'health'
-        ? Object.fromEntries(countriesRef.current.map((c) => [c.iso, c.status === 'ok' ? 0.28 : c.status === 'explained' || c.status === 'waiting' ? 0.6 : 0.95]))
-        : {}
-    const entries = Object.entries(opacity)
-    map.setPaintProperty('watched', 'fill-opacity', entries.length ? (['match', ['get', 'iso'], ...entries.flat(), 0.85] as any) : 0.85)
+    map.setPaintProperty('watched', 'fill-opacity', (modeRef.current === 'health' ? opacityExpr(countriesRef.current, 0.95) : 0.85) as any)
     syncMarkers()
   }
 
@@ -245,6 +274,14 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, on
   }
 
   useEffect(paint, [countries, mode])
+
+  // Day/night: recompute the night overlay when the simulated hour changes.
+  useEffect(() => {
+    if (utcHour == null || utcHour === hourRef.current) return
+    hourRef.current = utcHour
+    const src = mapRef.current?.getSource('night') as GeoJSONSource | undefined
+    src?.setData(nightCells(utcHour) as any)
+  }, [utcHour])
 
   // Fly to the selected country, or back to the whole globe, keeping clear of the right-hand card.
   useEffect(() => {

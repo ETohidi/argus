@@ -285,7 +285,7 @@ export default function App() {
 
   return (
     <div className="relative h-full overflow-hidden bg-bg">
-      {state && <Globe countries={state.countries} mode={mode} selectedIso={focusIso} insetRight={sideOpen ? 460 : 0} onSelect={selectCountry} />}
+      {state && <Globe countries={state.countries} mode={mode} selectedIso={focusIso} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
 
       <TopBar clock={state?.clock.label ?? 'Connecting…'} status={state ? statusSentence(state) : { text: 'Connecting to the twin…', tone: 'neutral' }} mode={mode} onMode={setMode} />
 
