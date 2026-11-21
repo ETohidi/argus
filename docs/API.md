@@ -366,7 +366,7 @@ Read-only: nothing in the session world changes.
   "range_line": "Likely $18–$36 per 1,000 users a day (p10–p90)",
   "total_line": "At 176,000 daily users (assumed): about +$4,275 a day after 4 weeks",
   "learned_line": "Learned from Mexico, Brazil and Türkiye",
-  "backtest_line": "Tested on 20 countries we know: best offers right in 20 of 20"
+  "backtest_line": "Tested on 20 countries we know: picked the #1 offer in 15 of 20 (the global average: 11 of 20)"
 }
 ```
 
@@ -374,6 +374,7 @@ How the backtest works:
 - **Ground truth:** the simulator's true next 4 weeks for each watched country.
 - **Best reward truth:** the simulator is rerun at each reward share. The reward response is hidden in the simulator
   and only switched on by a `set_reward` change. Argus sees only noisy results of past reward tests.
-- **Which line the UI gets:** `backtest_line` quotes the strongest of the three checks, with its real count.
-- **Baseline:** the same ranking for every country already gets 18 of 20 offers right, so the offer result is
-  strongest on the top pick: 15 of 20, against 11 for that baseline.
+- **Which line the UI gets:** `backtest_line` quotes how often Argus picked the #1 offer. The global-average baseline is
+  added in brackets only when it is more than 2 below.
+- **Why not the top-3 count:** the global average already gets 18 of 20 in the top 3, so "20 of 20 in the top 3" is
+  in the README table and in `backtest.offers`, not on screen.

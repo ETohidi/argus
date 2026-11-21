@@ -48,10 +48,13 @@ def test_backtest_all_20_countries_reports_real_counts():
     assert o["true_top_is_first"] > o["naive_baseline"]["true_top_is_first"]   # similarity beats one global ranking
     assert m["median_abs_error"] <= 0.35 and m["inside_p10_p90"] >= 14         # calibrated range (~80% nominal)
     assert rw["within_one_step"] == sum(r["reward"]["within_one_step"] for r in bt["countries"]) and rw["within_one_step"] >= 16
-    # the plain-language line quotes the strongest of the three, with its real count
-    best = max(o["true_top_in_top3"], rw["within_one_step"], m["inside_p10_p90"])
+    # the on-screen line: #1 offer hits, with the naive baseline only when it is clearly (>2) worse
     line = L.launch("AR", 42)["backtest_line"]
-    assert line.startswith("Tested on 20 countries we know: ") and f"{best} of 20" in line
+    top1, naive = o["true_top_is_first"], o["naive_baseline"]["true_top_is_first"]
+    assert line.startswith(f"Tested on 20 countries we know: picked the #1 offer in {top1} of 20")
+    assert (f"(the global average: {naive} of 20)" in line) == (top1 - naive > 2)
+    assert L._tested_line({"n": 20, "offers": {"true_top_is_first": 15, "naive_baseline": {"true_top_is_first": 13}}}) \
+        == "Tested on 20 countries we know: picked the #1 offer in 15 of 20"
 
 
 def test_reward_truth_is_hidden_and_off_by_default():

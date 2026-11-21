@@ -144,7 +144,7 @@ calling a later scene first runs the earlier ones.
 - **Backtest:** each of the 20 watched countries is hidden in turn and predicted from the other 19, then checked against
   the simulator's true next 4 weeks.
 
-  | Check | Argus | Same ranking for every country |
+  | Check | Argus | Global average (same ranking everywhere) |
   |---|---|---|
   | Best offers: true top category in Argus's top 3 | 20 of 20 | 18 of 20 |
   | Best offers: true top category ranked first | 15 of 20 | 11 of 20 |

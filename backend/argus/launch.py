@@ -303,15 +303,12 @@ def _fraud_risk(nb: list[tuple[str, float]], day_margin: float, incidents: list[
             "source": "simulated fraud history of the neighbours (plus bot-farm issues in this session)"}
 
 
-def _strongest(bt: dict) -> str:
-    """The plain-language backtest line: the strongest result, stated with its real count."""
-    n = bt["n"]
-    scores = [(bt["offers"]["true_top_in_top3"], bt["offers"]["text"]),
-              (bt["reward"]["within_one_step"], bt["reward"]["text"]),
-              (bt["margin_per_user"]["inside_p10_p90"], f"margin per user inside the forecast range in "
-                                                        f"{bt['margin_per_user']['inside_p10_p90']} of {n}")]
-    best = max(scores, key=lambda s: s[0])
-    return f"Tested on {n} countries we know: {best[1]}"
+def _tested_line(bt: dict) -> str:
+    """The on-screen backtest line: how often Argus picked the #1 offer, with the naive baseline when it is clearly worse."""
+    n, top1 = bt["n"], bt["offers"]["true_top_is_first"]
+    naive = bt["offers"]["naive_baseline"]["true_top_is_first"]
+    line = f"Tested on {n} countries we know: picked the #1 offer in {top1} of {n}"
+    return line + (f" (the global average: {naive} of {n})" if top1 - naive > 2 else "")
 
 
 def launch(iso: str = "AR", seed: int = 42, incidents: list[dict] | None = None, users: int | None = None) -> dict:
@@ -385,6 +382,6 @@ def _launch(iso: str, seed: int) -> dict:
         "backtest": bt,
         "headline": f"Launching in {f['name']}: about ${per1000['p50']:,.0f} margin per 1,000 users a day",
         "learned_line": f"Learned from {', '.join(names[:-1])} and {names[-1]}",
-        "backtest_line": _strongest(bt),
+        "backtest_line": _tested_line(bt),
         "range_line": f"Likely ${per1000['p10']:,.0f}–${per1000['p90']:,.0f} per 1,000 users a day (p10–p90)",
     }
