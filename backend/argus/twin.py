@@ -439,6 +439,7 @@ class Twin:
         for opt in options:
             rng = np.random.default_rng([seed, c, 7])
             cum = np.zeros((n, H))
+            ev = {"chargeback": [], "budget_cut": [], "tracking_fixed": []}   # per path: hour of the event or None
             for i in range(n):
                 bias = np.exp(rng.normal(0, sig))
                 hn = np.exp(rng.normal(0, sig, H))
@@ -483,6 +484,9 @@ class Twin:
                     cb_at = np.where(started_now, t_cb, first_on + t_cb + ctx.get("elapsed", 3))
                     bc_at = np.where(started_now, t_bc, first_on + t_bc + ctx.get("elapsed", 3))
                     on_any = fraud_on.any(0)
+                    for name, at in (("chargeback", cb_at), ("budget_cut", bc_at)):
+                        hit = on_any & (at < H)
+                        ev[name].append(float(max(at[hit].min(), 0.0)) if hit.any() else None)
                     acc = np.where(on_any[None] & (hrs[:, None] >= cb_at[None]), 0.5, 1.0)             # (H,K)
                     cut = np.where(on_any[None] & (hrs[:, None] >= bc_at[None]), 0.4, 1.0)
                     rev = (rev * cut[:, None] + b_rev) * acc[:, None]
@@ -494,6 +498,7 @@ class Twin:
                         aff[p0, k] = True
                     fixed_at = t_fix if opt in ("notify_advertiser", "pause_notify") else H + 1
                     broken[:] = aff[None] & (hrs[:, None, None] < fixed_at)
+                    ev["tracking_fixed"].append(float(fixed_at) if fixed_at < H else None)
                     rev = np.where(broken, rev * acc_ratio[None], rev)
                     if opt in ("pause_offers", "pause_notify"):
                         paused = aff[None] & (hrs[:, None, None] < 18)
@@ -502,11 +507,23 @@ class Twin:
                 margin = (rev - rew).sum((1, 2)) * hn
                 cum[i] = np.cumsum(margin)
             daily = cum[:, 23::24]
+            events = []
+            for name, times in ev.items():
+                hits = [x for x in times if x is not None]
+                if times and len(hits) >= 0.5 * len(times):          # happens in most simulated futures
+                    events.append({"event": name, "after_h": int(round(float(np.median(hits)))),
+                                   "probability": round(len(hits) / len(times), 2)})
             results.append({"id": opt, "p10": np.percentile(daily, 10, axis=0).tolist(),
                             "p50": np.percentile(daily, 50, axis=0).tolist(),
                             "p90": np.percentile(daily, 90, axis=0).tolist(),
-                            "days": list(range(1, daily.shape[1] + 1))})
+                            "days": list(range(1, daily.shape[1] + 1)), "events": events, "_daily": daily})
         base = results[0]["p50"][-1]
+        for r in results:
+            # Paired difference vs do-nothing per simulated future (common random numbers), per day.
+            d = r["_daily"] - results[0]["_daily"]
+            r["delta_daily"] = {q: np.percentile(d, v, axis=0).tolist() for q, v in (("p10", 10), ("p50", 50), ("p90", 90))}
+        for r in results:
+            r.pop("_daily")
         for r in results:
             r["delta_p50_usd"] = r["p50"][-1] - base
         return results

@@ -163,3 +163,21 @@ def test_incident_counterfactual_removes_the_cause():
     last_actual, last_cf = d["series"][-1], cf["series"][-1]
     assert last_cf["value"] < last_actual["actual"]                       # removing the fake accounts lowers sign-ups
     assert last_actual["lo"] <= last_cf["value"] <= last_actual["hi"]      # ... back into the normal zone
+
+
+def test_fix_routes_and_do_nothing_events():
+    S = {"X-Session": "routes"}
+    inc_id = client.post("/api/demo/bot_farm", headers=S).json()["incident_id"]
+    fixes = {f["id"]: f for f in client.get(f"/api/incidents/{inc_id}", headers=S).json()["fixes"]}
+    for f in fixes.values():
+        keys(f["delta_daily"], ["p10", "p50", "p90"])
+        assert len(f["delta_daily"]["p50"]) == 7
+        assert all(a <= b <= c for a, b, c in zip(*(f["delta_daily"][q] for q in ("p10", "p50", "p90"))))
+    assert fixes["none"]["delta_daily"]["p50"] == [0] * 7
+    assert fixes["verify_new_accounts"]["delta_daily"]["p50"][-1] == fixes["verify_new_accounts"]["delta_p50_usd"] \
+        or abs(fixes["verify_new_accounts"]["delta_daily"]["p50"][-1] - fixes["verify_new_accounts"]["delta_p50_usd"]) < 0.2 * abs(fixes["verify_new_accounts"]["delta_p50_usd"])
+    ev = fixes["none"]["events"]
+    labels = [e["label"] for e in ev]
+    assert labels == ["Advertisers start reclaiming money", "Advertiser cuts the budget"]
+    assert 0 < ev[0]["after_h"] < ev[1]["after_h"] <= 168
+    assert fixes["block_cluster"]["events"] == []

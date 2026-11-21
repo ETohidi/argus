@@ -29,6 +29,8 @@ SUPPORTED, PARTIAL = 0.8, 0.3
 QUIET_TO_RESOLVE = 6
 SEV_HIGH_USD, SEV_HIGH_SOON_USD = 25_000, 10_000       # 7-day cost of doing nothing (USD)
 SEV_MEDIUM_USD, SEV_MEDIUM_SOON_USD = 5_000, 1_000     # "soon" = advertisers react within 24 h
+EVENT_LABEL = {"chargeback": "Advertisers start reclaiming money", "budget_cut": "Advertiser cuts the budget",
+               "tracking_fixed": "Advertiser fixes tracking"}
 RESIDUAL_FRAUD = {"none": 1.0, "cap_rewards": 0.4, "verify_new_accounts": 0.05, "block_cluster": 0.0}
 
 KPI_LABEL = {"new_accounts": "new accounts", "completions": "completions", "revenue": "revenue",
@@ -440,7 +442,10 @@ class Agent:
         rec_fix = next(f for f in inc["fixes"] if f["id"] == inc["recommended"])
         # Risk = what doing nothing costs over 7 days vs the recommended fix (p50), plus how soon advertisers react.
         inc["risk_7d_usd"] = round(max(rec_fix["delta_p50_usd"], 0))
-        inc["reaction_h"] = (max(24 - ctx["elapsed"], 1) if kind in ("fraud", "user")
+        # Advertiser reaction time from the twin's simulated do-nothing future (median over Monte Carlo paths).
+        cb = next((x["after_h"] for x in inc["fixes"][0]["events"]
+                   if x["label"] == EVENT_LABEL["chargeback"]), None)
+        inc["reaction_h"] = (cb if kind in ("fraud", "user")
                              else 0 if kind == "tracking" else None)          # tracking: losses accrue now
         inc["severity"] = self._severity(inc["risk_7d_usd"], inc["reaction_h"])
         rec = next(f for f in inc["fixes"] if f["id"] == inc["recommended"])
@@ -508,6 +513,7 @@ class Agent:
         country = cfg.COUNTRIES[inc["c"]].name
         cats = ", ".join(cfg.CATEGORY_KEYS[k] for k in inc["fix_categories"])
         e = inc["ctx"]["elapsed"]
+        times = {r["id"]: {x["event"]: x["after_h"] for x in r["events"]} for r in ff}
         out = []
         for r in ff:
             name, desc = FIX_INFO[r["id"]]
@@ -515,7 +521,10 @@ class Agent:
                         "description": desc.format(country=country, platform=inc["platform"], categories=cats),
                         "days": r["days"], "p10": [round(x) for x in r["p10"]], "p50": [round(x) for x in r["p50"]],
                         "p90": [round(x) for x in r["p90"]], "delta_p50_usd": round(r["delta_p50_usd"]),
-                        "advertiser_risk": self._risk(inc, r["id"], e, cats)})
+                        "delta_daily": {q: [round(x) for x in v] for q, v in r["delta_daily"].items()},
+                        "events": [{"after_h": x["after_h"], "label": EVENT_LABEL[x["event"]],
+                                    "probability": x["probability"]} for x in r["events"]],
+                        "advertiser_risk": self._risk(inc, r["id"], times.get(r["id"], {}), cats)})
         return out
 
     @staticmethod
@@ -528,15 +537,20 @@ class Agent:
         return "low"
 
     @staticmethod
-    def _risk(inc: dict, fix: str, elapsed: int, cats: str) -> str:
+    def _risk(inc: dict, fix: str, times: dict, cats: str) -> str:
         if inc["kind"] in ("fraud", "user"):
-            cb, bc = max(24 - elapsed, 1), max(48 - elapsed, 1)
+            cb, bc = times.get("chargeback"), times.get("budget_cut")
+            react = (f"chargebacks on {cats} (about half of revenue) in ~{cb} h" if cb is not None else
+                     "no advertiser reaction expected within 7 days")
+            if bc is not None:
+                react += f", budget cut (−60%) in ~{bc} h"
             return {
-                "none": f"High: chargebacks on {cats} (about half of revenue) in ~{cb} h, budget cut (−60%) in ~{bc} h",
+                "none": f"High: {react}" if cb is not None else f"Medium: {react}",
                 "block_cluster": "Low: 30% chance the farm returns at half strength within 1–2 days",
                 "verify_new_accounts": "Low: about 12% fewer genuine sign-ups on this platform",
                 "cap_rewards": "Medium: leaves ~40% of the fake accounts active; the margin gain comes from paying "
-                               "genuine users less (about 15% fewer starts), so it treats a symptom, not the cause",
+                               "genuine users less (about 15% fewer starts), so it treats a symptom, not the cause"
+                               + (f"; advertisers still react in ~{cb} h" if cb is not None else ""),
             }[fix]
         if inc["kind"] == "tracking":
             return {

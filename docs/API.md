@@ -31,7 +31,7 @@ Globe state.
     { "id": "inc-1", "title": "...", "country": "CA", "status": "open", "severity": "high",
       "impact_usd_h": 134.0,      // current deviation in USD/h
       "risk_7d_usd": 114042,      // 7-day margin lost by doing nothing vs the recommended fix (p50, twin)
-      "reaction_h": 21,           // hours until advertisers react (chargebacks); 0 = losses accrue now; null = n/a
+      "reaction_h": 27,           // hours until advertisers react (chargebacks), from the do-nothing route's events; 0 = losses accrue now; null = n/a
       "card": { ... } }           // plain-language issue card, see below
   ],
   "explained": [
@@ -82,6 +82,11 @@ After approval `what_to_do` becomes "Done: <fix> applied."
       "id": "block_cluster", "name": "Block cluster", "description": "...",
       "days": [1,2,3,4,5,6,7], "p10": [], "p50": [], "p90": [],                           // cumulative margin USD
       "delta_p50_usd": 15000.0,                                                            // day-7 p50 vs do nothing
+      "delta_daily": { "p10": [], "p50": [], "p90": [] },   // cumulative margin vs do nothing, days 1..7 (paired per simulated future)
+      "events": [                                           // advertiser reactions in the twin's simulated future (≥50% of paths)
+        { "after_h": 27, "label": "Advertisers start reclaiming money", "probability": 1.0 },
+        { "after_h": 50, "label": "Advertiser cuts the budget", "probability": 1.0 }
+      ],                                                    // labels also: "Advertiser fixes tracking"; [] when none apply
       "advertiser_risk": "..."
     }
   ],

@@ -53,7 +53,7 @@ def test_bot_farm_detected_and_explained(demo):
     assert top["verdict"] == "supported" and top["explained"] >= 0.8 and "Fake-account" in top["name"]
     assert all(h["verdict"] == "rejected" for h in inc["hypotheses"][1:])
     assert inc["recommended"] != "none"
-    assert inc["severity"] == "high" and inc["risk_7d_usd"] >= 25_000 and inc["reaction_h"] <= 24
+    assert inc["severity"] == "high" and inc["risk_7d_usd"] >= 25_000 and inc["reaction_h"] <= 48
     heat = demo["w"].agent.country_detail(cfg.ISO_INDEX["CA"])
     android = next(p for p in heat["platforms"] if p["platform"] == "Android")
     ios = next(p for p in heat["platforms"] if p["platform"] == "iOS")
