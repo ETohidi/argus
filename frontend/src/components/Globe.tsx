@@ -4,6 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import { loadWorldGeoJson } from '../lib/countryGeometry'
 import { geometryContains, isOnGlobe } from '../lib/globeHit'
 import { WORLD_COORDS, nightImage } from '../lib/daynight'
+import { EarthImagery, graticule } from '../lib/earthImagery'
 import type { GeoJSONSource, ImageSource } from 'maplibre-gl'
 import { AURORA, STATUS_COLOR, STATUS_LABEL, potentialColor, usd } from '../lib/theme'
 import type { CountryState, CountryStatus } from '../lib/types'
@@ -62,6 +63,8 @@ function opacityExpr(countries: CountryState[], pulse: number): unknown {
 }
 
 // Only issues get a marker; explained / waiting markets are already told apart by their fill.
+const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
+
 const MARKER_STATUSES: CountryStatus[] = ['incident', 'watch']
 
 export default function Globe({ countries, mode, selectedIso, insetRight = 0, utcHour, onSelect }: Props) {
@@ -74,6 +77,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
   const selectedRef = useRef(selectedIso)
   const onSelectRef = useRef(onSelect)
   const hourRef = useRef(utcHour ?? 12)
+  const earthRef = useRef<EarthImagery | null>(null)
   countriesRef.current = countries
   modeRef.current = mode
   selectedRef.current = selectedIso
@@ -91,6 +95,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
       renderWorldCopies: false,
       maxZoom: 5,
       minZoom: 1,
+      pixelRatio: Math.min(window.devicePixelRatio || 1, 2), // crisp on Retina without 3× GPU cost
     })
     mapRef.current = map
     if (import.meta.env.DEV) (window as unknown as { __argusMap?: MapLibreMap }).__argusMap = map // for edge hit-tests
@@ -178,6 +183,26 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
       // Night side: one smooth image from the sun's elevation (updated when the hour changes).
       map.addSource('night', { type: 'image', url: nightImage(hourRef.current), coordinates: WORLD_COORDS })
       map.addLayer({ id: 'night', type: 'raster', source: 'night', paint: { 'raster-opacity': 1, 'raster-fade-duration': 0 } })
+      // Faint graticule.
+      map.addSource('graticule', { type: 'geojson', data: graticule() })
+      map.addLayer(
+        { id: 'graticule', type: 'line', source: 'graticule', paint: { 'line-color': AURORA.fg2, 'line-opacity': 0.07, 'line-width': 0.5 } },
+        'borders',
+      )
+      // NASA day / night imagery, loaded lazily; until then the flat ocean and land show.
+      EarthImagery.load()
+        .then(async (earth) => {
+          earthRef.current = earth
+          const { url, poleColor } = await earth.render(hourRef.current)
+          if (!mapRef.current) return
+          map.setPaintProperty('ocean', 'background-color', poleColor)
+          map.addSource('earth', { type: 'image', url, coordinates: WORLD_COORDS })
+          map.addLayer({ id: 'earth', type: 'raster', source: 'earth', paint: { 'raster-fade-duration': 0, 'raster-opacity': 1 } }, 'land')
+          map.setPaintProperty('land', 'fill-opacity-transition', { duration: 800 } as any)
+          map.setPaintProperty('land', 'fill-opacity', 0)
+          map.setLayoutProperty('night', 'visibility', 'none') // night is part of the blended texture now
+        })
+        .catch(() => {}) // keep the flat look if the images can't load
       map.addLayer({
         id: 'hover-outline',
         type: 'line',
@@ -294,8 +319,19 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
   useEffect(() => {
     if (utcHour == null || utcHour === hourRef.current) return
     hourRef.current = utcHour
-    const src = mapRef.current?.getSource('night') as ImageSource | undefined
-    src?.updateImage({ url: nightImage(utcHour), coordinates: WORLD_COORDS })
+    const map = mapRef.current
+    const earth = earthRef.current
+    if (earth && map?.getSource('earth')) {
+      const hour = utcHour
+      earth.render(hour).then(({ url, poleColor }) => {
+        if (hour !== hourRef.current) return
+        ;(map.getSource('earth') as ImageSource | undefined)?.updateImage({ url, coordinates: WORLD_COORDS })
+        map.setPaintProperty('ocean', 'background-color', poleColor)
+      })
+    } else {
+      const src = map?.getSource('night') as ImageSource | undefined
+      src?.updateImage({ url: nightImage(utcHour), coordinates: WORLD_COORDS })
+    }
   }, [utcHour])
 
   // Fly to the selected country, or back to the whole globe, keeping clear of the right-hand card.
@@ -312,9 +348,11 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
           zoom: ['US', 'CA', 'BR', 'AU'].includes(c.iso) ? 2.3 : ['IN', 'ID', 'MX', 'ZA'].includes(c.iso) ? 2.8 : 3.3,
           padding,
           duration: 1800,
+          curve: 1.3,
+          easing: easeOutCubic,
           essential: true,
         })
-      else map.flyTo({ center: [map.getCenter().lng, HOME_VIEW.center[1]], zoom: HOME_VIEW.zoom, padding, duration: 1600, essential: true })
+      else map.flyTo({ center: [map.getCenter().lng, HOME_VIEW.center[1]], zoom: HOME_VIEW.zoom, padding, duration: 1600, easing: easeOutCubic, essential: true })
     }
     if (loadedRef.current) run()
     else map.once('load', run)

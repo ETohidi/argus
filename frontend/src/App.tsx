@@ -358,6 +358,8 @@ export default function App() {
         onAddMetric={openAddMetric}
       />
 
+      <div className="pointer-events-none absolute bottom-1.5 right-8 z-10 text-[13px] text-fg-2">Earth imagery: NASA Visible Earth</div>
+
       {toast && (
         <div className="fade-up pointer-events-none absolute left-1/2 top-24 z-50 -translate-x-1/2 rounded-full bg-panel/90 px-5 py-2 text-[13px] text-fg ring-1 ring-line/50">
           {toast}
