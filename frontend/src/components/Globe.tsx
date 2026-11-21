@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import maplibregl, { type Map as MapLibreMap } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { buildWorldGeoJson } from '../lib/countryGeometry'
+import { geometryContains, isOnGlobe } from '../lib/globeHit'
 import { STATUS_COLOR, STATUS_LABEL, potentialColor, usd } from '../lib/theme'
 import type { CountryState, CountryStatus } from '../lib/types'
 
@@ -69,6 +70,7 @@ export default function Globe({ countries, mode, selectedIso, onSelect }: Props)
       minZoom: 1,
     })
     mapRef.current = map
+    if (import.meta.env.DEV) (window as unknown as { __argusMap?: MapLibreMap }).__argusMap = map // for edge hit-tests
     const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 14, className: 'argus-popup' })
 
     let lastInteraction = -Infinity
@@ -97,7 +99,7 @@ export default function Globe({ countries, mode, selectedIso, onSelect }: Props)
         'fog-ground-blend': 0.6,
         'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 4, 0.4],
       } as any)
-      map.addSource('world', { type: 'geojson', data: buildWorldGeoJson() as any })
+      map.addSource('world', { type: 'geojson', data: world as any })
       map.addLayer({
         id: 'land',
         type: 'fill',
@@ -125,6 +127,13 @@ export default function Globe({ countries, mode, selectedIso, onSelect }: Props)
         paint: { 'line-color': '#e2e8f0', 'line-opacity': 0.25, 'line-width': 0.8 },
       })
       map.addLayer({
+        id: 'hover-outline',
+        type: 'line',
+        source: 'world',
+        filter: ['==', ['get', 'iso'], '__none__'],
+        paint: { 'line-color': '#e2e8f0', 'line-opacity': 0.7, 'line-width': 1.4 },
+      })
+      map.addLayer({
         id: 'selected-outline',
         type: 'line',
         source: 'world',
@@ -135,10 +144,36 @@ export default function Globe({ countries, mode, selectedIso, onSelect }: Props)
       paint()
     })
 
-    map.on('mousemove', 'watched', (e) => {
-      const iso = e.features?.[0]?.properties?.iso as string | undefined
-      const c = countriesRef.current.find((x) => x.iso === iso)
-      if (!c) return
+    // Hover and click only react to watched countries under the pointer on the visible globe surface.
+    const world = buildWorldGeoJson()
+    const geometryByIso = new Map(world.features.filter((f) => f.properties.iso).map((f) => [f.properties.iso, f.geometry]))
+    const countryAt = (point: { x: number; y: number }): string | null => {
+      if (!loadedRef.current || !isOnGlobe(map, point)) return null
+      const { lng, lat } = map.unproject([point.x, point.y])
+      for (const f of map.queryRenderedFeatures([point.x, point.y], { layers: ['watched'] })) {
+        const iso = f.properties?.iso as string | undefined
+        const g = iso ? geometryByIso.get(iso) : undefined
+        if (iso && g && geometryContains(g, lng, lat)) return iso
+      }
+      return null
+    }
+    let hovered: string | null = null
+    const clearHover = () => {
+      if (hovered === null && !popup.isOpen()) return
+      hovered = null
+      canvas.style.cursor = ''
+      popup.remove()
+      if (loadedRef.current) map.setFilter('hover-outline', ['==', ['get', 'iso'], '__none__'])
+    }
+    map.on('mousemove', (e) => {
+      const iso = countryAt(e.point)
+      const c = iso ? countriesRef.current.find((x) => x.iso === iso) : undefined
+      if (!c) return clearHover()
+      note() // hovering a country pauses auto-rotation
+      if (hovered !== c.iso) {
+        hovered = c.iso
+        map.setFilter('hover-outline', ['==', ['get', 'iso'], c.iso])
+      }
       canvas.style.cursor = 'pointer'
       const line =
         modeRef.current === 'health'
@@ -146,13 +181,11 @@ export default function Globe({ countries, mode, selectedIso, onSelect }: Props)
           : `Potential <b>+${usd(c.potential_usd_day)}</b>/day${c.potential_pct != null ? ` · +${c.potential_pct.toFixed(1)}% margin` : ''}`
       popup.setLngLat(e.lngLat).setHTML(`<div class="font-semibold">${c.name}</div><div>${line}</div>`).addTo(map)
     })
-    map.on('mouseleave', 'watched', () => {
-      canvas.style.cursor = ''
-      popup.remove()
-    })
+    // The globe moves under a still pointer (auto-rotation, fly-to), so a stale hover is cleared on movement too.
+    map.on('movestart', clearHover)
+    canvas.addEventListener('mouseleave', clearHover)
     map.on('click', (e) => {
-      const f = map.queryRenderedFeatures(e.point, { layers: ['watched'] })[0]
-      const iso = f?.properties?.iso as string | undefined
+      const iso = countryAt(e.point)
       if (iso) onSelectRef.current(iso)
     })
 
@@ -160,6 +193,7 @@ export default function Globe({ countries, mode, selectedIso, onSelect }: Props)
       cancelAnimationFrame(frame)
       canvas.removeEventListener('pointerdown', note)
       canvas.removeEventListener('wheel', note)
+      canvas.removeEventListener('mouseleave', clearHover)
       map.remove()
       mapRef.current = null
       loadedRef.current = false

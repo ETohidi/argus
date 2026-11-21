@@ -164,6 +164,9 @@ body,
   }
 }
 
+.argus-popup {
+  pointer-events: none; /* a tooltip must never capture the pointer (stale hovers near the globe edge) */
+}
 .argus-popup .maplibregl-popup-content {
   background: rgba(7, 12, 21, 0.92);
   color: #e2e8f0;
