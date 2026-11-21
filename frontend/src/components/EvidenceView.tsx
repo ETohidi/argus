@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import CausalGraph from './charts/CausalGraph'
 import FanChart, { relativeSeries } from './charts/FanChart'
 import L3Scatter from './charts/L3Scatter'
+import NormalZoneChart from './charts/NormalZoneChart'
 import ShapleyBars from './charts/ShapleyBars'
 import { bestHypothesis, isBaseline, isFraud, shortHypothesis } from '../lib/incident'
 import { MINT, NEUTRAL, VERDICT_COLOR, usd } from '../lib/theme'
@@ -165,33 +166,63 @@ function Empty({ text }: { text: string }) {
   return <div className="rounded-2xl bg-panel/60 p-10 text-center text-[16px] text-fg-2 ring-1 ring-line">{text}</div>
 }
 
-// Counterfactual replay: share of the change that disappears when each explanation is removed from the twin.
+// Proof: replay the twin without the cause. The big toggle slides the observed line onto the counterfactual,
+// back into the normal band; the other explanations tested are listed below.
 function Proof({ d }: { d: IncidentDetail }) {
+  const [without, setWithout] = useState(false)
+  const cf = d.counterfactual
+  const series = (d.series ?? []).slice(-24) // last day: the excursion stays readable
+  const cfByT = new Map((cf?.series ?? []).map((p) => [p.t, p.value]))
+  const cfValues = series.map((p) => cfByT.get(p.t) ?? p.actual)
+  const share = cf?.explained_share ?? bestHypothesis(d)?.explained ?? 0
+  const question = cf ? `What would it look like ${cf.label.charAt(0).toLowerCase()}${cf.label.slice(1)}?` : null
   const hyps = [...d.hypotheses].sort((a, b) => b.explained - a.explained)
   return (
-    <Frame>
-      <div className="space-y-6">
-        {hyps.map((h, i) => (
-          <div key={h.name}>
-            <div className="mb-2 flex items-baseline justify-between gap-6 text-[16px]">
+    <div className="space-y-6">
+      {series.length > 1 && (
+        <Frame>
+          {question && (
+            <button
+              onClick={() => setWithout((w) => !w)}
+              aria-pressed={without}
+              className={`flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-left text-[16px] ring-1 transition ${without ? 'bg-ok/10 text-fg ring-ok/50' : 'bg-bg/40 text-fg ring-line hover:ring-accent/60'}`}
+            >
+              <span className={`relative h-7 w-12 shrink-0 rounded-full transition ${without ? 'bg-ok' : 'bg-line'}`}>
+                <span className={`absolute top-1 h-5 w-5 rounded-full bg-fg transition-all duration-300 ${without ? 'left-6' : 'left-1'}`} />
+              </span>
+              {question}
+            </button>
+          )}
+          <div className="mt-6">
+            <NormalZoneChart series={series} leftAt={d.left_zone_at} values={without ? cfValues : undefined} width={896} height={300} fontSize={13} />
+          </div>
+          <div className="mt-3 flex items-baseline justify-between gap-6 text-[13px] text-fg-2">
+            <span>{d.series_meta?.label ?? 'Alerting metric'} · grey = normal for this hour</span>
+            <span className={`text-[16px] transition-opacity duration-300 ${without ? 'text-ok opacity-100' : 'opacity-0'}`}>
+              {Math.round(share * 100)}% of the change disappears{share >= 0.8 ? ' — cause proven' : ''}
+            </span>
+          </div>
+        </Frame>
+      )}
+      <Frame>
+        <h3 className="mb-4 text-[16px] text-fg">Every explanation Argus tested</h3>
+        <div className="space-y-4">
+          {hyps.map((h) => (
+            <div key={h.name} className="grid grid-cols-[1fr_180px_56px_80px] items-center gap-4 text-[13px]">
               <span className={h.verdict === 'supported' ? 'text-fg' : 'text-fg-2'}>{shortHypothesis(h.name)}</span>
-              <span className="flex items-baseline gap-3">
-                <span className="num text-fg">{Math.round(h.explained * 100)}%</span>
-                <span className="w-20 text-right text-[13px]" style={{ color: VERDICT_COLOR[h.verdict] }}>
-                  {h.verdict === 'supported' ? 'Proven' : h.verdict === 'partial' ? 'Partial' : 'Ruled out'}
-                </span>
+              <div className="h-2 overflow-hidden rounded-full bg-line">
+                <div className="h-full rounded-full transition-[width] duration-300 ease-out" style={{ width: `${Math.max(1, h.explained * 100)}%`, background: VERDICT_COLOR[h.verdict] }} />
+              </div>
+              <span className="num text-right text-fg">{Math.round(h.explained * 100)}%</span>
+              <span className="text-right" style={{ color: h.verdict === 'supported' ? VERDICT_COLOR.supported : undefined }}>
+                {h.verdict === 'supported' ? 'Proven' : h.verdict === 'partial' ? 'Partial' : 'Ruled out'}
               </span>
             </div>
-            <div className="h-3 overflow-hidden rounded-full bg-line">
-              <div className="grow-x h-full origin-left rounded-full" style={{ width: `${Math.max(0.5, h.explained * 100)}%`, background: VERDICT_COLOR[h.verdict], animationDelay: `${i * 90}ms` }} />
-            </div>
-          </div>
-        ))}
-      </div>
-      <p className="mt-8 text-[13px] text-fg-2">
-        Each bar: how much of the change vanishes when the twin is replayed without that explanation. Proven at 80% or more.
-      </p>
-    </Frame>
+          ))}
+        </div>
+        <p className="mt-5 text-[13px] text-fg-2">Share of the change that vanishes when the twin is replayed without that explanation. Proven at 80% or more.</p>
+      </Frame>
+    </div>
   )
 }
 

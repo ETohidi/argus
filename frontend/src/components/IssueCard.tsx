@@ -54,7 +54,7 @@ export default function IssueCard({ summary, detail, countryName, approving, onA
           </div>
           {detail?.series && detail.series.length > 1 && (
             <figure className="mt-6">
-              <NormalZoneChart series={detail.series} leftAt={detail.left_zone_at} width={364} height={100} />
+              <NormalZoneChart series={detail.series.slice(-24)} leftAt={detail.left_zone_at} width={364} height={100} />
               <figcaption className="mt-1 text-[13px] text-fg-2">Grey = normal for this hour. The line is what happened.</figcaption>
             </figure>
           )}
