@@ -122,8 +122,12 @@ export function buildIncidentDetail(a: Args): IncidentDetail {
         coherence: Math.round(Math.min(0.99, Math.max(0.02, c)) * 1000) / 1000,
         payout_focus: Math.round(Math.min(0.99, Math.max(0.01, p)) * 1000) / 1000,
         flagged,
+        device: flagged ? ['emulator-x86', 'generic_x86_64', 'sdk_gphone'][i % 3] : `Phone ${10 + (i % 7)}`,
+        account_age_days: flagged ? 1 : 30 + ((i * 37) % 400),
       }
     })
+    const links: { a: number; b: number }[] = []
+    for (let i = 0; i < 88 && links.length < 120; i++) for (let j = i + 3; j < 88 && links.length < 120; j += 9) if (i % 3 === j % 3) links.push({ a: i, b: j })
     const daily = 21_400
     const fixes = withDelta([
       {
@@ -220,6 +224,12 @@ export function buildIncidentDetail(a: Args): IncidentDetail {
       l3: {
         summary: { n_users: 600, n_flagged: 88, coherence_flagged: 0.28, coherence_others: 0.73, top_devices: ['emulator-x86', 'generic_x86_64', 'sdk_gphone'] },
         points,
+        links,
+        groups: [
+          { device: 'emulator-x86', count: 30 },
+          { device: 'generic_x86_64', count: 29 },
+          { device: 'sdk_gphone', count: 29 },
+        ],
       },
       fixes,
       recommended,

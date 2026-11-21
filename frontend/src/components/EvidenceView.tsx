@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import CausalGraph from './charts/CausalGraph'
+import FakeAccountPicture from './charts/FakeAccountPicture'
 import L3Scatter from './charts/L3Scatter'
 import NormalZoneChart from './charts/NormalZoneChart'
 import ShapleyBars from './charts/ShapleyBars'
@@ -52,6 +53,8 @@ function graphCaption(d: IncidentDetail) {
 function usersCaption(d: IncidentDetail) {
   if (!d.l3) return `No need to look at individual users: the broken link is ${PLAIN[d.root ?? ''] ?? 'a business mechanism'}, not people.`
   const s = d.l3.summary
+  const devices = d.l3.groups?.length ?? 0
+  if (devices > 0) return `${s.n_flagged} new accounts on ${devices} shared ${devices === 1 ? 'phone' : 'phones'}; their interests don't match what they do.`
   const emu = s.top_devices.some((x) => /emu|emulator|sdk|generic/i.test(x))
   return `${s.n_flagged} new accounts whose tastes make no sense, ${emu ? 'on shared emulators' : `sharing devices like ${s.top_devices[0]}`}.`
 }
@@ -139,9 +142,15 @@ export default function EvidenceView({ detail: d, title, initialTab = 'graph', a
             </Frame>
           ) : tab === 'users' ? (
             d.l3 ? (
-              <Frame narrow>
-                <L3Scatter l3={d.l3} />
-              </Frame>
+              <div className="space-y-6">
+                <Frame>
+                  <FakeAccountPicture l3={d.l3} />
+                </Frame>
+                <Frame narrow>
+                  <h3 className="mb-4 text-[16px] text-fg">Why they stand out: tastes vs payouts</h3>
+                  <L3Scatter l3={d.l3} />
+                </Frame>
+              </div>
             ) : (
               <Empty text="This incident was settled at the segment level (L2); no accounts were sampled." />
             )
