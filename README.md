@@ -59,7 +59,7 @@ calling a later scene first runs the earlier ones.
 |---|---|
 | `start` | Fresh world after 14 days of history; the globe is green, 20 countries × 6 KPIs watched |
 | `promo` | Planned "Weekend Boost" in Germany: a naive detector alerts, Argus logs it as explained by the calendar |
-| `bot_farm` | Fake accounts on Android in Canada: revenue goes *up*; Argus opens a high-severity incident within ~3 h |
+| `bot_farm` | Fake accounts on Android in Canada from Mon 03:00: revenue goes *up*; sign-ups leave the normal zone at 04:00 and Argus opens a high-severity incident at 06:00, three hours in |
 | `investigate` | Decision trail: country → Android × fintech/strategy → root cause new accounts → user-level taste check → counterfactual (~94% explained) |
 | `approve` | Human approves the recommended fix (verify new accounts); Canada returns to green within ~2 h |
 | `verify` | 24 h later: actual margin lands inside the predicted band → "Prediction verified" |

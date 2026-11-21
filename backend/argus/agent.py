@@ -92,8 +92,12 @@ DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
 def hour_label(t: int) -> str:
-    """Simulated UTC time label, e.g. "Mon 03:00" (sim day 0 is a Monday)."""
-    day, hour = divmod(int(t), 24)
+    """Simulated UTC time at which hour t's data is complete, e.g. "Mon 04:00" for the hour 03:00-04:00.
+
+    Convention for every label in the API: data are labelled by the end of the hour ("data through 04:00"),
+    and the clock shows the end of the last hour Argus has processed. Sim day 0 starts on a Monday.
+    """
+    day, hour = divmod(int(t) + 1, 24)
     return f"{DOW[day % 7]} {hour:02d}:00"
 
 
@@ -1114,7 +1118,7 @@ class Agent:
         for e in self.view.calendar:
             if e.start <= self.t:
                 ev.append({"t": e.start, "label": f"Planned: {e.name} ({', '.join(e.to_dict()['categories'])})",
-                           "kind": "planned", "country": e.country})
+                           "kind": "planned", "country": e.country, "time_label": hour_label(e.start - 1)})
         for inc in self.incidents:
             iso = inc["country"]
             left = inc.get("left_zone_at")
@@ -1140,7 +1144,7 @@ class Agent:
         order = {"planned": 0, "explained": 1, "waiting": 2, "anomaly": 3, "detected": 4, "approved": 5, "verified": 6}
         ev.sort(key=lambda x: (x["t"], order[x["kind"]]))
         for x in ev:
-            x["time_label"] = hour_label(x["t"])
+            x.setdefault("time_label", hour_label(x["t"]))   # planned events start at the beginning of their hour
         return {"events": ev}
 
     def incident_detail(self, inc: dict) -> dict:
@@ -1174,7 +1178,7 @@ class Agent:
         s = _with_formulas(_country_sums(last))
         pot = {p["iso"]: p["potential_usd_day"] for p in self.potential}
         pct = {p["iso"]: p["potential_pct"] for p in self.potential}
-        day, hour = divmod(t, 24)
+        day, hour = divmod(t + 1, 24)                    # clock = end of the last processed hour
         dow = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][day % 7]
         countries = []
         for c, country in enumerate(cfg.COUNTRIES):

@@ -41,7 +41,8 @@ levels are calibrated to public data; everything else is invented. No private Al
   taste model is flatter than the truth.
 
 ## Incidents
-- **Bot farm:** ramps to 320 accounts over 10 h; bots are always online, complete fintech and strategy-game offers,
+- **Bot farm:** ramps to 320 accounts over 10 h (the `bot_farm` demo scene uses 8 h: it starts at Mon 03:00 UTC, near
+  Canada's evening sign-up peak, where a 10 h ramp is detected at 07:00 instead of 06:00; the detector is unchanged); bots are always online, complete fintech and strategy-game offers,
   deliver ~no advertiser value, use emulator devices and scripted onboarding answers.
 - **Advertiser reaction:** if fake completions exceed 20% of a country × category for 24 h, advertisers charge back half
   the revenue; after 48 h they cut budget (impressions × 0.4).

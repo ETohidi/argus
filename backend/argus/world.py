@@ -11,6 +11,7 @@ from .twin import Twin
 _TASTE: TasteModel | None = None
 SCENES = ["start", "promo", "bot_farm", "investigate", "approve", "verify", "new_metric", "tracking_break"]
 INJECT_TYPES = ("promo", "bot_farm", "tracking_break", "data_delay")
+DEMO_FARM_RAMP_H = 8
 
 
 def taste_model() -> TasteModel:
@@ -58,7 +59,7 @@ class World:
             self.reality.step()
             self.agent.on_hour()
 
-    def inject(self, kind: str, country: str, platform: str | None = None) -> dict:
+    def inject(self, kind: str, country: str, platform: str | None = None, ramp_h: int | None = None) -> dict:
         iso = _country(country)
         if kind == "promo":
             self.n_events += 1
@@ -68,7 +69,9 @@ class World:
             return {"type": kind, "country": iso, "calendar": ev.to_dict()}
         if kind == "bot_farm":
             plat = _platform(platform, "Android")
-            self.reality.add_bot_farm(iso, plat)
+            farm = self.reality.add_bot_farm(iso, plat)
+            if ramp_h:
+                farm.ramp = int(ramp_h)
             return {"type": kind, "country": iso, "platform": plat, "start": self.reality.t}
         if kind == "tracking_break":
             plat = _platform(platform, "iOS")
@@ -106,13 +109,17 @@ class World:
                 if prev not in self.scenes_done:
                     self.demo(prev)
         out: dict = {"scene": scene}
+        # Story clock (labels = end of hour): start shows Mon 01:00; the promo runs from 01:00 and is explained by
+        # 03:00; the bot farm starts at 03:00, leaves the normal zone with the 04:00 data and is detected at 06:00.
         if scene == "start":
-            self.step(2)
+            self.step(1)
         elif scene == "promo":
             self.inject("promo", "DE")
-            self.step(6)
+            self.step(2)
         elif scene == "bot_farm":
-            self.inject("bot_farm", "CA", "Android")
+            # Demo farm builds its 320 accounts over 8 h (default 10 h): at 03:00 UTC Canada is near its evening
+            # sign-up peak, and this keeps detection at 06:00, three hours in (see docs/ASSUMPTIONS.md).
+            self.inject("bot_farm", "CA", "Android", ramp_h=DEMO_FARM_RAMP_H)
             inc = self._step_until_incident("CA", 12)
             out["incident_id"] = inc["id"] if inc else None
         elif scene == "investigate":

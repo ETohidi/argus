@@ -7,13 +7,17 @@ Base path: `/api`. All bodies are JSON. All endpoints accept an optional `X-Sess
 
 The built frontend (`frontend/dist`) is served at `/` when it exists.
 
+**Time labels.** Hour `t` covers simulated UTC `t:00–(t+1):00` (sim day 0 is a Monday). Every label is the time the
+hour's data are complete ("data through 04:00"): the clock shows the end of the last processed hour, series points and
+timeline events are labelled by the end of their hour, and planned calendar events by their start time.
+
 ## Read endpoints
 
 ### `GET /api/state`
 Globe state.
 ```jsonc
 {
-  "clock": { "t": 336, "label": "Day 15 · Mon 00:00 UTC", "utc_hour": 0, "day_of_week": "Mon", "day": 15 },  // simulated UTC; for day/night
+  "clock": { "t": 336, "label": "Day 15 · Mon 01:00 UTC", "utc_hour": 1, "day_of_week": "Mon", "day": 15 },  // end of last processed hour; for day/night
   "countries": [
     {
       "iso": "CA", "name": "Canada", "lat": 56.1, "lng": -106.3,
@@ -175,5 +179,7 @@ Public data behind the simulation, for a "Data" panel.
 | `POST /api/demo/{scene}` | — | Deterministic (fixed seed) jump to a video scene; returns `{ scene, state, incident_id? }` |
 
 Demo scenes, in order: `start`, `promo`, `bot_farm`, `investigate`, `approve`, `verify`, `new_metric`, `tracking_break`. Each scene advances the session world from wherever the previous scene left it (calling `start` resets).
+Story clock: `start` Mon 01:00 · promo from 01:00, explained by 03:00 · bot farm from 03:00, leaves the normal zone
+with the 04:00 data, detected at 06:00 · approve at 08:00 · verified Tue 08:00 · tracking break detected Tue 13:00.
 
 Errors: `404 {detail}` for unknown incident / country / scene, `400 {detail}` for invalid input.

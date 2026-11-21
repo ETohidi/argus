@@ -20,7 +20,7 @@ def test_state_contract():
     keys(st, ["clock", "countries", "incidents", "explained", "attention"])
     keys(st["clock"], ["t", "label", "utc_hour", "day_of_week", "day"])
     assert 0 <= st["clock"]["utc_hour"] <= 23 and st["clock"]["day_of_week"] in ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-    assert st["clock"]["utc_hour"] == st["clock"]["t"] % 24
+    assert st["clock"]["utc_hour"] == (st["clock"]["t"] + 1) % 24        # clock = end of the last processed hour
     assert len(st["countries"]) == 20
     c = st["countries"][0]
     keys(c, ["iso", "name", "lat", "lng", "status", "health_z", "kpis", "potential_usd_day"])
@@ -220,3 +220,15 @@ def test_timeline_uses_only_what_argus_knows():
     ca = [e for e in ev if e["country"] == "CA"]
     assert [e["kind"] for e in ca] == ["anomaly", "detected", "approved", "verified"]
     assert all("farm" not in e["label"].lower() for e in ev)
+
+
+def test_demo_story_clock():
+    S = {"X-Session": "story"}
+    st = client.post("/api/demo/promo", headers=S).json()["state"]
+    assert st["clock"]["label"].endswith("Mon 03:00 UTC") and st["explained"]
+    out = client.post("/api/demo/bot_farm", headers=S).json()
+    d = client.get(f"/api/incidents/{out['incident_id']}", headers=S).json()
+    assert d["left_zone_at"]["label"] in ("Mon 04:00", "Mon 05:00")
+    assert out["state"]["clock"]["label"].endswith("Mon 06:00 UTC")
+    ev = {e["kind"]: e["time_label"] for e in client.get("/api/timeline", headers=S).json()["events"]}
+    assert ev["planned"] == "Mon 01:00" and ev["detected"] == "Mon 06:00"
