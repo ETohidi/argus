@@ -36,6 +36,9 @@ Globe state.
       "impact_usd_h": 134.0,      // current deviation in USD/h
       "risk_7d_usd": 114042,      // 7-day margin lost by doing nothing vs the recommended fix (p50, twin)
       "reaction_h": 27,           // hours until advertisers react (chargebacks), from the do-nothing route's events; 0 = losses accrue now; null = n/a
+      "found_line": "Found by Argus at 06:00, nobody asked · advertisers would react in ~28 h",
+                                       // detection hour (end of hour, HH:00) + reaction_h; reaction_h 0 → "· losses are
+                                       // happening now"; reaction_h null → no second part. Also in /api/incidents and detail.
       "status_label": "Still going",   // "Open" | "Still going" | "Fix applied" | "Fix verified" | "Resolved"
       "first_seen": "Mon 04:00",       // first hour out of the normal zone (or detection time)
       "last_seen": "Mon 09:00",        // last hour the alert condition held
@@ -54,7 +57,11 @@ Globe state.
       "max_z": { "country": "US", "z": 1.3 }, "note": "Added because you asked for 'margin_per_signup'. ..." }
   ],
   "explained": [
-    { "t": 350, "country": "DE", "event": "Weekend Boost (games)", "naive_z": 5.1, "twin_z": 0.7 }
+    { "t": 350, "country": "DE", "event": "Weekend Boost (Casual games, Strategy games): rewards +36% vs a naive baseline, expected by the twin",
+      "naive_z": 5.1, "twin_z": 0.7,
+      "change_pct": 36,                // signed % move of the KPI vs the normal (naive) baseline that the event explains
+      "kpi": "rewards",                // which KPI moved (KPI label)
+      "line": "Germany +36% · planned promo, no alarm" }   // noun: "planned promo" (calendar promo), "late data", else the event name
   ],
   "attention": { "watched_series": 120, "investigations": 1, "l3_runs": 1 }
 }
@@ -89,6 +96,7 @@ After approval `what_to_do` becomes "Done: <fix> applied."
 ```jsonc
 {
   "id": "inc-1", "title": "...", "status": "open", "severity": "high", "impact_usd_h": 134.0, "risk_7d_usd": 114042, "reaction_h": 21,
+  "found_line": "Found by Argus at 06:00, nobody asked · advertisers would react in ~21 h",
   "country": "CA", "platform": "android", "category": "fintech", "detected_at": 352,
   "trail": [ { "t": 352, "level": "L1", "action": "...", "finding": "..." } ],   // level: "L1" | "L2" | "L3"
   "graph": {

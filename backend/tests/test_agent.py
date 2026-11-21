@@ -175,3 +175,22 @@ def test_different_causes_in_one_country_are_separate_issues():
     assert brk["family"] == "revenue" and brk["root"] == "revenue" and brk["kind"] == "tracking"
     assert farm["alerts_merged"] >= 10                       # the farm's repeated alerts still merge into one issue
     assert brk["hypotheses"][0]["verdict"] == "supported"
+
+
+def test_found_line_and_explained_line():
+    from argus.agent import Agent
+    from argus.world import World
+
+    base = {"detected_at": 5}                                     # hour 5 ends at 06:00
+    assert Agent.found_line({**base, "reaction_h": 22}) == \
+        "Found by Argus at 06:00, nobody asked · advertisers would react in ~22 h"
+    assert Agent.found_line({**base, "reaction_h": 0}) == "Found by Argus at 06:00, nobody asked · losses are happening now"
+    assert Agent.found_line({**base, "reaction_h": None}) == "Found by Argus at 06:00, nobody asked"
+    w = World(seed=42)
+    w.demo("bot_farm")
+    st = w.agent.state()
+    inc = st["incidents"][0]
+    assert inc["found_line"].startswith("Found by Argus at 06:00, nobody asked")
+    assert w.agent.incident_detail(w.agent.incidents[0])["found_line"] == inc["found_line"]
+    de = [e for e in st["explained"] if e["country"] == "DE"][0]
+    assert de["change_pct"] > 0 and de["line"] == f"Germany +{de['change_pct']}% · planned promo, no alarm"

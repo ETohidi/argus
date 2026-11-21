@@ -203,7 +203,7 @@ class Agent:
         for c in range(cfg.C):
             if self.waiting[c] and c not in self.wait_info:
                 i = int(np.argmax(np.abs(zn[c])))
-                self.wait_info[c] = {"t": t, "naive_z": float(zn[c, i]),
+                self.wait_info[c] = {"t": t, "naive_z": float(zn[c, i]), "rel": float(naive["rel"][c, i]), "kpi": KPI_LABEL[KPIS[i]],
                                      "share": float(self.twin.rows[t]["completeness"][c])}
                 self.wait_log.append({"t": t, "country": cfg.COUNTRIES[c].iso,
                                       "share": self.wait_info[c]["share"]})
@@ -213,7 +213,8 @@ class Agent:
                                        "event": f"Late data ({info['share']:.0%} of rows delivered): waited, "
                                                 f"backfilled after {t - info['t']} h, no alert",
                                        "naive_z": round(info["naive_z"], 1),
-                                       "twin_z": round(float(z[c, np.argmax(np.abs(z[c]))]), 1)})
+                                       "twin_z": round(float(z[c, np.argmax(np.abs(z[c]))]), 1),
+                                       **self._explained_line(c, info["rel"], "late data", info["kpi"])})
 
         # 2. watch: twin vs naive
         ext = self._extension_z(t)
@@ -236,7 +237,10 @@ class Agent:
                 entry = {"t": t, "country": ev.country, "event": f"{ev.name} ({', '.join(ev.to_dict()['categories'])})"
                          f": {KPI_LABEL[KPIS[i]]} {naive['rel'][c, i]:+.0%} vs a naive "
                          f"baseline, expected by the twin",
-                         "naive_z": round(float(zn[c, i]), 1), "twin_z": round(float(z[c, i]), 1)}
+                         "naive_z": round(float(zn[c, i]), 1), "twin_z": round(float(z[c, i]), 1),
+                         **self._explained_line(c, float(naive["rel"][c, i]),
+                                                "planned promo" if ev.reward_share > cfg.REWARD_SHARE else ev.name,
+                                                KPI_LABEL[KPIS[i]])}
                 if key not in self._explained_idx:
                     self._explained_idx[key] = len(self.explained)
                     self.explained.append(entry)
@@ -1183,11 +1187,27 @@ class Agent:
     def get_incident(self, inc_id: str) -> dict | None:
         return next((i for i in self.incidents if i["id"] == inc_id), None)
 
+    @staticmethod
+    def _explained_line(c: int, rel: float, noun: str, kpi: str) -> dict:
+        """change_pct = signed KPI move vs the normal (naive) baseline; line = 'Germany +31% · planned promo, no alarm'."""
+        pct = int(round(rel * 100))
+        return {"change_pct": pct, "kpi": kpi, "line": f"{cfg.COUNTRIES[c].name} {pct:+d}% · {noun}, no alarm"}
+
+    @staticmethod
+    def found_line(inc: dict) -> str:
+        """'Found by Argus at 06:00, nobody asked · advertisers would react in ~22 h' (story clock, end of hour)."""
+        line = f"Found by Argus at {hour_label(inc['detected_at']).split()[1]}, nobody asked"
+        r = inc.get("reaction_h")
+        if r is None:
+            return line
+        return line + (" · losses are happening now" if r <= 0 else f" · advertisers would react in ~{int(round(r))} h")
+
     def incident_summary(self, inc: dict) -> dict:
         out = {k: inc[k] for k in ("id", "title", "country", "status", "severity", "impact_usd_h", "risk_7d_usd",
                                    "reaction_h")}
         out.update(self._state_fields(inc))
         out["card"] = self.card(inc)
+        out["found_line"] = self.found_line(inc)
         return out
 
     @staticmethod
@@ -1407,6 +1427,7 @@ class Agent:
                 "severity", "impact_usd_h", "risk_7d_usd", "reaction_h", "kind", "root")
         out = {k: inc[k] for k in keys}
         out.update(self._state_fields(inc))
+        out["found_line"] = self.found_line(inc)
         out["reports"] = self.reports_for(inc)
         out["card"] = self.card(inc)
         ser = self.series(inc)
