@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import CausalGraph from './charts/CausalGraph'
-import FanChart from './charts/FanChart'
+import FanChart, { relativeSeries } from './charts/FanChart'
 import L3Scatter from './charts/L3Scatter'
 import ShapleyBars from './charts/ShapleyBars'
 import { PLATFORM_LABEL, VERDICT_COLOR, usd } from '../lib/theme'
@@ -113,7 +113,7 @@ export default function IncidentDetail({ detail, onBack, onApprove, approving }:
           </Section>
         )}
         {show.fixes && (
-          <Section title={aud === 'ceo' ? 'Recommended action' : 'Fixes tested in the twin · 7-day cumulative margin'}>
+          <Section title={aud === 'ceo' ? 'Recommended action' : 'Fixes tested in the twin · fast-forward 7 days'}>
             <Fixes d={d} ceo={aud === 'ceo'} onApprove={onApprove} approving={approving} />
           </Section>
         )}
@@ -186,9 +186,11 @@ function Hypotheses({ d }: { d: Detail }) {
 
 function Fixes({ d, ceo, onApprove, approving }: { d: Detail; ceo: boolean; onApprove: (id: string) => void; approving: boolean }) {
   const all = d.fixes
-  const lo = Math.min(0, ...all.flatMap((f) => f.p10))
-  const hi = Math.max(...all.flatMap((f) => f.p90))
   const baseline = all.find((f) => f.id === 'do_nothing') ?? all[0]
+  const reference = baseline.p50
+  const rel = all.map((f) => relativeSeries(f, reference))
+  const lo = Math.min(0, ...rel.flatMap((r) => r.p10))
+  const hi = Math.max(0, ...rel.flatMap((r) => r.p90))
   const list = ceo ? all.filter((f) => f.id === (d.applied ?? d.recommended)) : all
   return (
     <div className={ceo ? '' : 'grid grid-cols-2 gap-2.5'}>
@@ -197,7 +199,7 @@ function Fixes({ d, ceo, onApprove, approving }: { d: Detail; ceo: boolean; onAp
           key={f.id}
           f={f}
           color={FIX_COLORS[all.indexOf(f) % FIX_COLORS.length]}
-          baseline={baseline}
+          reference={reference}
           domain={[lo, hi]}
           recommended={f.id === d.recommended}
           applied={d.applied}
@@ -207,7 +209,7 @@ function Fixes({ d, ceo, onApprove, approving }: { d: Detail; ceo: boolean; onAp
         />
       ))}
       <div className={`${ceo ? 'mt-2' : 'col-span-2'} text-[10.5px] text-slate-500`}>
-        Band p10–p90, line p50 of 40 Monte Carlo runs over 168 h. Dashed: do nothing.
+        Cumulative margin vs do nothing (p50) over 7 days. Band p10–p90, line p50 of 40 Monte Carlo runs.
       </div>
     </div>
   )
@@ -216,7 +218,7 @@ function Fixes({ d, ceo, onApprove, approving }: { d: Detail; ceo: boolean; onAp
 function FixCard(p: {
   f: Fix
   color: string
-  baseline: Fix
+  reference: number[]
   domain: [number, number]
   recommended: boolean
   applied: string | null
@@ -242,7 +244,7 @@ function FixCard(p: {
       <div className={`num text-[11px] ${f.delta_p50_usd > 0 ? 'text-teal-300' : f.delta_p50_usd < 0 ? 'text-rose-300' : 'text-slate-500'}`}>
         {f.id === 'do_nothing' ? 'baseline' : `${f.delta_p50_usd >= 0 ? '+' : ''}${usd(f.delta_p50_usd)} vs do nothing`}
       </div>
-      <FanChart fix={f} baseline={p.baseline} domain={p.domain} color={p.color} />
+      <FanChart fix={f} reference={p.reference} domain={p.domain} color={p.color} {...(p.big ? { width: 400, height: 150 } : {})} />
       {p.big && <p className="mb-2 text-[11.5px] leading-snug text-slate-300">{f.description}</p>}
       <div className="line-clamp-2 min-h-[26px] text-[10px] leading-tight text-slate-500">{f.advertiser_risk}</div>
       {canApprove && (

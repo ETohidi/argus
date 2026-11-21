@@ -2,8 +2,8 @@ import { useMemo } from 'react'
 import { NODE_COLOR } from '../../lib/theme'
 import type { GraphEdge, GraphNode, NodeState } from '../../lib/types'
 
-const W = 440
-const NODE_W = 112
+const W = 460
+const NODE_W = 128
 const NODE_H = 30
 const ROW = 50
 const PAD = 8
@@ -60,14 +60,24 @@ function layout(nodes: GraphNode[], edges: GraphEdge[]) {
         const ps = preds.get(p.id) ?? []
         return ps.length ? ps.reduce((s, q) => s + byId.get(q)!.x, 0) / ps.length : W / 2
       }
-      row.forEach((p, i) => ((p as any)._b = bary(p) + i * 0.01 + (p.dummy ? 0.5 : 0)))
-      row.sort((a, b) => (a as any)._b - (b as any)._b)
+      // Sort by barycenter; within a tie, dummies go to the middle so long edges pass between nodes.
+      const groups = new Map<number, Placed[]>()
+      row.forEach((p) => {
+        const k = Math.round(bary(p))
+        groups.set(k, [...(groups.get(k) ?? []), p])
+      })
+      const sorted = [...groups.entries()].sort((a, b) => a[0] - b[0]).flatMap(([, g]) => {
+        const real = g.filter((p) => !p.dummy)
+        const mid = Math.ceil(real.length / 2)
+        return [...real.slice(0, mid), ...g.filter((p) => p.dummy), ...real.slice(mid)]
+      })
+      row.splice(0, row.length, ...sorted)
     }
-    const units = row.reduce((s, p) => s + (p.dummy ? 0.35 : 1), 0)
-    const unit = Math.min((W - 2 * PAD) / units, NODE_W + 34)
+    const units = row.reduce((s, p) => s + (p.dummy ? 0.2 : 1), 0)
+    const unit = Math.min((W - 2 * PAD) / units, NODE_W + 30)
     let x = (W - unit * units) / 2
     row.forEach((p) => {
-      const w = unit * (p.dummy ? 0.35 : 1)
+      const w = unit * (p.dummy ? 0.2 : 1)
       p.x = x + w / 2
       p.y = PAD + l * ROW + NODE_H / 2
       x += w
@@ -77,19 +87,26 @@ function layout(nodes: GraphNode[], edges: GraphEdge[]) {
 }
 
 function pathFor(points: Placed[]) {
-  let d = ''
-  points.forEach((p, i) => {
-    const top = p.dummy ? p.y : p.y - NODE_H / 2
-    const bottom = p.dummy ? p.y : p.y + NODE_H / 2
-    if (i === 0) {
-      d = `M${p.x},${bottom}`
-      return
-    }
-    const prev = points[i - 1]
-    const py = prev.dummy ? prev.y : prev.y + NODE_H / 2
-    const my = (py + top) / 2
-    d += ` C${prev.x},${my} ${p.x},${my} ${p.x},${top}`
-  })
+  const a = points[0]
+  const b = points[points.length - 1]
+  const start: [number, number] = [a.x, a.y + NODE_H / 2]
+  const end: [number, number] = [b.x, b.y - NODE_H / 2]
+  if (points.length === 2) {
+    const my = (start[1] + end[1]) / 2
+    return `M${start[0]},${start[1]} C${start[0]},${my} ${end[0]},${my} ${end[0]},${end[1]}`
+  }
+  // Long edge: smooth Catmull-Rom curve through the dummy waypoints.
+  const pts: [number, number][] = [start, ...points.slice(1, -1).map((p) => [p.x, p.y] as [number, number]), end]
+  let d = `M${start[0]},${start[1]}`
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)]
+    const p1 = pts[i]
+    const p2 = pts[i + 1]
+    const p3 = pts[Math.min(pts.length - 1, i + 2)]
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6]
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6]
+    d += ` C${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${p2[0]},${p2[1]}`
+  }
   return d
 }
 
@@ -151,11 +168,11 @@ export default function CausalGraph({ nodes, edges }: { nodes: GraphNode[]; edge
             const c = NODE_COLOR[n.state]
             const active = n.state !== 'normal'
             return (
-              <g key={p.id} transform={`translate(${p.x - NODE_W / 2},${p.y - NODE_H / 2})`} className="fade-up" style={{ animationDelay: `${i * 50}ms` }}>
+              <g key={p.id} transform={`translate(${p.x - NODE_W / 2},${p.y - NODE_H / 2})`} className="fade-in" style={{ animationDelay: `${i * 50}ms` }}>
                 {n.state === 'root' && <rect width={NODE_W} height={NODE_H} rx={8} fill={c} opacity={0.35} filter="url(#glow)" />}
                 <rect width={NODE_W} height={NODE_H} rx={8} fill={active ? `${c}22` : '#0e1724'} stroke={c} strokeWidth={active ? 1.4 : 1} />
                 <text x={8} y={19} fontSize={10.5} fill={active ? '#f1f5f9' : '#94a3b8'} fontWeight={n.state === 'root' ? 700 : 500}>
-                  {n.label.length > 15 ? n.label.slice(0, 14) + '…' : n.label}
+                  {n.label.length > 16 ? n.label.slice(0, 15) + '…' : n.label}
                 </text>
                 <text x={NODE_W - 7} y={19} fontSize={10} textAnchor="end" fill={active ? c : '#64748b'} className="num" fontWeight={600}>
                   {Math.abs(n.z) >= 0.05 ? (n.z > 0 ? '+' : '−') + Math.abs(n.z).toFixed(1) : '0'}
@@ -174,7 +191,7 @@ export default function CausalGraph({ nodes, edges }: { nodes: GraphNode[]; edge
         <span className="flex items-center gap-1.5">
           <span className="h-0.5 w-4 bg-rose-400" /> propagation
         </span>
-        <span className="text-slate-500">z given parents</span>
+        <span className="text-slate-500">number = z-score</span>
       </div>
     </div>
   )

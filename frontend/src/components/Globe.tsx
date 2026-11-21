@@ -15,7 +15,7 @@ type Props = {
 }
 
 const BASE_LAND = '#152030'
-const HOME_VIEW = { center: [-30, 28] as [number, number], zoom: 1.7 }
+const HOME_VIEW = { center: [-30, 28] as [number, number], zoom: 1.95 }
 
 const STYLE: maplibregl.StyleSpecification = {
   version: 8,
@@ -26,10 +26,10 @@ const STYLE: maplibregl.StyleSpecification = {
 
 function fillColors(countries: CountryState[], mode: GlobeMode): Record<string, string> {
   if (mode === 'health') return Object.fromEntries(countries.map((c) => [c.iso, STATUS_COLOR[c.status]]))
-  const vals = countries.map((c) => c.potential_usd_day)
-  const lo = Math.min(...vals)
-  const hi = Math.max(...vals)
-  return Object.fromEntries(countries.map((c) => [c.iso, potentialColor((c.potential_usd_day - lo) / (hi - lo || 1))]))
+  // Rank-based so one large market does not wash out the rest.
+  const ranked = [...countries].sort((a, b) => a.potential_usd_day - b.potential_usd_day)
+  const n = Math.max(1, ranked.length - 1)
+  return Object.fromEntries(ranked.map((c, i) => [c.iso, potentialColor(i / n)]))
 }
 
 function matchExpr(colors: Record<string, string>, fallback: string): any {
@@ -210,12 +210,17 @@ export default function Globe({ countries, mode, selectedIso, onSelect }: Props)
     const run = () => {
       map.setFilter('selected-outline', ['==', ['get', 'iso'], selectedIso ?? '__none__'])
       const c = countriesRef.current.find((x) => x.iso === selectedIso)
-      if (c) map.flyTo({ center: [c.lng, c.lat - 4], zoom: c.iso === 'US' || c.iso === 'CA' || c.iso === 'BR' || c.iso === 'AU' ? 2.6 : 3.3, duration: 1800, essential: true })
+      if (c) map.flyTo({ center: [c.lng, c.lat - 4], zoom: ['US', 'CA', 'BR', 'AU'].includes(c.iso) ? 2.3 : ['IN', 'ID', 'MX', 'ZA'].includes(c.iso) ? 2.8 : 3.3, duration: 1800, essential: true })
       else map.flyTo({ center: [map.getCenter().lng, HOME_VIEW.center[1]], zoom: HOME_VIEW.zoom, duration: 1600, essential: true })
     }
     if (loadedRef.current) run()
     else map.once('load', run)
   }, [selectedIso])
 
-  return <div ref={containerRef} className="absolute inset-0" />
+  // maplibre-gl.css forces position: relative on the container, so size it from a wrapper.
+  return (
+    <div className="absolute inset-0">
+      <div ref={containerRef} className="h-full w-full" />
+    </div>
+  )
 }

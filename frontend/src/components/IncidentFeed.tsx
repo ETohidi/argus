@@ -8,17 +8,21 @@ export default function IncidentFeed({ state, onOpen, onCountry }: { state: Worl
   const name = (iso: string) => state.countries.find((c) => c.iso === iso)?.name ?? iso
   const active = state.incidents.filter((i) => i.status !== 'resolved')
   const resolved = state.incidents.filter((i) => i.status === 'resolved')
+  const live = active.filter((i) => i.status === 'open' || i.status === 'persisting')
   const watching = state.countries.filter((c) => c.status === 'watch' || c.status === 'waiting')
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-slate-700/50 px-5 py-4">
         <div className="section-title">Incident feed</div>
         <div className="mt-1 text-[13px] text-slate-300">
-          {active.length === 0 ? (
-            <span className="text-teal-300">All {state.countries.length} countries within forecast</span>
+          {live.length === 0 ? (
+            <span className="text-teal-300">
+              All {state.countries.length} countries within forecast
+              {active.length > 0 && <span className="text-slate-400"> · {active.length} being followed up</span>}
+            </span>
           ) : (
             <span>
-              <span className="font-semibold text-rose-300">{active.length}</span> active · {usd(active.reduce((s, i) => s + i.impact_usd_h, 0))}/h at stake
+              <span className="font-semibold text-rose-300">{live.length}</span> open · {usd(live.reduce((s, i) => s + i.impact_usd_h, 0))}/h at stake
             </span>
           )}
         </div>

@@ -1,25 +1,28 @@
 import type { Fix } from '../../lib/types'
 import { usd } from '../../lib/theme'
 
-const W = 200
-const H = 92
-const M = { l: 4, r: 4, t: 6, b: 14 }
+const M = { l: 4, r: 4, t: 8, b: 14 }
 
 type Props = {
   fix: Fix
-  baseline?: Fix
+  // Values are drawn relative to this reference (do-nothing p50), so the fans separate visually.
+  reference: number[]
   domain: [number, number]
   color: string
+  width?: number
+  height?: number
 }
 
-export default function FanChart({ fix, baseline, domain, color }: Props) {
-  const days = [0, ...fix.days]
-  const n = days.length - 1
+export function relativeSeries(fix: Fix, reference: number[]) {
+  const rel = (arr: number[]) => [0, ...arr.map((v, i) => v - (reference[i] ?? 0))]
+  return { p10: rel(fix.p10), p50: rel(fix.p50), p90: rel(fix.p90) }
+}
+
+export default function FanChart({ fix, reference, domain, color, width: W = 200, height: H = 96 }: Props) {
+  const { p10, p50, p90 } = relativeSeries(fix, reference)
+  const n = p50.length - 1
   const x = (i: number) => M.l + (i / n) * (W - M.l - M.r)
   const y = (v: number) => H - M.b - ((v - domain[0]) / (domain[1] - domain[0] || 1)) * (H - M.t - M.b)
-  const p10 = [0, ...fix.p10]
-  const p50 = [0, ...fix.p50]
-  const p90 = [0, ...fix.p90]
   const band =
     p90.map((v, i) => `${i ? 'L' : 'M'}${x(i)},${y(v)}`).join(' ') +
     ' ' +
@@ -31,30 +34,30 @@ export default function FanChart({ fix, baseline, domain, color }: Props) {
     ' Z'
   const line = (arr: number[]) => arr.map((v, i) => `${i ? 'L' : 'M'}${x(i)},${y(v)}`).join(' ')
   const gid = `fan-${fix.id}`
+  const end = p50[n]
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
       <defs>
-        <linearGradient id={gid} x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0" stopColor={color} stopOpacity={0.45} />
-          <stop offset="1" stopColor={color} stopOpacity={0.12} />
+        <linearGradient id={gid} x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0" stopColor={color} stopOpacity={0.15} />
+          <stop offset="1" stopColor={color} stopOpacity={0.45} />
         </linearGradient>
       </defs>
       {[1, 2, 3, 4, 5, 6, 7].map((d) => (
         <line key={d} x1={x(d)} x2={x(d)} y1={M.t} y2={H - M.b} stroke="#1e293b" strokeWidth={0.6} />
       ))}
-      {baseline && baseline.id !== fix.id && (
-        <path d={line([0, ...baseline.p50])} fill="none" stroke="#94a3b8" strokeWidth={1} strokeDasharray="3 3" opacity={0.6} />
-      )}
-      <path d={band} fill={`url(#${gid})`} className="fade-up" />
+      <line x1={M.l} x2={W - M.r} y1={y(0)} y2={y(0)} stroke="#94a3b8" strokeWidth={0.8} strokeDasharray="3 3" opacity={0.6} />
+      <path d={band} fill={`url(#${gid})`} className="fade-in" />
       <path d={line(p50)} fill="none" stroke={color} strokeWidth={1.8} pathLength={1} className="draw" />
-      <circle cx={x(n)} cy={y(p50[n])} r={2.5} fill={color} />
+      <circle cx={x(n)} cy={y(end)} r={2.5} fill={color} />
       {[1, 7].map((d) => (
         <text key={d} x={x(d)} y={H - 3} fontSize={8} fill="#64748b" textAnchor="middle">
           d{d}
         </text>
       ))}
-      <text x={W - M.r} y={M.t + 8} fontSize={8.5} fill="#cbd5e1" textAnchor="end" className="num">
-        {usd(p50[n])}
+      <text x={W - M.r - 4} y={Math.max(M.t + 8, Math.min(H - M.b - 4, y(end) + (end >= 0 ? -6 : 12)))} fontSize={8.5} fill="#cbd5e1" textAnchor="end" className="num">
+        {end >= 0 ? '+' : ''}
+        {usd(end)}
       </text>
     </svg>
   )

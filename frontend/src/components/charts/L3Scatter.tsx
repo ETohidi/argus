@@ -42,7 +42,7 @@ export default function L3Scatter({ l3 }: { l3: L3Result }) {
           <circle key={i} cx={x(p.coherence)} cy={y(p.payout_focus)} r={2} fill="#5eead4" opacity={0.35} />
         ))}
         {flagged.map((p, i) => (
-          <circle key={`f${i}`} cx={x(p.coherence)} cy={y(p.payout_focus)} r={2.6} fill="#f43f5e" opacity={0.9} className="fade-up" style={{ animationDelay: `${300 + i * 6}ms` }} />
+          <circle key={`f${i}`} cx={x(p.coherence)} cy={y(p.payout_focus)} r={2.6} fill="#f43f5e" opacity={0.9} className="fade-in" style={{ animationDelay: `${300 + i * 6}ms` }} />
         ))}
         {flagged.length > 0 && (
           <g>
