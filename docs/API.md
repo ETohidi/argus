@@ -14,7 +14,7 @@ Globe state.
   "countries": [
     {
       "iso": "CA", "name": "Canada", "lat": 56.1, "lng": -106.3,
-      "status": "ok",              // "ok" | "watch" | "incident" | "explained" | "waiting"
+      "status": "ok",              // "ok" | "watch" (|z|≥4 for 1 h) | "incident" (persists ≥2 h and impact > $150/h or |z|≥8) | "explained" | "waiting"
       "health_z": 0.4,             // max |z| over the country's KPIs (signed value of that KPI)
       "kpis": {                    // last-hour observed values
         "new_accounts": 0, "completions": 0, "revenue": 0,

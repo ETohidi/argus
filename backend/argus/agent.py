@@ -18,7 +18,11 @@ from .twin import KPIS, STAY, TOP_PAYOUT, USER_SIDE, Twin
 WINDOW = 3
 ALERT_Z = 4.0
 ROOT_Z = 3.0
-WATCH_Z = 3.0
+WATCH_Z = 4.0                 # amber: |z| >= 4 for one hour
+QUIET_Z = 3.0                 # "healthy" for resolution purposes
+INCIDENT_HOURS = 2            # an incident needs the alert to persist this long ...
+INCIDENT_IMPACT = 150.0       # ... and impact above this (USD/h) ...
+INCIDENT_Z = 8.0              # ... or a deviation this extreme
 L3_MIN_IMPACT = 50.0          # USD/h before a user-level run is worth it
 SUPPORTED, PARTIAL = 0.8, 0.3
 QUIET_TO_RESOLVE = 6
@@ -147,7 +151,7 @@ class Agent:
         ext = self._extension_z(t)
         hit = (np.abs(z) >= ALERT_Z) & ~self.waiting[:, None]
         self.consec = np.where(hit, self.consec + 1, 0)
-        alert = self.consec >= 2
+        alert = self.consec >= INCIDENT_HOURS
         allz = np.concatenate([z, ext], axis=1) if ext.size else z
         imax = np.argmax(np.abs(allz), axis=1)
         self.health = allz[np.arange(cfg.C), imax]
@@ -178,6 +182,8 @@ class Agent:
         for c in np.argsort(-impact):
             if not alert[c].any():
                 continue
+            if impact[c] <= INCIDENT_IMPACT and np.abs(z[c][alert[c]]).max() < INCIDENT_Z:
+                continue                                                  # stays amber ("watch")
             inc = self._active_incident(int(c))
             if inc is not None:
                 if inc["status"] == "open":
@@ -192,7 +198,7 @@ class Agent:
             self.investigate(int(c), t, res, alert[c])
 
         # 9-10. verification and resolution
-        self.quiet = np.where(np.abs(z).max(1) < WATCH_Z, self.quiet + 1, 0)
+        self.quiet = np.where(np.abs(z).max(1) < QUIET_Z, self.quiet + 1, 0)
         for inc in self.incidents:
             if inc["status"] == "fix_applied" and inc["verification"]["status"] == "pending" and t >= inc["due"]:
                 self._verify(inc, t)
