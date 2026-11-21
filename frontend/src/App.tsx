@@ -300,7 +300,7 @@ export default function App() {
     <div className="relative h-full overflow-hidden bg-bg">
       {state && <Globe countries={state.countries} mode={mode} selectedIso={focusIso} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
 
-      <TopBar clock={state?.clock.label ?? 'Connecting…'} status={state ? statusSentence(state) : { text: 'Connecting to the twin…', tone: 'neutral' }} mode={mode} onMode={setMode} />
+      <TopBar clock={state ? shortClock(state.clock) : 'Connecting…'} status={state ? statusSentence(state) : { text: 'Connecting to the twin…', tone: 'neutral' }} mode={mode} onMode={setMode} />
 
       {/* Right column: an explained change as a quiet note, then the issue card or the country sheet. */}
       <div className="pointer-events-none absolute bottom-8 right-8 top-24 z-20 flex flex-col items-end gap-4 overflow-y-auto">
@@ -333,8 +333,8 @@ export default function App() {
         ) : null}
       </div>
 
-      {state && (
-        <div className="pointer-events-none absolute bottom-6 left-40 z-20 transition-[right] duration-300 ease-out" style={{ right: sideOpen ? 480 : 40 }}>
+      {state && (state.incidents.some((i) => i.status !== 'resolved') || timeline.some((e) => e.t >= state.clock.t - 72)) && (
+        <div className="pointer-events-none absolute bottom-6 left-48 z-20 transition-[right] duration-300 ease-out" style={{ right: sideOpen ? 480 : 40 }}>
           <TimelineStrip
             events={timeline}
             now={state.clock.t}
@@ -390,4 +390,11 @@ export default function App() {
       )}
     </div>
   )
+}
+
+// "Mon 12:00": the clock without the day counter or the time zone.
+function shortClock(c: WorldState['clock']) {
+  if (c.day_of_week != null && c.utc_hour != null) return `${c.day_of_week} ${String(c.utc_hour).padStart(2, '0')}:00`
+  const m = c.label.match(/([A-Z][a-z]{2}) (\d{2}:\d{2})/)
+  return m ? `${m[1]} ${m[2]}` : c.label
 }

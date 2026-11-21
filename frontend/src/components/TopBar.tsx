@@ -1,6 +1,5 @@
 import type { GlobeMode } from './Globe'
-import { POTENTIAL_STOPS, STATUS_COLOR, STATUS_LABEL } from '../lib/theme'
-import type { CountryStatus } from '../lib/types'
+import { STATUS_COLOR } from '../lib/theme'
 
 type Props = {
   clock: string
@@ -11,7 +10,7 @@ type Props = {
 
 const TONE: Record<Props['status']['tone'], string> = { ok: STATUS_COLOR.ok, issue: STATUS_COLOR.incident, neutral: STATUS_COLOR.explained }
 
-// Home bar (L1): logo, clock, one status sentence, the mode toggle and a colour legend on hover. Nothing else.
+// Home bar (L1): logo, clock, one status sentence and the mode toggle. Nothing else.
 export default function TopBar({ clock, status, mode, onMode }: Props) {
   return (
     <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center gap-8 px-8 py-6">
@@ -36,32 +35,6 @@ export default function TopBar({ clock, status, mode, onMode }: Props) {
               {m === 'health' ? 'Health' : 'Potential'}
             </button>
           ))}
-        </div>
-        <div className="group relative">
-          <button aria-label="Colour legend" className="grid h-8 w-8 place-items-center rounded-full text-[13px] text-fg-2 ring-1 ring-line/50 hover:text-fg">
-            ?
-          </button>
-          <div className="invisible absolute right-0 top-10 w-60 rounded-xl bg-panel/95 p-4 text-[13px] text-fg opacity-0 ring-1 ring-line/50 transition group-hover:visible group-hover:opacity-100">
-            {mode === 'health' ? (
-              <ul className="space-y-2">
-                {(Object.keys(STATUS_COLOR) as CountryStatus[]).map((s) => (
-                  <li key={s} className="flex items-center gap-2.5">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: STATUS_COLOR[s] }} />
-                    {STATUS_LABEL[s]}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div>
-                <div className="mb-2">Untapped potential, as % of each market's margin</div>
-                <div className="h-2 rounded-full" style={{ background: `linear-gradient(90deg, ${POTENTIAL_STOPS.map(([o, c]) => `${c} ${o * 100}%`).join(',')})` }} />
-                <div className="mt-1 flex justify-between text-fg-2">
-                  <span>Low</span>
-                  <span>High</span>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </header>

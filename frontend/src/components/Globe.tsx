@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react'
 import maplibregl, { type Map as MapLibreMap } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { buildWorldGeoJson } from '../lib/countryGeometry'
+import { loadWorldGeoJson } from '../lib/countryGeometry'
 import { geometryContains, isOnGlobe } from '../lib/globeHit'
-import { nightCells } from '../lib/daynight'
-import type { GeoJSONSource } from 'maplibre-gl'
+import { WORLD_COORDS, nightImage } from '../lib/daynight'
+import type { GeoJSONSource, ImageSource } from 'maplibre-gl'
 import { AURORA, STATUS_COLOR, STATUS_LABEL, potentialColor, usd } from '../lib/theme'
 import type { CountryState, CountryStatus } from '../lib/types'
 
@@ -99,6 +99,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
     let prev = performance.now()
     let frame = 0
     let lastPulse = 0
+    let lastHide = 0
     const note = () => (lastInteraction = performance.now())
     const spin = (now: number) => {
       const dt = Math.min(now - prev, 100)
@@ -112,7 +113,21 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
         lastPulse = now
         map.setPaintProperty('watched', 'fill-opacity', opacityExpr(countriesRef.current, 0.7 + 0.25 * Math.sin(now / 420)) as any)
       }
+      if (now - lastHide > 120) {
+        lastHide = now
+        hideFarMarkers()
+      }
       frame = requestAnimationFrame(spin)
+    }
+    // Markers on the hidden hemisphere (or right on the horizon) are hidden outright.
+    const hideFarMarkers = () => {
+      const c = map.getCenter()
+      const toRad = Math.PI / 180
+      for (const { marker } of markersRef.current.values()) {
+        const p = marker.getLngLat()
+        const cos = Math.sin(c.lat * toRad) * Math.sin(p.lat * toRad) + Math.cos(c.lat * toRad) * Math.cos(p.lat * toRad) * Math.cos((p.lng - c.lng) * toRad)
+        marker.getElement().style.visibility = cos > 0.15 ? 'visible' : 'hidden'
+      }
     }
     const canvas = map.getCanvas()
     canvas.addEventListener('pointerdown', note)
@@ -127,7 +142,12 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
         'fog-ground-blend': 0.6,
         'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 0.8, 4, 0.35], // violet glow around the globe
       } as any)
-      map.addSource('world', { type: 'geojson', data: world as any })
+      // Country polygons arrive lazily (50m Natural Earth); until then the ocean shows alone.
+      map.addSource('world', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      loadWorldGeoJson().then((world) => {
+        geometryByIso = new Map(world.features.filter((f) => f.properties.iso).map((f) => [f.properties.iso, f.geometry]))
+        ;(map.getSource('world') as GeoJSONSource | undefined)?.setData(world as any)
+      })
       map.addLayer({
         id: 'land',
         type: 'fill',
@@ -154,14 +174,9 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
         filter: ['!=', ['get', 'iso'], ''],
         paint: { 'line-color': AURORA.fg2, 'line-opacity': 0.25, 'line-width': 0.5 },
       })
-      // Night side: soft dark overlay from the sun's elevation (updated when the hour changes).
-      map.addSource('night', { type: 'geojson', data: nightCells(hourRef.current) as any })
-      map.addLayer({
-        id: 'night',
-        type: 'fill',
-        source: 'night',
-        paint: { 'fill-color': AURORA.bg, 'fill-opacity': ['get', 'o'], 'fill-antialias': false },
-      })
+      // Night side: one smooth image from the sun's elevation (updated when the hour changes).
+      map.addSource('night', { type: 'image', url: nightImage(hourRef.current), coordinates: WORLD_COORDS })
+      map.addLayer({ id: 'night', type: 'raster', source: 'night', paint: { 'raster-opacity': 1, 'raster-fade-duration': 0 } })
       map.addLayer({
         id: 'hover-outline',
         type: 'line',
@@ -181,8 +196,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
     })
 
     // Hover and click only react to watched countries under the pointer on the visible globe surface.
-    const world = buildWorldGeoJson()
-    const geometryByIso = new Map(world.features.filter((f) => f.properties.iso).map((f) => [f.properties.iso, f.geometry]))
+    let geometryByIso = new Map<string, import('geojson').Geometry>()
     const countryAt = (point: { x: number; y: number }): string | null => {
       if (!loadedRef.current || !isOnGlobe(map, point)) return null
       const { lng, lat } = map.unproject([point.x, point.y])
@@ -279,8 +293,8 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
   useEffect(() => {
     if (utcHour == null || utcHour === hourRef.current) return
     hourRef.current = utcHour
-    const src = mapRef.current?.getSource('night') as GeoJSONSource | undefined
-    src?.setData(nightCells(utcHour) as any)
+    const src = mapRef.current?.getSource('night') as ImageSource | undefined
+    src?.updateImage({ url: nightImage(utcHour), coordinates: WORLD_COORDS })
   }, [utcHour])
 
   // Fly to the selected country, or back to the whole globe, keeping clear of the right-hand card.

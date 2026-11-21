@@ -108,7 +108,7 @@ export default function ScenarioMenu(p: Props) {
         onClick={() => setOpen((o) => !o)}
         className={`rounded-full px-4 py-2 text-[13px] ring-1 transition ${open ? 'text-fg ring-fg-2' : 'text-fg-2 ring-line hover:text-fg'}`}
       >
-        Scenario
+        Try a scenario
       </button>
     </div>
   )
