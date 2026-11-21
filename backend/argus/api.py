@@ -105,6 +105,7 @@ class ApproveIn(BaseModel):
 class MetricIn(BaseModel):
     name: str
     description: str = ""
+    formula: str | None = None
 
 
 def _world(x_session: str | None):
@@ -193,7 +194,8 @@ def post_metric(body: MetricIn, x_session: str | None = Header(default=None)) ->
         raise HTTPException(400, "name is required")
     s = _world(x_session)
     with s.lock:
-        return s.world.agent.add_metric(body.name.strip()[:80], body.description.strip()[:500])
+        return s.world.agent.add_metric(body.name.strip()[:120], body.description.strip()[:500],
+                                        (body.formula or "").strip()[:300] or None)
 
 
 @app.get("/api/country/{iso}")

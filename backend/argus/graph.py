@@ -28,10 +28,11 @@ class Node:
     origin: str = "core"      # core | extension
     confidence: float = 1.0
     description: str = ""
+    note: str = ""
 
     def to_dict(self) -> dict:
         return {k: getattr(self, k) for k in ("id", "label", "unit", "kind", "level", "parents", "edge", "mechanism",
-                                               "expr", "aggregation", "origin", "confidence", "description")}
+                                               "expr", "aggregation", "origin", "confidence", "description", "note")}
 
 
 CORE_NODES: list[Node] = [

@@ -830,75 +830,177 @@ class Agent:
                     pass
         return keyword_formula(name, description, self._known())
 
-    def add_metric(self, name: str, description: str) -> dict:
+    def add_metric(self, name: str, description: str = "", formula: str | None = None) -> dict:
+        """Automatic extension: resolve, validate (names, units, data, aggregation), place, monitor, explain."""
+        from . import extension as ext
+
         checks: list[dict] = []
-        nid = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")[:48] or "metric"
+
+        def result(status: str, message: str, **extra) -> dict:
+            ok = status == "added"
+            return {"status": status, "message": message, "node": extra.pop("node", None),
+                    "validation": {"ok": ok, "checks": checks}, **extra}
+
+        label, text = ext.split_name_formula(name, description, formula)
+        nid = re.sub(r"[^a-z0-9]+", "_", (label or "metric").lower()).strip("_")[:48] or "metric"
         if not re.match(r"^[a-z]", nid):
             nid = "m_" + nid
-        expr, source = self._propose(name, description)
-        checks.append({"name": "formula", "ok": expr is not None,
-                       "detail": f"{nid} = {expr} (proposed by {source})" if expr else
-                       "Could not map the description to known metrics"})
-        if expr is None:
-            return {"node": None, "validation": {"ok": False, "checks": checks}}
-        try:
-            names, agg = parse_expression(expr, self._known())
-            checks.append({"name": "names", "ok": True, "detail": "All metrics exist: " + ", ".join(names)})
-        except (ValueError, SyntaxError) as e:
-            checks.append({"name": "names", "ok": False, "detail": str(e)})
-            return {"node": None, "validation": {"ok": False, "checks": checks}}
-        dup = [n.id for n in self.graph.nodes.values() if n.expr and n.expr.replace(" ", "") == expr.replace(" ", "")]
-        dup += [n for n in names if n == expr.strip()]
-        checks.append({"name": "duplicate", "ok": not dup and nid not in self.graph.nodes,
-                       "detail": f"Same as existing metric {dup[0]}" if dup else
-                       (f"Metric id {nid} already exists" if nid in self.graph.nodes else "New metric")})
-        # identity check on history (L2 segments and L1 countries)
-        hist = [self.twin.rows[x] for x in sorted(self.twin.rows)][-24 * 14:]
-        seg = []
-        for r in hist[-24:]:
-            vals = {k: (r[k][..., None] if r[k].ndim == 2 else r[k]) for k in MECHANISMS}
-            vals = _with_formulas(vals)
-            with np.errstate(divide="ignore", invalid="ignore"):
-                seg.append(np.asarray(evaluate(expr, vals), dtype=float))
-        seg = np.array(seg)
-        day = _with_formulas({k: sum(_country_sums(r)[k] for r in hist[-24:]) for k in _country_sums(hist[-1])})
-        with np.errstate(divide="ignore", invalid="ignore"):
-            country_val = np.asarray(evaluate(expr, day), dtype=float) * np.ones(cfg.C)
-            glob = float(evaluate(expr, {k: v.sum() for k, v in day.items() if k != "quality_per_completion"}
-                                  | {"quality_per_completion": day["quality"].sum() / day["completions"].sum()}))
-        finite = np.isfinite(country_val).all() and np.isfinite(glob)
-        ca = cfg.ISO_INDEX["CA"]
-        checks.append({"name": "identity", "ok": bool(finite),
-                       "detail": f"Evaluated on 14 days of history: global {glob:,.4g}, "
-                                 f"{cfg.COUNTRIES[ca].name} {country_val[ca]:,.4g} (last 24 h); "
-                                 f"{np.isfinite(seg).mean():.0%} of segment-hours defined"
-                       if finite else "Formula gives undefined values on history"})
-        mean_c = float(np.nanmean(country_val))
-        checks.append({"name": "aggregation", "ok": True,
-                       "detail": (f"Ratio: non-additive across countries; aggregate as Σnumerator/Σdenominator "
-                                  f"(global {glob:,.4g} vs mean of countries {mean_c:,.4g})") if agg == "ratio"
-                       else "Additive: sum across platforms, categories and countries"})
-        ok = all(ch["ok"] for ch in checks)
-        if not ok:
-            return {"node": None, "validation": {"ok": False, "checks": checks}}
-        sigma = self._extension_sigma(expr)
-        checks.append({"name": "monitoring", "ok": True,
-                       "detail": f"Backtest error {sigma.mean():.1%} per 3 h window; now watched in {cfg.C} "
-                                 f"countries"})
-        kinds = {n: self.graph.nodes[n].kind for n in names if n in self.graph.nodes}
-        if agg == "ratio":
-            num, den = names[0], names[-1]
-            unit = ("USD" if kinds.get(num) == "money" else self.graph.nodes[num].label.lower()) + " per " + \
-                   self.graph.nodes[den].label.lower().rstrip("s")
-            kind = "ratio"
+        known = self._known()
+        if text is not None:
+            res = ext.resolve_formula(text, known)
+            if res["ambiguous"]:
+                word, cands = next(iter(res["ambiguous"].items()))
+                options = [re.sub(rf"(?<![a-z_]){re.escape(word)}(?![a-z_])", c, res["expr"]) for c in cands]
+                names = " or ".join(self.graph.nodes[c].label.lower() for c in cands)
+                msg = f"'{word}' is ambiguous: it could mean {names}. Pick one and add the metric again."
+                checks.append({"name": "names", "ok": False, "detail": msg})
+                return result("ambiguous", msg, ambiguity={"term": word, "candidates": cands,
+                                                           "suggested_formulas": options})
+            if res["unknown"]:
+                word, sugg = next(iter(res["unknown"].items()))
+                msg = (f"Unknown metric '{word}'." + (f" Did you mean {', '.join(sugg)}?" if sugg else "")
+                       + " Known metrics: " + ", ".join(sorted(known)) + ".")
+                checks.append({"name": "names", "ok": False, "detail": msg})
+                return result("invalid", msg)
+            expr, source = res["expr"], "your formula"
+            mapped = res["mapped"]
         else:
-            kind = "money" if any(v == "money" for v in kinds.values()) else "count"
-            unit = "USD/h" if kind == "money" else "per hour"
-        node = Node(nid, name, unit, kind, "L2", names, "formula", expr=expr, aggregation=agg, origin="extension",
-                    confidence={"user": 1.0, "LLM": 0.9}.get(source, 0.8), description=description)
+            expr, source = self._propose(label, description)
+            mapped = []
+            if expr is None:
+                msg = ("Could not work out a formula from the description. Write it as "
+                       "'name = formula', e.g. margin_per_signup = margin / signups.")
+                checks.append({"name": "formula", "ok": False, "detail": msg})
+                return result("invalid", msg)
+        checks.append({"name": "formula", "ok": True,
+                       "detail": f"{nid} = {expr} (from {source})"
+                                 + ("; read " + ", ".join(f"'{a}' as {b}" for a, b in mapped) if mapped else "")})
+        try:
+            names, agg = parse_expression(expr, known)
+        except (ValueError, SyntaxError) as e:
+            msg = f"The formula is not valid: {e}."
+            checks.append({"name": "names", "ok": False, "detail": msg})
+            return result("invalid", msg)
+        checks.append({"name": "names", "ok": True, "detail": "All inputs are known metrics: " + ", ".join(names)})
+        try:
+            unit = ext.unit_text(ext.dimension(expr))
+            checks.append({"name": "dimensions", "ok": True, "detail": f"Units are consistent: result in {unit}"})
+        except ext.DimensionError as e:
+            msg = f"The units don't match: {e}."
+            checks.append({"name": "dimensions", "ok": False, "detail": msg})
+            return result("invalid", msg)
+        same = [n for n in self.graph.nodes.values()
+                if n.expr and n.expr.replace(" ", "") == expr.replace(" ", "")] + \
+               [self.graph.nodes[n] for n in names if n == expr.strip()]
+        if same or nid in self.graph.nodes:
+            other = same[0].id if same else nid
+            msg = (f"Already in the graph as '{other}'" + (f" ({self.graph.nodes[other].expr})"
+                                                            if self.graph.nodes[other].expr else "")
+                   + ": not added twice.")
+            checks.append({"name": "duplicate", "ok": False, "detail": msg})
+            return result("duplicate", msg, node=self.graph.nodes[other].to_dict())
+        # Same values as an existing metric on the data (e.g. rewards * 1)? Then it is not a new metric.
+        recent = [self.twin.rows[x] for x in sorted(self.twin.rows)[-24:]]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            def series_of(e: str) -> np.ndarray:
+                return np.array([np.asarray(evaluate(e, _with_formulas(_country_sums(r))), dtype=float)
+                                 * np.ones(cfg.C) for r in recent])
+            cand = series_of(expr)
+            for other in list(MECHANISMS) + [n.id for n in self.graph.nodes.values() if n.expr]:
+                oexpr = other if other in MECHANISMS else self.graph.nodes[other].expr
+                ov = series_of(oexpr)
+                if np.allclose(cand, ov, rtol=1e-9, atol=1e-9, equal_nan=True):
+                    msg = (f"On the data this is identical to the existing metric '{other}'"
+                           + (f" ({oexpr})" if oexpr != other else "") + ": not added twice.")
+                    checks.append({"name": "duplicate", "ok": False, "detail": msg})
+                    return result("duplicate", msg, node=self.graph.nodes[other].to_dict())
+        checks.append({"name": "duplicate", "ok": True,
+                       "detail": "New metric: no existing metric has this formula or the same values on the data"})
+
+        # Does the formula hold on the data? Evaluate on 14 days of observed history at every breakdown level.
+        place = ext.placement(names)
+        with_k = "offer category" in place["breakdown"]
+        hist = [self.twin.rows[x] for x in sorted(self.twin.rows)][-24 * 14:]
+
+        def seg_vals(r: dict) -> dict:
+            v = {}
+            for k in MECHANISMS:
+                a = r[k]
+                v[k] = (a if with_k else a.sum(2)) if a.ndim == 3 else (a[..., None] if with_k else a)
+            return _with_formulas(v)
+
+        with np.errstate(divide="ignore", invalid="ignore"):
+            seg = np.array([np.asarray(evaluate(expr, seg_vals(r)), dtype=float) for r in hist])
+            sums = {k: sum(seg_vals(r)[k] for r in hist[-24:]) for k in MECHANISMS}
+            sums = _with_formulas(sums)
+            seg_day = np.asarray(evaluate(expr, sums), dtype=float)
+            day = _with_formulas({k: sum(_country_sums(r)[k] for r in hist[-24:]) for k in _country_sums(hist[-1])})
+            country_val = np.asarray(evaluate(expr, day), dtype=float) * np.ones(cfg.C)
+        defined = float(np.isfinite(seg).mean())
+        finite = bool(np.isfinite(country_val).all())
+        checks.append({"name": "holds_on_data", "ok": finite and defined >= 0.5,
+                       "detail": (f"Computed on {len(hist)} h of observed data at {' × '.join(place['breakdown'][1:])} "
+                                  f"level: {defined:.0%} of segment-hours defined; "
+                                  f"{cfg.COUNTRIES[cfg.ISO_INDEX['CA']].name} last 24 h = "
+                                  f"{country_val[cfg.ISO_INDEX['CA']]:,.4g} {unit}")
+                       if finite else "The formula is undefined on the observed data (e.g. division by zero)"})
+        if agg == "ratio":
+            seg_mean = float(np.nanmean(seg_day))
+            glob = float(np.nansum([evaluate(expr, {k: np.nansum(v) for k, v in sums.items()})]))
+            checks.append({"name": "aggregation", "ok": True,
+                           "detail": f"Ratio: not additive. Country and global values are Σnumerator / Σdenominator "
+                                     f"({glob:,.4g}), not the average of segments ({seg_mean:,.4g})"})
+        else:
+            seg_total = np.nansum(seg_day.reshape(cfg.C, -1), axis=1)
+            err = float(np.nanmax(np.abs(seg_total - country_val) / np.maximum(np.abs(country_val), 1e-9)))
+            checks.append({"name": "aggregation", "ok": err < 1e-6,
+                           "detail": f"Additive: segments sum to the country total (max error {err:.1e})"})
+        if not all(ch["ok"] for ch in checks):
+            msg = next(ch["detail"] for ch in checks if not ch["ok"])
+            return result("invalid", msg)
+
+        sigma = self._extension_sigma(expr)
+        kinds = {n: self.graph.nodes[n].kind for n in names}
+        kind = "ratio" if agg == "ratio" else ("money" if "money" in kinds.values() else "count")
+        node = Node(nid, label or nid, unit, kind, "L2", names, "formula", expr=expr, aggregation=agg,
+                    origin="extension", confidence={"your formula": 1.0, "LLM": 0.9}.get(source, 0.8),
+                    description=description or f"{label} = {expr}")
         self.graph.add(node)
-        self.extensions[nid] = {"expr": expr, "sigma": sigma}
-        return {"node": node.to_dict(), "validation": {"ok": True, "checks": checks}}
+        self.extensions[nid] = {"expr": expr, "sigma": sigma, "added_at": self.t}
+        z_now = self._extension_z(self.t)[:, -1]
+        worst = int(np.argmax(np.abs(z_now)))
+        checks.append({"name": "monitoring", "ok": True,
+                       "detail": f"Watched in {cfg.C} countries against its seasonal baseline "
+                                 f"(backtest error {float(sigma.mean()):.1%} per 3 h)"})
+        parents_txt = " and ".join(self.graph.nodes[n].label.lower() for n in names)
+        note = (f"Added because you asked for '{label}'. Argus read it as {expr}"
+                + (f" ('{mapped[0][0]}' = {mapped[0][1]})" if mapped else "")
+                + f", placed it under {parents_txt} as a formula edge, checked the units ({unit}) and that it "
+                  f"computes on {len(hist) // 24} days of data, and now watches it in {cfg.C} countries"
+                + (" as a ratio of sums." if agg == "ratio" else "."))
+        node.note = note
+        monitoring = {"watched": True, "countries": cfg.C, "baseline_error_pct": round(float(sigma.mean()) * 100, 1),
+                      "now": {"country": cfg.COUNTRIES[worst].iso, "z": round(float(z_now[worst]), 1)},
+                      "watched_series": cfg.C * (len(KPIS) + len(self.extensions))}
+        out = node.to_dict()
+        out["note"] = note
+        return result("added", f"Added '{label}' and started monitoring it.", node=out, placement=place,
+                      monitoring=monitoring, note=note)
+
+    def _added_metrics_state(self) -> list[dict]:
+        """Metrics added through automatic extension, with their current deviation (z) per country."""
+        if not self.extensions or self.t not in self.twin.rows:
+            return []
+        z = self._extension_z(self.t)
+        out = []
+        for j, (nid, e) in enumerate(self.extensions.items()):
+            n = self.graph.nodes[nid]
+            worst = int(np.argmax(np.abs(z[:, j])))
+            out.append({"id": nid, "label": n.label, "expr": e["expr"], "unit": n.unit, "added_at": e.get("added_at"),
+                        "status": "watch" if abs(z[worst, j]) >= WATCH_Z else "ok",
+                        "max_z": {"country": cfg.COUNTRIES[worst].iso, "z": round(float(z[worst, j]), 1)},
+                        "note": n.note})
+        return out
 
     def _ext_values(self, rows: list[dict]) -> dict:
         s = {k: sum(_country_sums(r)[k] for r in rows) for k in _country_sums(rows[0])}
@@ -1237,6 +1339,7 @@ class Agent:
             "countries": countries,
             "incidents": [self.incident_summary(i) for i in self.incidents],
             "explained": list(self.explained),
+            "added_metrics": self._added_metrics_state(),
             "attention": {"watched_series": cfg.C * (len(KPIS) + len(self.extensions)),
                           "investigations": self.investigations, "l3_runs": self.l3_runs},
         }
