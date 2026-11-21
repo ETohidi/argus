@@ -10,13 +10,14 @@ type Props = {
   width?: number
   height?: number
   fontSize?: number
+  showStart?: boolean // label the first hour on the axis
 }
 
 const ease = (x: number) => 1 - Math.pow(1 - x, 3)
 
 // Grey band = what the twin expected for each hour (lo..hi); line = what happened,
 // white inside the band and orange outside it (exact, via an SVG mask of the band).
-export default function NormalZoneChart({ series, leftAt, values, width: W = 356, height: H = 120, fontSize = 13 }: Props) {
+export default function NormalZoneChart({ series, leftAt, values, width: W = 356, height: H = 120, fontSize = 13, showStart = true }: Props) {
   const id = useId().replace(/:/g, '')
   const target = values ?? series.map((p) => p.actual)
   const [shown, setShown] = useState(target)
@@ -74,9 +75,11 @@ export default function NormalZoneChart({ series, leftAt, values, width: W = 356
           </text>
         </g>
       )}
-      <text x={x(0)} y={H - 3} fontSize={fontSize} fill="#9A9CC4">
-        {series[0].label}
-      </text>
+      {showStart && (
+        <text x={x(0)} y={H - 3} fontSize={fontSize} fill="#9A9CC4">
+          {series[0].label}
+        </text>
+      )}
       <text x={x(n)} y={H - 3} fontSize={fontSize} fill="#9A9CC4" textAnchor="end">
         now
       </text>

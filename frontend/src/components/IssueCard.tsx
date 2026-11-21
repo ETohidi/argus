@@ -1,6 +1,6 @@
 import { usd } from '../lib/theme'
 import type { IncidentDetail, IncidentSummary } from '../lib/types'
-import { recommendedFix } from '../lib/incident'
+import { cardLines, isFraud, metricLabel, recommendedFix, shortTitle } from '../lib/incident'
 import NormalZoneChart from './charts/NormalZoneChart'
 
 type Props = {
@@ -27,6 +27,7 @@ export default function IssueCard({ summary, detail, countryName, approving, onA
   const fix = detail ? recommendedFix(detail) : undefined
   const [amount, amountNote] = splitAmount(card?.looks_like ?? `${usd(summary.impact_usd_h)}/h`)
   const atStake = card?.at_stake_7d_usd ?? summary.risk_7d_usd ?? 0
+  const [line1, line2] = cardLines(card, detail ? isFraud(detail) : /fake/i.test(card?.title ?? summary.title))
   // Status chips: pink on 15% pink for problems, mint for verified, neutral while waiting.
   const chip = !decided
     ? 'bg-problem/15 text-problem'
@@ -39,7 +40,7 @@ export default function IssueCard({ summary, detail, countryName, approving, onA
       <div className="flex items-start justify-between gap-4">
         <div>
           <span className={`inline-block rounded-full px-2.5 py-0.5 text-[13px] ${chip}`}>{card?.status_line ?? 'Needs a decision'}</span>
-          <h2 className="mt-2 text-[24px] font-semibold leading-tight text-fg">{card?.title ?? summary.title}</h2>
+          <h2 className="mt-2 text-[24px] font-semibold leading-tight text-fg">{shortTitle(card?.title ?? summary.title)}</h2>
         </div>
         <button onClick={onClose} aria-label="Close" className="-mr-2 -mt-1 rounded-full px-2 text-[16px] text-fg-2 hover:text-fg">
           ×
@@ -54,15 +55,15 @@ export default function IssueCard({ summary, detail, countryName, approving, onA
           </div>
           {detail?.series && detail.series.length > 1 && (
             <figure className="mt-6">
-              <NormalZoneChart series={detail.series.slice(-24)} leftAt={detail.left_zone_at} width={364} height={100} />
+              <div className="mb-1 text-[13px] text-fg-2">{metricLabel(detail.series_meta)}</div>
+              <NormalZoneChart series={detail.series.slice(-24)} leftAt={detail.left_zone_at} width={364} height={100} showStart={false} />
               <figcaption className="mt-1 text-[13px] text-fg-2">Grey = normal for this hour. The line is what happened.</figcaption>
             </figure>
           )}
-          <dl className="mt-5 space-y-2.5 text-[13px] leading-snug">
-            <Line term="What happened" text={card?.what_happened} />
-            <Line term="Why" text={card?.why} />
-            <Line term="What to do" text={card?.what_to_do} />
-          </dl>
+          <div className="mt-5 space-y-2 text-[16px] leading-snug">
+            <p className="text-fg">{line1}</p>
+            <p className="text-fg-2">{line2}</p>
+          </div>
           <button
             disabled={!fix || approving}
             onClick={() => fix && onApprove(fix.id)}
@@ -92,14 +93,6 @@ function Big({ label, value, note, tone = 'text-fg' }: { label: string; value: s
   )
 }
 
-function Line({ term, text }: { term: string; text?: string }) {
-  return (
-    <div>
-      <dt className="text-fg-2">{term}</dt>
-      <dd className="text-fg">{text ?? '…'}</dd>
-    </div>
-  )
-}
 
 // After approval: the verification state replaces the decision.
 function Outcome({ detail, countryName, statusLine }: { detail: IncidentDetail | null; countryName: string; statusLine?: string }) {

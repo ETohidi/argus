@@ -67,3 +67,43 @@ export function statusSentence(state: WorldState): { text: string; tone: 'ok' | 
   if (explained.length) return { text: explained.length === 1 ? '1 change explained · no alert' : `${explained.length} changes explained · no alert`, tone: 'neutral' }
   return { text: `All ${state.countries.length} markets within forecast`, tone: 'ok' }
 }
+
+// "Fake-account cluster in Canada (Android)" → "Fake accounts in Canada"; "Tracking break in United Kingdom (iOS, …)"
+// → "Tracking break in the United Kingdom".
+export function shortTitle(title: string) {
+  let t = title.replace(/\s*\(.*\)\s*$/, '').replace(/^Fake-account cluster/i, 'Fake accounts')
+  t = t.replace(/ in (United Kingdom|United States|Netherlands|Philippines)\b/, ' in the $1')
+  return t
+}
+
+// The card's two plain lines: what is going on, and why Argus is sure.
+export function cardLines(card: { what_happened: string; why: string } | undefined, fraud: boolean): [string, string] {
+  if (!card) return ['…', '…']
+  let first = card.what_happened.split(/(?<=\.)\s/)[0]
+  const n = card.what_happened.match(/About (\d+) fake accounts/i)
+  if (fraud && n) first = `About ${Math.round(Number(n[1]) / 10) * 10} fake accounts are farming high-paying offers.`
+  const pct = card.why.match(/(\d+)% explained/)
+  const clause = card.why
+    .replace(/\s*\(.*?\)\s*\.?$/, '')
+    .replace(/\s+and they share .*$/i, '')
+    .replace(/^Their stated interests/i, 'their interests')
+  const proven = /proven/i.test(card.why)
+  const body = clause.charAt(0).toLowerCase() + clause.slice(1)
+  const second = `${proven ? 'Proven' : 'Likely'}: ${body}${pct ? ` (${pct[1]}% explained)` : ''}.`
+  return [first, second]
+}
+
+const KPI_PLAIN: Record<string, string> = {
+  new_accounts: 'New sign-ups',
+  active_users: 'Active users',
+  completions: 'Completions',
+  revenue: 'Revenue',
+  rewards: 'Rewards',
+  margin: 'Margin',
+  quality_per_completion: 'Quality per completion',
+}
+export function metricLabel(meta: { kpi: string; unit: string } | undefined) {
+  if (!meta) return ''
+  const name = KPI_PLAIN[meta.kpi] ?? meta.kpi
+  return `${name} ${/usd/i.test(meta.unit) ? '($) ' : ''}per hour`
+}

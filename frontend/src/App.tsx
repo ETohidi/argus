@@ -9,7 +9,7 @@ import ScenarioMenu, { SCENE_LABEL } from './components/ScenarioMenu'
 import TimelineStrip from './components/TimelineStrip'
 import TopBar from './components/TopBar'
 import { api, onBackendChange, type Backend } from './lib/api'
-import { needsDecision, statusSentence } from './lib/incident'
+import { needsDecision, shortTitle, statusSentence } from './lib/incident'
 import { DEMO_SCENES } from './lib/types'
 import type { CountryDetail, DemoScene, IncidentDetail, InjectType, MetricGraph, MetricResponse, PotentialResponse, TimelineEvent, WorldState } from './lib/types'
 
@@ -367,7 +367,7 @@ export default function App() {
       {evidence && card && (
         <EvidenceView
           detail={detail?.id === card.id ? detail : null}
-          title={card.card?.title ?? card.title}
+          title={shortTitle(card.card?.title ?? card.title)}
           initialTab={evidence.tab}
           approving={approving}
           onApprove={approve}
