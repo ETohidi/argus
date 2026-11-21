@@ -17,3 +17,11 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 API contract: [`docs/API.md`](docs/API.md). Jump to a video scene with `POST /api/demo/{scene}`
 (`start`, `promo`, `bot_farm`, `investigate`, `approve`, `verify`, `new_metric`, `tracking_break`).
 Optional LLM (OpenAI-compatible): set `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`; deterministic templates otherwise.
+
+## Run in Docker (frontend + API on one port)
+```bash
+docker build -t argus .
+docker run -p 7860:7860 argus            # open http://localhost:7860
+# optional LLM reports: add -e LLM_BASE_URL=... -e LLM_API_KEY=... -e LLM_MODEL=...
+```
+Port 7860 matches Hugging Face Spaces (Docker SDK). Secrets are never baked into the image.
