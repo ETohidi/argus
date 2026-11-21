@@ -13,6 +13,7 @@ cd backend
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m pytest -q          # unit + end-to-end demo tests
 .venv/bin/uvicorn argus.api:app --reload --port 8000
+./run_demo_server.sh                   # for video recording: port 8000, no --reload
 ```
 API contract: [`docs/API.md`](docs/API.md). Jump to a video scene with `POST /api/demo/{scene}`
 (`start`, `promo`, `bot_farm`, `investigate`, `approve`, `verify`, `new_metric`, `tracking_break`).
