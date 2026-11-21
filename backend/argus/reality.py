@@ -95,7 +95,7 @@ class Reality:
         self.pref /= self.pref.sum(axis=1, keepdims=True)
         # Production feed: taste-aware but clearly payout-heavy (impressions ∝ taste × payout).
         # Simulation assumption, see docs/ASSUMPTIONS.md: this leaves a few % of margin on the table.
-        alloc = self.pref * cfg.PAYOUT ** 1.0
+        alloc = self.pref * cfg.PAYOUT ** 1.1
         self.alloc = alloc / alloc.sum(axis=1, keepdims=True)                # (C,K)
         self.exposure = np.zeros((cfg.C, cfg.K))                             # advertiser fraud exposure (hours)
         self.true: list[dict] = []

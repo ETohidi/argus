@@ -817,9 +817,11 @@ class Agent:
         rows = [self.view.observed[x] for x in range(max(0, t - 23), t + 1)]
         self.potential_alloc = getattr(self, "potential_alloc", {})
         out = []
+        demands = [self.taste.country_demand(self.view.sample_users(c, 0, 150) + self.view.sample_users(c, 1, 150))
+                   for c in range(cfg.C)]
+        global_demand = np.mean(demands, axis=0)
         for c, country in enumerate(cfg.COUNTRIES):
-            users = self.view.sample_users(c, 0, 150) + self.view.sample_users(c, 1, 150)
-            demand = self.taste.country_demand(users)
+            demand = demands[c]
             imp = sum(r["impressions"][c].sum(0) for r in rows)
             st = sum(r["starts"][c].sum(0) for r in rows)
             co = sum(r["completions"][c].sum(0) for r in rows)
@@ -827,9 +829,12 @@ class Agent:
             a_cur = imp / imp.sum()
             s, cr, m = st / np.maximum(imp, 1e-9), co / np.maximum(st, 1e-9), mg / np.maximum(co, 1e-9)
 
-            def margin(a: np.ndarray) -> float:
+            def margin_k(a: np.ndarray) -> np.ndarray:
                 # Assumed taste elasticity: start rate rises with under-served demand (exponent 0.6).
-                return float(imp.sum() * (a * s * (a_cur / a) ** 0.6 * cr * m).sum())
+                return imp.sum() * a * s * (a_cur / a) ** 0.6 * cr * m
+
+            def margin(a: np.ndarray) -> float:
+                return float(margin_k(a).sum())
 
             cur = margin(a_cur)
             best, a_best = cur, a_cur
@@ -839,13 +844,18 @@ class Agent:
                 v = margin(a)
                 if v > best:
                     best, a_best = v, a
-            gain = a_best - a_cur
-            top = [int(k) for k in np.argsort(-gain)[:2] if gain[k] > 0.005]
+            gain = margin_k(a_best) - margin_k(a_cur)        # margin dollars each category adds per day
+            # Top categories: under-served here (the taste-matched feed adds margin) and distinctive for local taste
+            # (demand index vs the global average), so the story differs by region.
+            index = demand / global_demand
+            under = [int(k) for k in np.where(gain > 0)[0]]
+            top = sorted(under, key=lambda k: -index[k])[:2]
             explain = self.taste.explain_signals(top[0]) if top else []
             self.potential_alloc[c] = a_best
             out.append({"iso": country.iso, "potential_usd_day": round(max(best - cur, 0.0), 0),
                         "potential_pct": round(max(best / cur - 1, 0.0) * 100, 1) if cur > 0 else 0.0,
                         "current_margin_usd_day": round(cur, 0),
+                        "demand_index": {cfg.CATEGORIES[k]: round(float(index[k]), 2) for k in range(cfg.K)},
                         "top_categories": [cfg.CATEGORIES[k] for k in top], "explain": explain})
         return out
 

@@ -82,13 +82,21 @@ ARCHETYPE_AFFINITY = np.array([
 A = len(ARCHETYPES)
 
 # Archetype mixture per country (invented, regionally plausible flavour).
+# Archetype mixture per region (invented). Order: puzzle commuter (casual), competitive gamer (strategy),
+# money-minded (fintech), binge watcher (streaming), bargain hunter (shopping), quick earner (surveys).
+# North America / Europe / Oceania lean streaming + fintech; Latin America / Africa / Asia lean casual games +
+# surveys; Japan and South Korea have a strong strategy-games audience. See docs/ASSUMPTIONS.md.
 _REGION_MIX = {
-    "North America": [0.22, 0.20, 0.18, 0.18, 0.12, 0.10],
-    "Latin America": [0.20, 0.18, 0.08, 0.14, 0.12, 0.28],
-    "Europe": [0.24, 0.16, 0.14, 0.18, 0.14, 0.14],
-    "Africa": [0.18, 0.14, 0.10, 0.12, 0.14, 0.32],
-    "Asia": [0.26, 0.22, 0.08, 0.12, 0.10, 0.22],
-    "Oceania": [0.22, 0.18, 0.16, 0.20, 0.12, 0.12],
+    "North America": [0.12, 0.12, 0.26, 0.30, 0.12, 0.08],
+    "Europe": [0.14, 0.10, 0.22, 0.30, 0.14, 0.10],
+    "Oceania": [0.14, 0.12, 0.22, 0.30, 0.14, 0.08],
+    "Latin America": [0.32, 0.08, 0.05, 0.10, 0.10, 0.35],
+    "Africa": [0.28, 0.06, 0.06, 0.10, 0.10, 0.40],
+    "Asia": [0.32, 0.14, 0.05, 0.08, 0.08, 0.33],
+}
+_COUNTRY_MIX = {
+    "JP": [0.20, 0.42, 0.06, 0.14, 0.08, 0.10],
+    "KR": [0.18, 0.46, 0.06, 0.12, 0.08, 0.10],
 }
 
 
@@ -96,7 +104,7 @@ def country_archetype_mix() -> np.ndarray:
     rng = np.random.default_rng(7)
     mix = np.zeros((C, A))
     for i, c in enumerate(COUNTRIES):
-        base = np.array(_REGION_MIX[c.region])
+        base = np.array(_COUNTRY_MIX.get(c.iso, _REGION_MIX[c.region]))
         mix[i] = base * rng.uniform(0.8, 1.2, A)
         mix[i] /= mix[i].sum()
     return mix

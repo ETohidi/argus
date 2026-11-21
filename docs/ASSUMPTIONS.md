@@ -4,22 +4,37 @@ Argus runs against a simulated marketplace (`backend/argus/reality.py`). All num
 rewarded user-acquisition business; none are Almedia data. The assumptions that shape what the demo shows:
 
 ## Marketplace
-- 20 countries, 2 platforms, 6 advertiser categories; ~$1.51M advertiser revenue and ~43% contribution margin per day.
+- 20 countries, 2 platforms, 6 advertiser categories; ~$1.53M advertiser revenue and ~43% contribution margin per day.
 - Users get 55% of the advertiser payout as reward; advertisers confirm 97% of completions.
 - Hourly noise: lognormal 3% plus Poisson-like counting noise on impressions, starts and completions; 6% on sign-ups.
 - **Offer mix:** payout per completion varies by offer within a category (lognormal σ = 0.06 per segment-hour), and the
   share of completions advertisers confirm wobbles (σ = 0.015). Revenue and rewards per completion are therefore never
   exactly constant, so counterfactual explanations land below 100%.
 
+## Regional taste
+- Six taste archetypes (puzzle commuter, competitive gamer, money-minded, binge watcher, bargain hunter, quick earner)
+  map to the six advertiser categories. Each region has its own archetype mix (`config._REGION_MIX`), ±20% per country:
+  - North America, Europe, Oceania lean **streaming + fintech** (binge watchers ~30%, money-minded ~22–26%);
+  - Latin America, Africa, Asia lean **casual games + surveys** (puzzle commuters ~30%, quick earners ~33–40%);
+  - Japan and South Korea have a strong **strategy-games** audience (competitive gamers 42–46%).
+- Users reveal their archetype only through 12 onboarding life signals; the taste model (ridge regression trained on a
+  separate synthetic population) turns signals into category affinity. Its predictions are flatter than the truth
+  (shrinkage), but keep the regional ordering: e.g. strategy-games demand index 1.4–1.5 in JP/KR.
+
 ## Production feed (Potential mode)
-- **The simulated production feed is payout-heavy:** offer impressions per category ∝ local taste × payout
-  (`alloc ∝ pref · payout^1.0`). This is a modelling choice for the demo, not a claim about Freecash's real feed.
+- **The simulated production feed is payout-heavy:** offer impressions per category ∝ local taste × payout^1.1
+  (`alloc ∝ pref · payout^1.1`). This is a modelling choice for the demo, not a claim about Freecash's real feed.
 - Start rate responds to taste fit: `start_rate ∝ (taste share / feed share)^0.6`, clipped to [0.4, 2.0].
-- Argus's twin does not know the true taste shares. It estimates local demand from the taste model applied to sampled
-  users' life signals, and assumes the same elasticity (0.6) without the clipping. It searches feeds that blend the
-  current allocation with that demand and reports the best one as `potential_usd_day` / `potential_pct`.
-- Validation (seed 42): the twin shows **+2.0–2.9%** margin per country; re-running the simulator with the twin's
-  proposed feed yields **+4.7–6.0%**. The twin is conservative because it does not know about the clipping.
+- Argus's twin does not know the true taste shares. It estimates local demand from the taste model applied to 300
+  sampled users per country, assumes the same elasticity (0.6) without the clipping, and searches feeds that blend the
+  current allocation with that demand. The best one gives `potential_usd_day` / `potential_pct`.
+- `top_categories`: categories the taste-matched feed would grow (positive margin gain), ranked by how distinctive local
+  demand is (`demand_index` = local / global demand). Result: streaming in North America, Western Europe and Australia;
+  surveys and shopping cashback in Latin America, Africa and South-East Asia; streaming and casual games in Japan and
+  Korea (strategy games are already over-served there by the payout-heavy feed, despite the highest demand index).
+- Validation (seed 42): the twin shows **+2.3–3.4%** margin per country; re-running the simulator with the twin's
+  proposed feed yields **+5.6–8.2%**. The twin is conservative because it does not know about the clipping and its
+  taste model is flatter than the truth.
 
 ## Incidents
 - **Bot farm:** ramps to 320 accounts over 10 h; bots are always online, complete fintech and strategy-game offers,

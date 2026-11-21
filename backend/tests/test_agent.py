@@ -102,3 +102,12 @@ def test_state_exposes_impact_and_risk(world):
     world._step_until_incident("GB", 10)
     s = world.agent.state()["incidents"][0]
     assert {"impact_usd_h", "risk_7d_usd", "reaction_h", "severity"} <= set(s)
+
+
+def test_potential_story_differs_by_region(world):
+    pot = {p["iso"]: p for p in world.agent.potential}
+    firsts = {p["top_categories"][0] for p in pot.values()}
+    assert len(firsts) >= 2
+    assert pot["US"]["top_categories"][0] != pot["BR"]["top_categories"][0]
+    assert pot["KR"]["demand_index"]["Strategy games"] > 1.3        # strong strategy-games audience
+    assert pot["BR"]["demand_index"]["Surveys"] > pot["DE"]["demand_index"]["Surveys"]

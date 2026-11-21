@@ -91,8 +91,10 @@ L2 heatmap.
 
 ### `GET /api/potential`
 ```jsonc
-{ "countries": [ { "iso": "DE", "potential_usd_day": 1127.0, "potential_pct": 2.4, "current_margin_usd_day": 46900.0,
-                   "top_categories": ["Surveys", "Shopping cashback"], "explain": ["uses coupons", "parent", "has a side hustle"] } ] }
+{ "countries": [ { "iso": "DE", "potential_usd_day": 1432.0, "potential_pct": 3.0, "current_margin_usd_day": 48441.0,
+                   "top_categories": ["Streaming apps", "Shopping cashback"],      // under-served AND locally distinctive
+                   "explain": ["watches series weekly", "night owl", "parent"],    // life signals behind the top category
+                   "demand_index": { "Casual games": 1.02, "Strategy games": 0.92, "...": 1.0 } } ] }  // local / global demand
 ```
 
 ## Write endpoints
