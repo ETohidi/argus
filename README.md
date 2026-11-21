@@ -70,6 +70,7 @@ business works; the twin learns its parameters from 14 days of observed data. Co
 | **Agent trace** | Every investigation records its steps (L1 → L2 → L3 → hypotheses → fixes → approval → verification) | incident `trail`, `GET /api/timeline` |
 | **Grounded generation** | The LLM only rewrites tool results: it receives the facts as JSON, and every number in its output is checked against them; any unmatched number → deterministic template instead | `llm.py`, `agent.py` `Agent._llm_reports`, `ungrounded_numbers` |
 | **Evaluation harness** | Seeds × injected faults (promo, bot farm, tracking break, data delay); detection latency, explained share, recommended fix, verification, false alarms in clean weeks | `argus/evaluate.py` (`python -m argus.evaluate`), `tests/test_e2e.py` |
+| **Tool interface for other agents (MCP)** | The twin's state, explanations, fix rollouts and sandboxed what-ifs as Model Context Protocol tools (stdio, JSON-RPC) | `argus/mcp_server.py` (`python -m argus.mcp_server`) |
 | **Taste coherence as a behavioural-consistency anomaly signal** | Real people's completions match the tastes their life signals predict; fake accounts don't. Low coherence + payout focus + shared devices form the fraud cluster | `taste.py` `TasteModel.score_users` |
 
 Latest harness run (seeds 42, 1–8): bot farm detected 9/9 in 3–4 h, 88–99% explained, all predictions verified;
@@ -121,6 +122,41 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 API contract: [`docs/API.md`](docs/API.md). Jump to a video scene with `POST /api/demo/{scene}`
 (`start`, `promo`, `bot_farm`, `investigate`, `approve`, `verify`, `new_metric`, `tracking_break`).
 Optional LLM (OpenAI-compatible): set `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`; deterministic templates otherwise.
+
+## Use the twin from other agents (MCP)
+
+Argus also runs as a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio, so any MCP client
+(Claude Desktop, Claude Code, other agents) can query and stress-test the twin. No extra dependency: the server is
+plain JSON-RPC on the standard library.
+
+```bash
+cd backend && .venv/bin/python -m argus.mcp_server      # stdio; logs on stderr
+```
+
+| Tool | What it does |
+|---|---|
+| `get_world_state` | Clock, countries that are not healthy, open incidents with issue cards, explained changes |
+| `explain_incident(id)` | Root cause, counterfactual proof, decision trail, hypotheses, fixes, engineer report |
+| `simulate_fix(id, fix)` | 7-day Monte Carlo rollout of one fix vs doing nothing (read-only) |
+| `what_if(country, change, platform?, hours?)` | Sandbox copy of the world: inject `promo` / `bot_farm` / `tracking_break` / `data_delay`, run it forward, report what Argus detects and the margin difference |
+| `advance_time(hours)`, `run_demo_scene(scene)` | Drive the simulation |
+
+Approving fixes is deliberately not exposed: changing the marketplace stays a human decision in the UI.
+
+Claude Desktop (`claude_desktop_config.json`), with your own path:
+```json
+{
+  "mcpServers": {
+    "argus": {
+      "command": "/path/to/argus/backend/.venv/bin/python",
+      "args": ["-m", "argus.mcp_server"],
+      "env": { "PYTHONPATH": "/path/to/argus/backend", "ARGUS_MCP_SCENE": "bot_farm" }
+    }
+  }
+}
+```
+`ARGUS_MCP_SCENE` is optional (start from a demo scene); `ARGUS_SEED` picks the world. Claude Code:
+`claude mcp add argus -e PYTHONPATH=/path/to/argus/backend -- /path/to/argus/backend/.venv/bin/python -m argus.mcp_server`.
 
 ## Run in Docker (frontend + API on one port)
 ```bash
