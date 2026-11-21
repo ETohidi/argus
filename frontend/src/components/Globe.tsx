@@ -11,12 +11,26 @@ import type { CountryState, CountryStatus } from '../lib/types'
 
 export type GlobeMode = 'health' | 'potential'
 
+// "What if we launch in …?": a country Argus does not watch yet. It starts dark, then fades to its predicted colour
+// while soft violet arcs travel in from the countries the prediction learned from.
+export type LaunchView = {
+  name: string // world-atlas name, used when the country is not one of the watched ones
+  iso?: string
+  lng: number
+  lat: number
+  zoom?: number
+  color: string
+  sources: [number, number][]
+  revealed: boolean
+}
+
 type Props = {
   countries: CountryState[]
   mode: GlobeMode
   selectedIso: string | null
   insetRight?: number // px covered by the right-hand card; the globe centres in the remaining space
   utcHour?: number // drives the day/night shading
+  launch?: LaunchView | null
   onSelect: (iso: string | null) => void
 }
 
@@ -64,10 +78,46 @@ function opacityExpr(countries: CountryState[], pulse: number): unknown {
 
 // Only issues get a marker; explained / waiting markets are already told apart by their fill.
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
+const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
+// Great-circle path between two points (lng/lat), with continuous longitudes.
+function arc(a: [number, number], b: [number, number], n = 64): [number, number][] {
+  const r = Math.PI / 180
+  const v = ([lng, lat]: [number, number]) => [Math.cos(lat * r) * Math.cos(lng * r), Math.cos(lat * r) * Math.sin(lng * r), Math.sin(lat * r)]
+  const p = v(a), q = v(b)
+  const w = Math.acos(Math.min(1, Math.max(-1, p[0] * q[0] + p[1] * q[1] + p[2] * q[2])))
+  const out: [number, number][] = []
+  for (let i = 0; i <= n; i++) {
+    const t = i / n
+    const s1 = w ? Math.sin((1 - t) * w) / Math.sin(w) : 1 - t
+    const s2 = w ? Math.sin(t * w) / Math.sin(w) : t
+    const x = s1 * p[0] + s2 * q[0], y = s1 * p[1] + s2 * q[1], z = s1 * p[2] + s2 * q[2]
+    let lng = Math.atan2(y, x) / r
+    const lat = Math.atan2(z, Math.hypot(x, y)) / r
+    if (out.length) {
+      const prev = out[out.length - 1][0]
+      while (lng - prev > 180) lng -= 360
+      while (lng - prev < -180) lng += 360
+    }
+    out.push([lng, lat])
+  }
+  return out
+}
+
+// A bright head travelling along each arc toward the new country, with a soft tail over a faint trail: a shimmer.
+function shimmer(head: number, fade: number): any {
+  const stops: (number | string)[] = []
+  for (let i = 0; i <= 24; i++) {
+    const p = i / 24
+    const a = p <= head ? Math.max(0, 1 - (head - p) / 0.5) : Math.max(0, 1 - (p - head) / 0.05)
+    stops.push(p, `rgba(176, 164, 255, ${Math.min(1, (0.16 + 0.84 * a) * fade).toFixed(3)})`)
+  }
+  return ['interpolate', ['linear'], ['line-progress'], ...stops]
+}
 
 const MARKER_STATUSES: CountryStatus[] = ['incident', 'watch']
 
-export default function Globe({ countries, mode, selectedIso, insetRight = 0, utcHour, onSelect }: Props) {
+export default function Globe({ countries, mode, selectedIso, insetRight = 0, utcHour, launch = null, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const loadedRef = useRef(false)
@@ -78,6 +128,8 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
   const onSelectRef = useRef(onSelect)
   const hourRef = useRef(utcHour ?? 12)
   const earthRef = useRef<EarthImagery | null>(null)
+  const launchRef = useRef(launch)
+  launchRef.current = launch
   countriesRef.current = countries
   modeRef.current = mode
   selectedRef.current = selectedIso
@@ -110,12 +162,12 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
     const spin = (now: number) => {
       const dt = Math.min(now - prev, 100)
       prev = now
-      if (!selectedRef.current && now - lastInteraction > 12_000 && !map.isMoving()) {
+      if (!selectedRef.current && !launchRef.current && now - lastInteraction > 12_000 && !map.isMoving()) {
         const c = map.getCenter()
         map.jumpTo({ center: [c.lng + dt * 0.0035, c.lat] })
       }
       // Pulse the affected country (≈15 fps is plenty for a slow breathe).
-      if (loadedRef.current && now - lastPulse > 66 && countriesRef.current.some((c) => c.status === 'incident') && modeRef.current === 'health') {
+      if (loadedRef.current && now - lastPulse > 66 && countriesRef.current.some((c) => c.status === 'incident') && modeRef.current === 'health' && !launchRef.current) {
         lastPulse = now
         map.setPaintProperty('watched', 'fill-opacity', opacityExpr(countriesRef.current, 0.7 + 0.25 * Math.sin(now / 420)) as any)
       }
@@ -203,6 +255,29 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
           map.setLayoutProperty('night', 'visibility', 'none') // night is part of the blended texture now
         })
         .catch(() => {}) // keep the flat look if the images can't load
+      // What-if launch: the new country (dark, then its predicted colour) and the learning arcs.
+      map.addLayer({
+        id: 'launch-fill',
+        type: 'fill',
+        source: 'world',
+        filter: ['==', ['get', 'name'], '__none__'],
+        paint: { 'fill-color': AURORA.bg, 'fill-opacity': 0, 'fill-color-transition': { duration: 1400 } as any, 'fill-opacity-transition': { duration: 1400 } as any },
+      })
+      map.addLayer({
+        id: 'launch-outline',
+        type: 'line',
+        source: 'world',
+        filter: ['==', ['get', 'name'], '__none__'],
+        paint: { 'line-color': AURORA.fg2, 'line-opacity': 0.6, 'line-width': 1, 'line-dasharray': [2, 2] },
+      })
+      map.addSource('launch-arcs', { type: 'geojson', lineMetrics: true, data: { type: 'FeatureCollection', features: [] } })
+      map.addLayer({
+        id: 'launch-arcs',
+        type: 'line',
+        source: 'launch-arcs',
+        layout: { 'line-cap': 'round' },
+        paint: { 'line-width': 4, 'line-blur': 1.5, 'line-gradient': shimmer(0, 0) },
+      })
       map.addLayer({
         id: 'hover-outline',
         type: 'line',
@@ -280,7 +355,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
     const map = mapRef.current
     if (!map || !loadedRef.current) return
     map.setPaintProperty('watched', 'fill-color', matchExpr(fillColors(countriesRef.current, modeRef.current), BASE_LAND))
-    map.setPaintProperty('watched', 'fill-opacity', (modeRef.current === 'health' ? opacityExpr(countriesRef.current, 0.95) : 0.85) as any)
+    map.setPaintProperty('watched', 'fill-opacity', launchRef.current ? 0.15 : ((modeRef.current === 'health' ? opacityExpr(countriesRef.current, 0.95) : 0.85) as any))
     syncMarkers()
   }
 
@@ -340,6 +415,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
     if (!map) return
     const run = () => {
       map.setFilter('selected-outline', ['==', ['get', 'iso'], selectedIso ?? '__none__'])
+      if (launchRef.current) return
       const padding = { top: 0, bottom: 0, left: 0, right: insetRight }
       const c = countriesRef.current.find((x) => x.iso === selectedIso)
       if (c)
@@ -357,6 +433,61 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
     if (loadedRef.current) run()
     else map.once('load', run)
   }, [selectedIso, insetRight])
+
+  // What-if launch: fly to the country (dark), then reveal its colour with the learning arcs; closing flies home.
+  const launchKey = launch ? `${launch.name}|${launch.revealed}` : ''
+  const prevLaunch = useRef('')
+  useEffect(() => {
+    const map = mapRef.current
+    const was = prevLaunch.current
+    prevLaunch.current = launchKey
+    if (!map || (!launchKey && !was)) return
+    let raf = 0
+    const run = () => {
+      const filter: any = launch ? (launch.iso ? ['any', ['==', ['get', 'name'], launch.name], ['==', ['get', 'iso'], launch.iso]] : ['==', ['get', 'name'], launch.name]) : ['==', ['get', 'name'], '__none__']
+      map.setFilter('launch-fill', filter)
+      map.setFilter('launch-outline', filter)
+      const arcs = map.getSource('launch-arcs') as GeoJSONSource
+      // Reduced motion: the camera jumps instead of flying; the country only fades.
+      const move = (o: maplibregl.FlyToOptions) => (reducedMotion() ? map.jumpTo({ center: o.center, zoom: o.zoom, padding: o.padding as maplibregl.PaddingOptions }) : map.flyTo(o))
+      if (!launch) {
+        map.setPaintProperty('launch-fill', 'fill-opacity', 0)
+        arcs.setData({ type: 'FeatureCollection', features: [] })
+        map.setPaintProperty('watched', 'fill-opacity', (modeRef.current === 'health' ? opacityExpr(countriesRef.current, 0.95) : 0.85) as any)
+        move({ center: [map.getCenter().lng, HOME_VIEW.center[1]], zoom: HOME_VIEW.zoom, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: 1600, easing: easeOutCubic, essential: true })
+        return
+      }
+      if (!launch.revealed) {
+        // Unwatched: dark, outlined, everything else dimmed; fly there.
+        map.setPaintProperty('launch-fill', 'fill-color', AURORA.bg)
+        map.setPaintProperty('launch-fill', 'fill-opacity', 0.75)
+        map.setPaintProperty('launch-outline', 'line-opacity', 0.6)
+        map.setPaintProperty('watched', 'fill-opacity', 0.15)
+        move({ center: [launch.lng, launch.lat - 4], zoom: launch.zoom ?? 2.7, padding: { top: 0, bottom: 0, left: 0, right: insetRight }, duration: 1800, curve: 1.3, easing: easeOutCubic, essential: true })
+        return
+      }
+      map.setPaintProperty('launch-fill', 'fill-color', launch.color)
+      map.setPaintProperty('launch-fill', 'fill-opacity', 0.85)
+      map.setPaintProperty('launch-outline', 'line-opacity', 0)
+      move({ center: [launch.lng, launch.lat - 4], zoom: launch.zoom ?? 2.7, padding: { top: 0, bottom: 0, left: 0, right: insetRight }, duration: 900, easing: easeOutCubic, essential: true })
+      if (reducedMotion() || !launch.sources.length) return
+      const to: [number, number] = [launch.lng, launch.lat]
+      arcs.setData({ type: 'FeatureCollection', features: launch.sources.map((s) => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: arc(s, to) } })) })
+      const t0 = performance.now()
+      const step = (now: number) => {
+        const t = (now - t0) / 1600
+        if (t >= 1) return map.setPaintProperty('launch-arcs', 'line-gradient', shimmer(0, 0))
+        const fade = Math.min(1, t / 0.12, (1 - t) / 0.3)
+        map.setPaintProperty('launch-arcs', 'line-gradient', shimmer(-0.05 + t * 1.3, fade))
+        raf = requestAnimationFrame(step)
+      }
+      raf = requestAnimationFrame(step)
+    }
+    if (loadedRef.current) run()
+    else map.once('load', run)
+    return () => cancelAnimationFrame(raf)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [launchKey])
 
   // maplibre-gl.css forces position: relative on the container, so size it from a wrapper.
   return (

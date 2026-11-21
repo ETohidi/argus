@@ -236,3 +236,23 @@ export const DEMO_SCENES = [
   'tracking_break',
 ] as const
 export type DemoScene = (typeof DEMO_SCENES)[number]
+
+// POST /api/what_if/launch: read-only forecast for entering a new country (docs/API.md "Enter a new country").
+type Range = { p10: number; p50: number; p90: number }
+export interface LaunchForecast {
+  country: { iso: string; name: string; region: string; lat: number; lng: number }
+  horizon_days: number
+  margin_per_1000_users_day_usd?: Range // the per-user prediction (headline)
+  users?: { daily_users: number; assumed: boolean; source: string }
+  margin_per_day_usd: Range // total at that user count
+  best_offer_mix: { category: string; margin_share: number; taste: number }[]
+  best_reward: { reward_share: number; current_share: number; uplift_per_1000_users_day_usd?: number }
+  fraud_risk: { level: 'low' | 'medium' | 'high'; farm_chance_4w: number; expected_loss_usd_4w: number; text: string }
+  learned_from: { iso: string; name: string; weight: number }[]
+  backtest: { n: number; margin_per_user?: { text: string }; offers?: { text: string }; reward?: { text: string } }
+  headline: string
+  range_line: string
+  total_line?: string
+  learned_line: string
+  backtest_line: string
+}

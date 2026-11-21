@@ -1,19 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import CountrySheet from './components/CountrySheet'
 import EvidenceView, { type EvidenceTab } from './components/EvidenceView'
-import Globe, { type GlobeMode } from './components/Globe'
+import Globe, { type GlobeMode, type LaunchView } from './components/Globe'
 import IssueCard from './components/IssueCard'
 import MetricGraphPanel from './components/MetricGraphPanel'
 import ScenarioMenu, { SCENE_LABEL } from './components/ScenarioMenu'
 import TimelineStrip from './components/TimelineStrip'
 import TopBar from './components/TopBar'
+import WhatIfCard from './components/WhatIfCard'
+import { potentialColor } from './lib/theme'
 import { api, onBackendChange, type Backend } from './lib/api'
 import { eventName, needsDecision, shortTitle, statusSentence } from './lib/incident'
 import { toOutcome, type MetricOutcome } from './lib/metrics'
 import { DEMO_SCENES } from './lib/types'
-import type { CountryDetail, DemoScene, IncidentDetail, InjectType, MetricGraph, PotentialResponse, TimelineEvent, WorldState } from './lib/types'
+import type { LaunchForecast, CountryDetail, DemoScene, IncidentDetail, InjectType, MetricGraph, PotentialResponse, TimelineEvent, WorldState } from './lib/types'
 
 // Default targets for the inject actions (the demo script), overridden by the selected country.
+// The one market the what-if can launch (POST /api/what_if/launch); its place on the globe before the forecast arrives.
+const LAUNCH = { iso: 'AR', name: 'Argentina', lng: -63.6, lat: -38.4 }
+
 const INJECT_DEFAULT: Record<InjectType, { country: string; platform?: string }> = {
   promo: { country: 'DE' },
   bot_farm: { country: 'CA', platform: 'android' },
@@ -44,6 +49,9 @@ export default function App() {
   const [countryDetail, setCountryDetail] = useState<CountryDetail | null>(null)
   const [potential, setPotential] = useState<PotentialResponse | null>(null)
   const [timeline, setTimeline] = useState<TimelineEvent[]>([])
+  // What-if launch: 'flying' (dark country, eye investigating) → 'shown' (colour, arcs, card). Read-only.
+  const [launch, setLaunch] = useState<{ phase: 'flying' | 'shown'; forecast: LaunchForecast | null } | null>(null)
+  const launchRun = useRef(0)
 
   const busyRef = useRef(false)
   const backendRef = useRef<Backend>('unknown')
@@ -191,6 +199,8 @@ export default function App() {
   // Each demo scene leaves the screen on the view that tells its part of the story.
   const demo = (scene: DemoScene) =>
     run(async () => {
+      launchRun.current++
+      setLaunch(null)
       if (scene === 'start') expectReset.current = true
       const r = await api.demo(scene)
       applyState(r.state)
@@ -263,10 +273,31 @@ export default function App() {
   }
 
   // Keyboard: 1–8 demo scenes, Space play / pause, E evidence, Esc closes the top layer.
+  async function whatIfLaunch() {
+    const run = ++launchRun.current
+    setCountryIso(null)
+    setCardId(null)
+    setEvidence(null)
+    setGraphView(null)
+    setLaunch({ phase: 'flying', forecast: null })
+    try {
+      const [f] = await Promise.all([api.whatIfLaunch(LAUNCH.iso), new Promise((r) => window.setTimeout(r, 2000))])
+      if (run === launchRun.current) setLaunch({ phase: 'shown', forecast: f })
+    } catch (e) {
+      if (run !== launchRun.current) return
+      setLaunch(null)
+      flash(backend === 'live' ? `The launch forecast failed: ${(e as Error).message}` : 'The launch forecast needs the live simulation.')
+    }
+  }
+  const closeLaunch = () => {
+    launchRun.current++
+    setLaunch(null)
+  }
+
   const keys = useRef({ demo, closeTop: () => {}, openEvidence: () => {} })
   keys.current = {
     demo,
-    closeTop: () => (evidence ? setEvidence(null) : graphView ? setGraphView(null) : countryIso ? setCountryIso(null) : cardId ? closeCard() : undefined),
+    closeTop: () => (launch ? closeLaunch() : evidence ? setEvidence(null) : graphView ? setGraphView(null) : countryIso ? setCountryIso(null) : cardId ? closeCard() : undefined),
     openEvidence: () => cardId && setEvidence({ tab: 'graph' }),
   }
   useEffect(() => {
@@ -292,18 +323,35 @@ export default function App() {
   const country = state?.countries.find((c) => c.iso === countryIso) ?? null
   const cardCountry = state?.countries.find((c) => c.iso === card?.country)
   const focusIso = countryIso ?? card?.country ?? null
-  const sideOpen = !!(country || card)
+  const sideOpen = !!(country || card || launch?.phase === 'shown')
+  const status = state ? statusSentence(state) : { text: 'Connecting…', tone: 'neutral' as const, mood: 'calm' as const }
+  const lf = launch?.forecast
+  const launchView: LaunchView | null = launch && state
+    ? {
+        name: lf?.country.name ?? LAUNCH.name,
+        iso: lf?.country.iso ?? LAUNCH.iso,
+        lng: lf?.country.lng ?? LAUNCH.lng,
+        lat: lf?.country.lat ?? LAUNCH.lat,
+        zoom: 2.4,
+        // Predicted colour on the Opportunities scale: where its daily margin would rank among the watched countries.
+        color: potentialColor(lf ? Math.max(0.45, state.countries.filter((c) => c.kpis.margin * 24 < lf.margin_per_day_usd.p50).length / state.countries.length) : 0.5),
+        sources: (lf?.learned_from ?? []).map((s) => state.countries.find((c) => c.iso === s.iso)).filter(Boolean).map((c) => [c!.lng, c!.lat] as [number, number]),
+        revealed: launch.phase === 'shown',
+      }
+    : null
   const explained = state?.explained[0]
 
   return (
     <div className="relative h-full overflow-hidden bg-bg">
-      {state && <Globe countries={state.countries} mode={mode} selectedIso={focusIso} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
+      {state && <Globe countries={state.countries} mode={mode} selectedIso={launch ? null : focusIso} launch={launchView} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
 
-      <TopBar clock={state ? shortClock(state.clock) : 'Connecting…'} status={state ? statusSentence(state) : { text: 'Connecting…', tone: 'neutral', mood: 'calm' }} mode={mode} onMode={setMode} />
+      <TopBar clock={state ? shortClock(state.clock) : 'Connecting…'} status={launch?.phase === 'flying' ? { ...status, mood: 'investigating' } : status} mode={mode} onMode={setMode} />
 
       {/* Right column: an explained change as a quiet note, then the issue card or the country sheet. */}
       <div className="pointer-events-none absolute bottom-8 right-8 top-24 z-20 flex flex-col items-end gap-4 overflow-y-auto">
-        {explained && !country && !card && (
+        {launch?.phase === 'shown' && lf ? (
+          <WhatIfCard f={lf} onClose={closeLaunch} />
+        ) : launch ? null : explained && !country && !card && (
           <div className="fade-in pointer-events-auto max-w-[420px] text-right text-[13px] leading-relaxed text-fg-2">
             <span className="mr-2 inline-block h-2 w-2 rounded-full bg-fg-2" />
             {state?.countries.find((c) => c.iso === explained.country)?.name ?? explained.country}: {eventName(explained.event)}, as planned
@@ -355,6 +403,8 @@ export default function App() {
         onDemo={demo}
         onInject={inject}
         onAddMetric={openMetricGraph}
+        launchName={LAUNCH.name}
+        onLaunch={whatIfLaunch}
       />
 
       <div className="pointer-events-none absolute bottom-1.5 right-8 z-10 text-[13px] text-fg-2">Earth imagery: NASA Visible Earth</div>

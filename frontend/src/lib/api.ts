@@ -14,6 +14,7 @@ import type {
   PotentialResponse,
   TimelineEvent,
   WorldState,
+  LaunchForecast,
 } from './types'
 
 export type Backend = 'live' | 'mock' | 'unknown'
@@ -90,6 +91,7 @@ export const api = {
   country: (iso: string) => request<CountryDetail>('GET', `/country/${iso}`),
   potential: () => request<PotentialResponse>('GET', '/potential'),
   graph: () => request<MetricGraph>('GET', '/graph'),
+  whatIfLaunch: (country = 'AR') => request<LaunchForecast>('POST', '/what_if/launch', { country }),
   graphTree: () => request<{ roots: string[]; rows: GraphTreeRow[] }>('GET', '/graph/tree'),
   timeline: () => request<{ events: TimelineEvent[] }>('GET', '/timeline'),
   step: (hours: number) => request<WorldState>('POST', '/step', { hours }),

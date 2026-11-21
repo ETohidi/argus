@@ -32,6 +32,8 @@ type Props = {
   onDemo: (s: DemoScene) => void
   onInject: (t: InjectType) => void
   onAddMetric: () => void
+  launchName: string
+  onLaunch: () => void
 }
 
 // Every operator control lives behind one quiet button, so the recorded screen stays clean.
@@ -90,8 +92,11 @@ export default function ScenarioMenu(p: Props) {
               ))}
             </div>
           </Group>
-          <Group title="Metrics" last>
+          <Group title="Metrics">
             <Btn onClick={act(p.onAddMetric)}>How the numbers connect…</Btn>
+          </Group>
+          <Group title="New market" last>
+            <Btn onClick={act(p.onLaunch)} disabled={p.busy}>What if we launch in {p.launchName}?</Btn>
           </Group>
           <div className="mt-4 border-t border-line pt-3 text-fg-2">
             {p.backend === 'live' ? 'Live simulation' : p.backend === 'mock' ? 'Sample data (simulation unreachable)' : 'Connecting…'}
