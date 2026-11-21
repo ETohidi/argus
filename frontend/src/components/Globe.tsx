@@ -3,7 +3,7 @@ import maplibregl, { type Map as MapLibreMap } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { buildWorldGeoJson } from '../lib/countryGeometry'
 import { geometryContains, isOnGlobe } from '../lib/globeHit'
-import { STATUS_COLOR, STATUS_LABEL, potentialColor, usd } from '../lib/theme'
+import { AURORA, STATUS_COLOR, STATUS_LABEL, potentialColor, usd } from '../lib/theme'
 import type { CountryState, CountryStatus } from '../lib/types'
 
 export type GlobeMode = 'health' | 'potential'
@@ -16,14 +16,14 @@ type Props = {
   onSelect: (iso: string | null) => void
 }
 
-const BASE_LAND = '#152030'
+const BASE_LAND = AURORA.land
 const HOME_VIEW = { center: [-30, 28] as [number, number], zoom: 1.95 }
 
 const STYLE: maplibregl.StyleSpecification = {
   version: 8,
   projection: { type: 'globe' },
   sources: {},
-  layers: [{ id: 'ocean', type: 'background', paint: { 'background-color': '#081321' } }],
+  layers: [{ id: 'ocean', type: 'background', paint: { 'background-color': AURORA.oceanOut } }],
 }
 
 function fillColors(countries: CountryState[], mode: GlobeMode): Record<string, string> {
@@ -94,11 +94,11 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, on
 
     map.on('load', () => {
       map.setSky({
-        'sky-color': '#02040a',
-        'horizon-color': '#0c1a2a',
-        'fog-color': '#081321',
+        'sky-color': AURORA.bg,
+        'horizon-color': '#2B2470',
+        'fog-color': AURORA.oceanIn,
         'fog-ground-blend': 0.6,
-        'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 0.45, 4, 0.2],
+        'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 0.8, 4, 0.35], // violet glow around the globe
       } as any)
       map.addSource('world', { type: 'geojson', data: world as any })
       map.addLayer({
@@ -118,28 +118,28 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, on
         id: 'borders',
         type: 'line',
         source: 'world',
-        paint: { 'line-color': '#0a1220', 'line-width': 0.6 },
+        paint: { 'line-color': AURORA.border, 'line-width': 0.5 },
       })
       map.addLayer({
         id: 'watched-outline',
         type: 'line',
         source: 'world',
         filter: ['!=', ['get', 'iso'], ''],
-        paint: { 'line-color': '#e2e8f0', 'line-opacity': 0.25, 'line-width': 0.8 },
+        paint: { 'line-color': AURORA.fg2, 'line-opacity': 0.25, 'line-width': 0.5 },
       })
       map.addLayer({
         id: 'hover-outline',
         type: 'line',
         source: 'world',
         filter: ['==', ['get', 'iso'], '__none__'],
-        paint: { 'line-color': '#e2e8f0', 'line-opacity': 0.7, 'line-width': 1.4 },
+        paint: { 'line-color': AURORA.fg, 'line-opacity': 0.7, 'line-width': 1.2 },
       })
       map.addLayer({
         id: 'selected-outline',
         type: 'line',
         source: 'world',
         filter: ['==', ['get', 'iso'], '__none__'],
-        paint: { 'line-color': '#ffffff', 'line-width': 2.2, 'line-blur': 0.5 },
+        paint: { 'line-color': AURORA.fg, 'line-width': 1.6 },
       })
       loadedRef.current = true
       paint()

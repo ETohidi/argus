@@ -22,27 +22,27 @@ export default function ShapleyBars({ items }: { items: { mechanism: string; val
         const neg = it.value_usd < 0
         return (
           <div key={it.mechanism} className="grid grid-cols-[150px_1fr_80px] items-center gap-3 text-[13px]">
-            <span className="truncate text-slate-300">{NAMES[it.mechanism] ?? it.mechanism}</span>
+            <span className="truncate text-fg">{NAMES[it.mechanism] ?? it.mechanism}</span>
             <div className="relative h-3.5">
-              <div className="absolute inset-y-0 left-1/2 w-px bg-slate-600" />
+              <div className="absolute inset-y-0 left-1/2 w-px bg-fg-2" />
               <div
                 className="grow-x absolute inset-y-0.5 rounded-sm"
                 style={{
                   left: neg ? `${50 - w}%` : '50%',
                   width: `${Math.max(w, 0.4)}%`,
-                  background: neg ? '#f97316' : '#2dd4bf',
+                  background: neg ? '#FF4D8D' : '#3CF2C4',
                   transformOrigin: neg ? 'right' : 'left',
                   animationDelay: `${i * 60}ms`,
                 }}
               />
             </div>
-            <span className={`num text-right ${neg ? 'text-orange-300' : 'text-teal-300'}`}>{usd(it.value_usd)}/h</span>
+            <span className={`num text-right ${neg ? 'text-problem' : 'text-ok'}`}>{usd(it.value_usd)}/h</span>
           </div>
         )
       })}
-      <div className="mt-3 flex justify-between border-t border-slate-800 pt-3 text-[13px] text-slate-500">
+      <div className="mt-3 flex justify-between border-t border-line pt-3 text-[13px] text-fg-2">
         <span>Exact Shapley values over 8 mechanisms; they add up to the margin change</span>
-        <span className="num font-semibold text-slate-200">Σ {usd(total)}/h</span>
+        <span className="num font-semibold text-fg">Σ {usd(total)}/h</span>
       </div>
     </div>
   )

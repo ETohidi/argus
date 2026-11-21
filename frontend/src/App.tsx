@@ -284,16 +284,16 @@ export default function App() {
   const explained = state?.explained[0]
 
   return (
-    <div className="relative h-full overflow-hidden bg-ink-950">
+    <div className="relative h-full overflow-hidden bg-bg">
       {state && <Globe countries={state.countries} mode={mode} selectedIso={focusIso} insetRight={sideOpen ? 460 : 0} onSelect={selectCountry} />}
 
       <TopBar clock={state?.clock.label ?? 'Connecting…'} status={state ? statusSentence(state) : { text: 'Connecting to the twin…', tone: 'neutral' }} mode={mode} onMode={setMode} />
 
       {/* Right column: an explained change as a quiet note, then the issue card or the country sheet. */}
       <div className="pointer-events-none absolute bottom-8 right-8 top-24 z-20 flex flex-col items-end gap-4 overflow-y-auto">
-        {explained && !country && (
-          <div className="fade-in pointer-events-auto max-w-[420px] text-right text-[13px] leading-relaxed text-slate-500">
-            <span className="mr-2 inline-block h-2 w-2 rounded-full bg-slate-400" />
+        {explained && !country && !card && (
+          <div className="fade-in pointer-events-auto max-w-[420px] text-right text-[13px] leading-relaxed text-fg-2">
+            <span className="mr-2 inline-block h-2 w-2 rounded-full bg-fg-2" />
             {state?.countries.find((c) => c.iso === explained.country)?.name ?? explained.country}: {explained.event.split(':')[0]}. Expected by the twin, no alert.
           </div>
         )}
@@ -335,7 +335,7 @@ export default function App() {
       />
 
       {toast && (
-        <div className="fade-up pointer-events-none absolute bottom-8 left-1/2 z-50 -translate-x-1/2 rounded-full bg-slate-900/90 px-5 py-2 text-[13px] text-slate-300 ring-1 ring-slate-700/50">
+        <div className="fade-up pointer-events-none absolute bottom-8 left-1/2 z-50 -translate-x-1/2 rounded-full bg-panel/90 px-5 py-2 text-[13px] text-fg ring-1 ring-line/50">
           {toast}
         </div>
       )}

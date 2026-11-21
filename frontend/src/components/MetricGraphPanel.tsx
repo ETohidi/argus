@@ -30,36 +30,36 @@ export default function MetricGraphPanel({ graph, highlight, result, onClose }: 
   const checks = result && (result.node as { id?: string } | null)?.id === fresh?.id ? result.validation.checks : null
 
   return (
-    <div className="fade-in absolute inset-0 z-40 overflow-y-auto bg-slate-950/80 backdrop-blur-md">
+    <div className="fade-in absolute inset-0 z-40 overflow-y-auto bg-bg/80 backdrop-blur-md">
       <div className="mx-auto max-w-[1040px] px-10 pb-16 pt-8">
-        <button onClick={onClose} className="text-[13px] text-slate-400 hover:text-slate-100">
+        <button onClick={onClose} className="text-[13px] text-fg-2 hover:text-fg">
           ← Back to the Earth
         </button>
-        <div className="mt-6 text-[13px] text-slate-500">Metric graph · {graph ? `${graph.nodes.length} metrics` : 'loading'}</div>
-        <p className="mt-2 max-w-[760px] text-[24px] font-medium leading-snug text-slate-100">
+        <div className="mt-6 text-[13px] text-fg-2">Metric graph · {graph ? `${graph.nodes.length} metrics` : 'loading'}</div>
+        <p className="mt-2 max-w-[760px] text-[24px] font-medium leading-snug text-fg">
           {fresh
             ? `“${fresh.label}” is now part of the twin: ${fresh.expr ? `${fresh.expr}, ` : ''}validated on history and watched in every market.`
             : 'Every metric Argus watches, and how they cause each other.'}
         </p>
         <div className="mt-10 grid grid-cols-[1.4fr_1fr] gap-8">
-          <div className="rounded-2xl bg-slate-900/60 p-8 ring-1 ring-slate-800">
-            {graph ? <CausalGraph nodes={nodes} edges={edges} highlight={lit} legend={false} /> : <div className="h-96 animate-pulse rounded-xl bg-slate-800/50" />}
+          <div className="rounded-2xl bg-panel/60 p-8 ring-1 ring-line">
+            {graph ? <CausalGraph nodes={nodes} edges={edges} highlight={lit} legend={false} /> : <div className="h-96 animate-pulse rounded-xl bg-line/50" />}
           </div>
           <div>
             {checks ? (
               <ul className="space-y-4">
                 {checks.map((c, i) => (
                   <li key={c.name} className="fade-up" style={{ animationDelay: `${i * 120}ms` }}>
-                    <div className={`text-[16px] ${c.ok ? 'text-teal-300' : 'text-orange-300'}`}>
+                    <div className={`text-[16px] ${c.ok ? 'text-ok' : 'text-problem'}`}>
                       {c.ok ? '✓' : '✕'} {c.name.charAt(0).toUpperCase() + c.name.slice(1)}
                     </div>
-                    <div className="text-[13px] leading-relaxed text-slate-400">{c.detail}</div>
+                    <div className="text-[13px] leading-relaxed text-fg-2">{c.detail}</div>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-[13px] leading-relaxed text-slate-400">
-                Solid lines are mechanisms the twin simulates; dashed lines are formulas and the marketing calendar. Metrics added live are shown in teal.
+              <p className="text-[13px] leading-relaxed text-fg-2">
+                Solid lines are mechanisms the twin simulates; dashed lines are formulas and the marketing calendar. Metrics added live are shown in mint.
               </p>
             )}
           </div>

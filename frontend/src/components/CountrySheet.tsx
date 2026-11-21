@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ORANGE, ORANGE_SOFT, PLATFORM_LABEL, STATUS_COLOR, STATUS_LABEL, usd } from '../lib/theme'
+import { PINK, PINK_SOFT, PLATFORM_LABEL, STATUS_COLOR, STATUS_LABEL, usd } from '../lib/theme'
 import type { CountryDetail, CountryState, IncidentSummary, PotentialResponse } from '../lib/types'
 
 const KPI_OPTIONS = [
@@ -10,12 +10,12 @@ const KPI_OPTIONS = [
   { id: 'quality_per_completion', label: 'Quality' },
 ]
 
-// Calm cells: grey within forecast, soft orange when drifting, orange when broken.
+// Calm cells: neutral within forecast, soft pink when drifting, pink when broken.
 function cellStyle(z: number) {
   const a = Math.abs(z)
-  if (a < 2) return { background: 'rgba(148,163,184,0.08)', color: '#94a3b8' }
-  if (a < 4) return { background: `${ORANGE_SOFT}33`, color: '#fed7aa' }
-  return { background: `${ORANGE}${a >= 8 ? 'cc' : '88'}`, color: '#fff7ed' }
+  if (a < 2) return { background: 'rgba(123,127,168,0.10)', color: '#9A9CC4' }
+  if (a < 4) return { background: `${PINK_SOFT}33`, color: '#FFC2D8' }
+  return { background: `${PINK}${a >= 8 ? 'cc' : '88'}`, color: '#FFF0F6' }
 }
 
 type Props = {
@@ -37,16 +37,16 @@ export default function CountrySheet({ country, detail, incident, potential, onO
     kpi !== 'worst' ? (s.kpi_z[kpi] ?? 0) : Object.values(s.kpi_z).reduce((m, v) => (Math.abs(v) > Math.abs(m) ? v : m), 0)
   const k = country.kpis
   return (
-    <section className="fade-up pointer-events-auto w-[420px] rounded-3xl bg-slate-900/90 p-8 ring-1 ring-slate-700/50 backdrop-blur">
+    <section className="fade-up pointer-events-auto w-[420px] rounded-3xl bg-panel/90 p-8 ring-1 ring-line/50 backdrop-blur">
       <div className="flex items-start justify-between">
         <div>
-          <div className="flex items-center gap-2 text-[13px] text-slate-400">
+          <div className="flex items-center gap-2 text-[13px] text-fg-2">
             <span className="h-2 w-2 rounded-full" style={{ background: STATUS_COLOR[country.status] }} />
             {STATUS_LABEL[country.status]}
           </div>
-          <h2 className="mt-1 text-[24px] font-semibold text-slate-50">{country.name}</h2>
+          <h2 className="mt-1 text-[24px] font-semibold text-fg">{country.name}</h2>
         </div>
-        <button onClick={onClose} aria-label="Close" className="-mr-2 -mt-1 rounded-full px-2 text-[16px] text-slate-500 hover:text-slate-200">
+        <button onClick={onClose} aria-label="Close" className="-mr-2 -mt-1 rounded-full px-2 text-[16px] text-fg-2 hover:text-fg">
           ×
         </button>
       </div>
@@ -58,34 +58,34 @@ export default function CountrySheet({ country, detail, incident, potential, onO
       </div>
 
       {incident && (
-        <button onClick={() => onOpenIncident(incident.id)} className="mt-6 w-full rounded-xl px-4 py-3 text-left text-[13px] text-orange-200 ring-1 ring-orange-400/40 hover:bg-orange-400/5">
+        <button onClick={() => onOpenIncident(incident.id)} className="mt-6 w-full rounded-xl px-4 py-3 text-left text-[13px] text-problem ring-1 ring-problem/40 hover:bg-problem/5">
           {incident.card?.title ?? incident.title} →
         </button>
       )}
 
       <div className="mt-8 flex items-baseline justify-between">
-        <h3 className="text-[13px] text-slate-400">Where it deviates</h3>
+        <h3 className="text-[13px] text-fg-2">Where it deviates</h3>
         <div className="flex gap-2">
           {KPI_OPTIONS.map((o) => (
-            <button key={o.id} onClick={() => setKpi(o.id)} className={`text-[13px] ${kpi === o.id ? 'text-slate-100' : 'text-slate-600 hover:text-slate-300'}`}>
+            <button key={o.id} onClick={() => setKpi(o.id)} className={`text-[13px] ${kpi === o.id ? 'text-fg' : 'text-fg-2 hover:text-fg'}`}>
               {o.label}
             </button>
           ))}
         </div>
       </div>
       {!detail ? (
-        <div className="mt-3 h-28 animate-pulse rounded-xl bg-slate-800/50" />
+        <div className="mt-3 h-28 animate-pulse rounded-xl bg-line/50" />
       ) : (
         <div className="mt-3 grid gap-1" style={{ gridTemplateColumns: `64px repeat(${categories.length}, 1fr)` }}>
           <div />
           {categories.map((c) => (
-            <div key={c} className="truncate pb-1 text-center text-[13px] text-slate-500" title={c}>
+            <div key={c} className="truncate pb-1 text-center text-[13px] text-fg-2" title={c}>
               {c.replace(/ (games|apps|cashback)$/i, '')}
             </div>
           ))}
           {platforms.map((p) => (
             <div key={p} className="contents">
-              <div className="flex items-center text-[13px] text-slate-400">{PLATFORM_LABEL[p] ?? p}</div>
+              <div className="flex items-center text-[13px] text-fg-2">{PLATFORM_LABEL[p] ?? p}</div>
               {categories.map((c) => {
                 const s = detail.segments.find((x) => x.platform === p && x.category === c)
                 if (!s) return <div key={c} />
@@ -106,11 +106,11 @@ export default function CountrySheet({ country, detail, incident, potential, onO
           ))}
         </div>
       )}
-      <div className="mt-2 text-[13px] text-slate-600">Deviation from the twin's forecast, in standard deviations</div>
+      <div className="mt-2 text-[13px] text-fg-2">Deviation from the twin's forecast, in standard deviations</div>
 
       {pot && (
-        <div className="mt-6 text-[13px] leading-relaxed text-slate-400">
-          <span className="text-teal-300">+{usd(pot.potential_usd_day)}/day</span>
+        <div className="mt-6 text-[13px] leading-relaxed text-fg-2">
+          <span className="text-ok">+{usd(pot.potential_usd_day)}/day</span>
           {pot.potential_pct != null && ` (${pot.potential_pct.toFixed(1)}% of margin)`} if the feed matched local taste: more {pot.top_categories.join(' and ').toLowerCase()}.
         </div>
       )}
@@ -121,10 +121,10 @@ export default function CountrySheet({ country, detail, incident, potential, onO
 function Kpi({ label, value, unit }: { label: string; value: string; unit: string }) {
   return (
     <div>
-      <div className="text-[13px] text-slate-500">{label}</div>
-      <div className="num text-[16px] font-semibold text-slate-100">
+      <div className="text-[13px] text-fg-2">{label}</div>
+      <div className="num text-[16px] font-semibold text-fg">
         {value}
-        <span className="text-[13px] font-normal text-slate-500">{unit}</span>
+        <span className="text-[13px] font-normal text-fg-2">{unit}</span>
       </div>
     </div>
   )

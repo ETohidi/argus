@@ -4,7 +4,7 @@ import FanChart, { relativeSeries } from './charts/FanChart'
 import L3Scatter from './charts/L3Scatter'
 import ShapleyBars from './charts/ShapleyBars'
 import { bestHypothesis, isBaseline, isFraud, shortHypothesis } from '../lib/incident'
-import { GREY_DIM, TEAL, VERDICT_COLOR, usd } from '../lib/theme'
+import { MINT, NEUTRAL, VERDICT_COLOR, usd } from '../lib/theme'
 import type { IncidentDetail, Level } from '../lib/types'
 
 export type EvidenceTab = 'graph' | 'users' | 'proof' | 'fixes' | 'details'
@@ -102,36 +102,36 @@ export default function EvidenceView({ detail: d, title, initialTab = 'graph', a
             : 'How Argus got here, and what it told each audience.'
 
   return (
-    <div className="fade-in absolute inset-0 z-40 overflow-y-auto bg-slate-950/80 backdrop-blur-md">
+    <div className="fade-in absolute inset-0 z-40 overflow-y-auto bg-bg/80 backdrop-blur-md">
       <div className="mx-auto max-w-[1040px] px-10 pb-16 pt-8">
-        <button onClick={onClose} className="text-[13px] text-slate-400 hover:text-slate-100">
+        <button onClick={onClose} className="text-[13px] text-fg-2 hover:text-fg">
           ← Back to the Earth
         </button>
-        <div className="mt-6 text-[13px] text-slate-500">The evidence</div>
-        <h1 className="text-[24px] font-semibold text-slate-50">{title}</h1>
+        <div className="mt-6 text-[13px] text-fg-2">The evidence</div>
+        <h1 className="text-[24px] font-semibold text-fg">{title}</h1>
 
-        <nav className="mt-8 flex gap-1 border-b border-slate-800">
+        <nav className="mt-8 flex gap-1 border-b border-line">
           {TABS.map((t, i) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
               className={`-mb-px border-b-2 px-4 pb-3 text-[16px] transition ${
-                tab === t.id ? 'border-teal-400 text-slate-50' : 'border-transparent text-slate-500 hover:text-slate-300'
+                tab === t.id ? 'border-ok text-fg' : 'border-transparent text-fg-2 hover:text-fg'
               } ${t.id === 'details' ? 'ml-auto' : ''}`}
             >
-              {t.id !== 'details' && <span className="num mr-2 text-[13px] text-slate-600">{i + 1}</span>}
+              {t.id !== 'details' && <span className="num mr-2 text-[13px] text-fg-2">{i + 1}</span>}
               {t.label}
             </button>
           ))}
         </nav>
 
-        <p key={`${tab}-${caption}`} className="fade-in mt-10 max-w-[760px] text-[24px] font-medium leading-snug text-slate-100">
+        <p key={`${tab}-${caption}`} className="fade-in mt-10 max-w-[760px] text-[24px] font-medium leading-snug text-fg">
           {caption}
         </p>
 
         <div key={tab} className="fade-in mt-10">
           {!d ? (
-            <div className="h-[420px] animate-pulse rounded-2xl bg-slate-900/60" />
+            <div className="h-[420px] animate-pulse rounded-2xl bg-panel/60" />
           ) : tab === 'graph' ? (
             <Frame narrow>
               <CausalGraph nodes={d.graph.nodes} edges={d.graph.edges} />
@@ -158,11 +158,11 @@ export default function EvidenceView({ detail: d, title, initialTab = 'graph', a
 }
 
 function Frame({ children, narrow }: { children: ReactNode; narrow?: boolean }) {
-  return <div className={`mx-auto rounded-2xl bg-slate-900/60 p-8 ring-1 ring-slate-800 ${narrow ? 'max-w-[720px]' : ''}`}>{children}</div>
+  return <div className={`mx-auto rounded-2xl bg-panel/60 p-8 ring-1 ring-line ${narrow ? 'max-w-[720px]' : ''}`}>{children}</div>
 }
 
 function Empty({ text }: { text: string }) {
-  return <div className="rounded-2xl bg-slate-900/60 p-10 text-center text-[16px] text-slate-400 ring-1 ring-slate-800">{text}</div>
+  return <div className="rounded-2xl bg-panel/60 p-10 text-center text-[16px] text-fg-2 ring-1 ring-line">{text}</div>
 }
 
 // Counterfactual replay: share of the change that disappears when each explanation is removed from the twin.
@@ -174,21 +174,21 @@ function Proof({ d }: { d: IncidentDetail }) {
         {hyps.map((h, i) => (
           <div key={h.name}>
             <div className="mb-2 flex items-baseline justify-between gap-6 text-[16px]">
-              <span className={h.verdict === 'supported' ? 'text-slate-50' : 'text-slate-400'}>{shortHypothesis(h.name)}</span>
+              <span className={h.verdict === 'supported' ? 'text-fg' : 'text-fg-2'}>{shortHypothesis(h.name)}</span>
               <span className="flex items-baseline gap-3">
-                <span className="num text-slate-200">{Math.round(h.explained * 100)}%</span>
+                <span className="num text-fg">{Math.round(h.explained * 100)}%</span>
                 <span className="w-20 text-right text-[13px]" style={{ color: VERDICT_COLOR[h.verdict] }}>
                   {h.verdict === 'supported' ? 'Proven' : h.verdict === 'partial' ? 'Partial' : 'Ruled out'}
                 </span>
               </span>
             </div>
-            <div className="h-3 overflow-hidden rounded-full bg-slate-800">
+            <div className="h-3 overflow-hidden rounded-full bg-line">
               <div className="grow-x h-full origin-left rounded-full" style={{ width: `${Math.max(0.5, h.explained * 100)}%`, background: VERDICT_COLOR[h.verdict], animationDelay: `${i * 90}ms` }} />
             </div>
           </div>
         ))}
       </div>
-      <p className="mt-8 text-[13px] text-slate-500">
+      <p className="mt-8 text-[13px] text-fg-2">
         Each bar: how much of the change vanishes when the twin is replayed without that explanation. Proven at 80% or more.
       </p>
     </Frame>
@@ -205,7 +205,7 @@ function Fixes({ d, approving, onApprove }: { d: IncidentDetail; approving: bool
   return (
     <div>
       {d.applied && (
-        <div className={`mb-6 rounded-2xl p-5 text-[16px] ring-1 ${v.status === 'verified' ? 'text-teal-200 ring-teal-400/40' : v.status === 'missed' ? 'text-orange-200 ring-orange-400/40' : 'text-slate-200 ring-slate-700'}`}>
+        <div className={`mb-6 rounded-2xl p-5 text-[16px] ring-1 ${v.status === 'verified' ? 'text-ok ring-ok/40' : v.status === 'missed' ? 'text-problem ring-problem/40' : 'text-fg ring-line'}`}>
           {v.status === 'verified'
             ? `Prediction verified: actual first-day margin ${usd(v.actual ?? 0)} landed inside the band.`
             : v.status === 'missed'
@@ -219,23 +219,23 @@ function Fixes({ d, approving, onApprove }: { d: IncidentDetail; approving: bool
           const applied = d.applied === f.id
           const base = isBaseline(f)
           return (
-            <div key={f.id} className={`rounded-2xl p-6 ring-1 ${best || applied ? 'bg-slate-900/80 ring-teal-400/50' : 'bg-slate-900/50 ring-slate-800'}`}>
+            <div key={f.id} className={`rounded-2xl p-6 ring-1 ${best || applied ? 'bg-panel/80 ring-ok/50' : 'bg-panel/50 ring-line'}`}>
               <div className="flex items-baseline justify-between gap-4">
-                <div className="text-[16px] font-semibold text-slate-100">{f.name}</div>
-                <div className={`num text-[16px] ${base ? 'text-slate-500' : f.delta_p50_usd >= 0 ? 'text-teal-300' : 'text-orange-300'}`}>
+                <div className="text-[16px] font-semibold text-fg">{f.name}</div>
+                <div className={`num text-[16px] ${base ? 'text-fg-2' : f.delta_p50_usd >= 0 ? 'text-ok' : 'text-problem'}`}>
                   {base ? 'baseline' : `${f.delta_p50_usd >= 0 ? '+' : ''}${usd(f.delta_p50_usd)}`}
                 </div>
               </div>
-              <div className="mt-1 text-[13px] text-slate-500">{best ? 'Best option' : applied ? 'Applied' : f.advertiser_risk}</div>
+              <div className="mt-1 text-[13px] text-fg-2">{best ? 'Best option' : applied ? 'Applied' : f.advertiser_risk}</div>
               <div className="mt-4">
-                <FanChart fix={f} reference={reference} domain={[lo, hi]} color={best || applied ? TEAL : GREY_DIM} width={420} height={170} />
+                <FanChart fix={f} reference={reference} domain={[lo, hi]} color={best || applied ? MINT : NEUTRAL} width={420} height={170} />
               </div>
-              <p className="mt-3 text-[13px] leading-relaxed text-slate-400">{f.description}</p>
+              <p className="mt-3 text-[13px] leading-relaxed text-fg-2">{f.description}</p>
               {!d.applied && !base && (
                 <button
                   disabled={approving}
                   onClick={() => onApprove(f.id)}
-                  className={`mt-4 rounded-xl px-4 py-2 text-[13px] font-semibold disabled:opacity-50 ${best ? 'bg-teal-400 text-slate-950 hover:bg-teal-300' : 'bg-slate-800 text-slate-200 hover:bg-slate-700'}`}
+                  className={`mt-4 rounded-xl px-4 py-2 text-[13px] font-semibold disabled:opacity-50 ${best ? 'bg-ok text-bg hover:bg-ok' : 'bg-line text-fg hover:bg-line'}`}
                 >
                   {approving ? 'Applying…' : 'Approve'}
                 </button>
@@ -244,7 +244,7 @@ function Fixes({ d, approving, onApprove }: { d: IncidentDetail; approving: bool
           )
         })}
       </div>
-      <p className="mt-6 text-[13px] text-slate-500">Margin gained vs doing nothing over 7 days. Band: p10–p90 of 40 simulated futures; line: median.</p>
+      <p className="mt-6 text-[13px] text-fg-2">Margin gained vs doing nothing over 7 days. Band: p10–p90 of 40 simulated futures; line: median.</p>
     </div>
   )
 }
@@ -256,19 +256,19 @@ function Details({ d }: { d: IncidentDetail }) {
   return (
     <div className="grid grid-cols-[1.1fr_1fr] gap-8">
       <section>
-        <h3 className="mb-4 text-[16px] font-semibold text-slate-200">Decision trail</h3>
-        <ol className="relative ml-2 border-l border-slate-800">
+        <h3 className="mb-4 text-[16px] font-semibold text-fg">Decision trail</h3>
+        <ol className="relative ml-2 border-l border-line">
           {d.trail.map((s, i) => (
             <li key={i} className="fade-up relative pb-6 pl-6 last:pb-0" style={{ animationDelay: `${i * 70}ms` }}>
-              <span className="absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full bg-slate-500" />
-              <div className="flex items-baseline gap-3 text-[13px] text-slate-500">
+              <span className="absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full bg-fg-2" />
+              <div className="flex items-baseline gap-3 text-[13px] text-fg-2">
                 <span>
                   {s.level} · {LEVEL_TEXT[s.level]}
                 </span>
                 <span className="num">hour {s.t}</span>
               </div>
-              <div className="mt-0.5 text-[13px] font-medium text-slate-100">{s.action}</div>
-              <div className="text-[13px] leading-relaxed text-slate-400">{s.finding}</div>
+              <div className="mt-0.5 text-[13px] font-medium text-fg">{s.action}</div>
+              <div className="text-[13px] leading-relaxed text-fg-2">{s.finding}</div>
             </li>
           ))}
         </ol>
@@ -276,20 +276,20 @@ function Details({ d }: { d: IncidentDetail }) {
       <section className="space-y-8">
         <div>
           <div className="mb-4 flex items-baseline gap-4">
-            <h3 className="text-[16px] font-semibold text-slate-200">Reports</h3>
+            <h3 className="text-[16px] font-semibold text-fg">Reports</h3>
             {(['ceo', 'manager', 'engineer'] as const).map((a) => (
-              <button key={a} onClick={() => setAud(a)} className={`text-[13px] ${aud === a ? 'text-teal-300' : 'text-slate-500 hover:text-slate-300'}`}>
+              <button key={a} onClick={() => setAud(a)} className={`text-[13px] ${aud === a ? 'text-ok' : 'text-fg-2 hover:text-fg'}`}>
                 {a === 'ceo' ? 'CEO' : a === 'manager' ? 'Manager' : 'Engineer'}
               </button>
             ))}
           </div>
-          <p key={aud} className="fade-in text-[13px] leading-relaxed text-slate-300">
+          <p key={aud} className="fade-in text-[13px] leading-relaxed text-fg">
             {d.reports[aud]}
           </p>
-          {d.reports.source && <div className="mt-2 text-[13px] text-slate-600">Written by {d.reports.source === 'llm' ? 'the language model' : 'templates'}.</div>}
+          {d.reports.source && <div className="mt-2 text-[13px] text-fg-2">Written by {d.reports.source === 'llm' ? 'the language model' : 'templates'}.</div>}
         </div>
         <div>
-          <h3 className="mb-4 text-[16px] font-semibold text-slate-200">Shapley contributions to the margin change</h3>
+          <h3 className="mb-4 text-[16px] font-semibold text-fg">Shapley contributions to the margin change</h3>
           <ShapleyBars items={d.contributions} />
         </div>
       </section>

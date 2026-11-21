@@ -45,18 +45,18 @@ export default function FanChart({ fix, reference, domain, color, width: W = 200
         </linearGradient>
       </defs>
       {[1, 2, 3, 4, 5, 6, 7].map((d) => (
-        <line key={d} x1={x(d)} x2={x(d)} y1={M.t} y2={H - M.b} stroke="#1e293b" strokeWidth={0.6} />
+        <line key={d} x1={x(d)} x2={x(d)} y1={M.t} y2={H - M.b} stroke="#1E2140" strokeWidth={0.6} />
       ))}
-      <line x1={M.l} x2={W - M.r} y1={y(0)} y2={y(0)} stroke="#94a3b8" strokeWidth={0.8} strokeDasharray="3 3" opacity={0.6} />
+      <line x1={M.l} x2={W - M.r} y1={y(0)} y2={y(0)} stroke="#7B7FA8" strokeWidth={0.8} strokeDasharray="3 3" opacity={0.6} />
       <path d={band} fill={`url(#${gid})`} className="fade-in" />
       <path d={line(p50)} fill="none" stroke={color} strokeWidth={1.8} pathLength={1} className="draw" />
       <circle cx={x(n)} cy={y(end)} r={2.5} fill={color} />
       {[1, 7].map((d) => (
-        <text key={d} x={x(d)} y={H - 3} fontSize={fs} fill="#64748b" textAnchor={d === 7 ? 'end' : 'middle'}>
+        <text key={d} x={x(d)} y={H - 3} fontSize={fs} fill="#7B7FA8" textAnchor={d === 7 ? 'end' : 'middle'}>
           day {d}
         </text>
       ))}
-      <text x={W - M.r - 4} y={Math.max(M.t + 8, Math.min(H - M.b - 4, y(end) + (end >= 0 ? -6 : 12)))} fontSize={fs} fill="#cbd5e1" textAnchor="end" className="num">
+      <text x={W - M.r - 4} y={Math.max(M.t + 8, Math.min(H - M.b - 4, y(end) + (end >= 0 ? -6 : 12)))} fontSize={fs} fill="#C9C8EE" textAnchor="end" className="num">
         {end >= 0 ? '+' : ''}
         {usd(end)}
       </text>

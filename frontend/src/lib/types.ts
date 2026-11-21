@@ -111,6 +111,15 @@ export interface L3Result {
   points: { coherence: number; payout_focus: number; flagged: boolean }[]
 }
 
+export interface SeriesPoint {
+  t: number
+  label: string
+  actual: number
+  expected: number
+  lo: number // twin −2σ
+  hi: number // twin +2σ
+}
+
 export interface IncidentDetail {
   id: string
   title: string
@@ -122,6 +131,10 @@ export interface IncidentDetail {
   kind?: string // "fraud" | "tracking" | ...
   root?: string
   card?: IssueCardText
+  series_meta?: { kpi: string; label: string; unit: string }
+  series?: SeriesPoint[] // alerting KPI for the root segment, last 48 h
+  left_zone_at?: { t: number; label: string } | null
+  counterfactual?: { label: string; series: { t: number; value: number }[]; explained_share: number } | null
   country: string
   platform: string
   category: string

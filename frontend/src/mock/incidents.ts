@@ -87,6 +87,28 @@ function withDelta(fixes: Omit<Fix, 'delta_p50_usd'>[]): Fix[] {
   return fixes.map((f) => ({ ...f, delta_p50_usd: Math.round(f.p50[6] - base) }))
 }
 
+
+const DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const hourLabel = (t: number) => `${DAY[Math.floor(t / 24) % 7]} ${String(t % 24).padStart(2, '0')}:00`
+
+// Alerting KPI for the last 48 h: twin expectation with a ±2σ band, an excursion starting at `leftAt`,
+// and the counterfactual replay (the excursion removed except for a residual share).
+function mockSeries(now: number, leftAt: number, direction: 1 | -1, size: number, explained: number, seed: number) {
+  const r = rng(seed)
+  const series = []
+  const cf = []
+  for (let t = now - 47; t <= now; t++) {
+    const expected = 50 + 16 * Math.sin(((t % 24) - 8) / 24 * 2 * Math.PI)
+    const noise = gauss(r) * 2.2
+    const h = t - leftAt
+    const excess = h >= 0 ? direction * size * Math.min(1, (h + 1) / 4) * expected : 0
+    const actual = expected + noise + excess
+    series.push({ t, label: hourLabel(t), actual: +actual.toFixed(1), expected: +expected.toFixed(1), lo: +(expected * 0.86).toFixed(1), hi: +(expected * 1.14).toFixed(1) })
+    cf.push({ t, value: +(h >= 0 ? expected + noise + excess * (1 - explained) : actual).toFixed(1) })
+  }
+  return { series, cf }
+}
+
 export function buildIncidentDetail(a: Args): IncidentDetail {
   const d = a.detectedAt
   const plat = a.platform === 'ios' ? 'iOS' : 'Android'
@@ -138,6 +160,12 @@ export function buildIncidentDetail(a: Args): IncidentDetail {
     const h = a.hoursSinceApply
     const actual = h != null && h >= 24 ? Math.round(appliedFix.p50[0] + (appliedFix.p90[0] - appliedFix.p50[0]) * 0.32) : null
     return {
+      series_meta: { kpi: 'new_accounts', label: `New accounts, ${a.countryName} · Android`, unit: 'per hour' },
+      ...(() => {
+        const leftAt = d - 3
+        const { series, cf } = mockSeries(d + (a.hoursSinceApply ?? 0) + 2, leftAt, 1, 0.9, 0.94, 31)
+        return { series, left_zone_at: { t: leftAt, label: hourLabel(leftAt) }, counterfactual: { label: 'Without the 88 flagged fake accounts', series: cf, explained_share: 0.94 } }
+      })(),
       id: a.id,
       title: a.title,
       status: a.status,
@@ -217,6 +245,12 @@ export function buildIncidentDetail(a: Args): IncidentDetail {
   const h = a.hoursSinceApply
   const actual = h != null && h >= 24 ? Math.round(appliedFix.p50[0] - (appliedFix.p50[0] - appliedFix.p10[0]) * 0.25) : null
   return {
+    series_meta: { kpi: 'revenue', label: `Revenue, ${a.countryName} · iOS`, unit: 'USD per hour' },
+    ...(() => {
+      const leftAt = d - 2
+      const { series, cf } = mockSeries(d + (a.hoursSinceApply ?? 0) + 1, leftAt, -1, 0.8, 0.97, 41)
+      return { series, left_zone_at: { t: leftAt, label: hourLabel(leftAt) }, counterfactual: { label: 'With tracking repaired', series: cf, explained_share: 0.97 } }
+    })(),
     id: a.id,
     title: a.title,
     status: a.status,

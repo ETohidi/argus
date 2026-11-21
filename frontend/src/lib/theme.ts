@@ -1,18 +1,36 @@
 import type { CountryStatus, NodeState, Verdict } from './types'
 
-// Three accents only: teal = ok, orange = issue, grey = explained / neutral.
-export const TEAL = '#2dd4bf'
-export const ORANGE = '#f97316'
-export const ORANGE_SOFT = '#fdba74'
-export const GREY = '#94a3b8'
-export const GREY_DIM = '#64748b'
+// "Aurora" palette, mirrored from the CSS variables in index.css (MapLibre and SVG need literal values).
+// Mint = fine / verified / best option; pink = problem; neutral = explained / normal band;
+// violet = glow and focus accent only, never data meaning.
+export const AURORA = {
+  bg: '#05060D',
+  panel: '#0E1020',
+  line: '#1E2140',
+  fg: '#F1F0FF',
+  fg2: '#9A9CC4',
+  ok: '#3CF2C4',
+  problem: '#FF4D8D',
+  neutral: '#7B7FA8',
+  accent: '#8B7CFF',
+  land: '#23305A',
+  border: '#2A2F5C',
+  oceanIn: '#141436',
+  oceanOut: '#06061A',
+} as const
+
+export const MINT = AURORA.ok
+export const PINK = AURORA.problem
+export const PINK_SOFT = '#FF8FB7' // a lesser problem (watch): still pink, lighter
+export const NEUTRAL = AURORA.neutral
+export const MUTED = AURORA.fg2
 
 export const STATUS_COLOR: Record<CountryStatus, string> = {
-  ok: TEAL,
-  watch: ORANGE_SOFT,
-  incident: ORANGE,
-  explained: GREY,
-  waiting: GREY_DIM,
+  ok: MINT,
+  watch: PINK_SOFT,
+  incident: PINK,
+  explained: NEUTRAL,
+  waiting: '#4A4E78',
 }
 
 export const STATUS_LABEL: Record<CountryStatus, string> = {
@@ -24,23 +42,23 @@ export const STATUS_LABEL: Record<CountryStatus, string> = {
 }
 
 export const NODE_COLOR: Record<NodeState, string> = {
-  root: ORANGE,
-  broken: '#fb923c',
-  symptom: ORANGE_SOFT,
-  normal: '#475569',
+  root: PINK,
+  broken: '#FF6FA3',
+  symptom: PINK_SOFT,
+  normal: '#3A3F6B',
 }
 
 export const VERDICT_COLOR: Record<Verdict, string> = {
-  supported: TEAL,
-  partial: ORANGE_SOFT,
-  rejected: GREY_DIM,
+  supported: MINT,
+  partial: PINK_SOFT,
+  rejected: '#4A4E78',
 }
 
-// Potential: one-hue ramp from slate to teal.
+// Potential: one-hue ramp from land blue to mint (upside is "good").
 export const POTENTIAL_STOPS: [number, string][] = [
-  [0, '#1e293b'],
-  [0.5, '#246b66'],
-  [1, '#5eead4'],
+  [0, '#23305A'],
+  [0.5, '#2A8C86'],
+  [1, '#3CF2C4'],
 ]
 
 export function potentialColor(t: number) {

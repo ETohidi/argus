@@ -57,7 +57,7 @@ export default function ScenarioMenu(p: Props) {
   return (
     <div ref={ref} className="absolute bottom-6 left-8 z-30">
       {open && (
-        <div className="fade-up absolute bottom-12 left-0 w-[340px] rounded-2xl bg-slate-900/95 p-5 text-[13px] text-slate-300 shadow-2xl ring-1 ring-slate-700/50">
+        <div className="fade-up absolute bottom-12 left-0 w-[340px] rounded-2xl bg-panel/95 p-5 text-[13px] text-fg shadow-2xl ring-1 ring-line/50">
           <Group title="Time">
             <div className="flex gap-2">
               <Btn onClick={p.onPlay} hint="Space">{p.playing ? 'Pause' : 'Play'}</Btn>
@@ -72,9 +72,9 @@ export default function ScenarioMenu(p: Props) {
                   <button
                     onClick={act(() => p.onDemo(s))}
                     disabled={p.busy}
-                    className={`flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-slate-800/70 disabled:opacity-40 ${p.lastScene === s ? 'text-teal-300' : ''}`}
+                    className={`flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-line/70 disabled:opacity-40 ${p.lastScene === s ? 'text-ok' : ''}`}
                   >
-                    <kbd className="num w-4 text-center text-slate-500">{i + 1}</kbd>
+                    <kbd className="num w-4 text-center text-fg-2">{i + 1}</kbd>
                     {SCENE_LABEL[s]}
                   </button>
                 </li>
@@ -93,7 +93,7 @@ export default function ScenarioMenu(p: Props) {
           <Group title="Metrics" last>
             <Btn onClick={act(p.onAddMetric)}>Add a metric…</Btn>
           </Group>
-          <div className="mt-4 border-t border-slate-800 pt-3 text-slate-500">
+          <div className="mt-4 border-t border-line pt-3 text-fg-2">
             {p.backend === 'live' ? 'Live twin' : p.backend === 'mock' ? 'Mock data (backend unreachable)' : 'Connecting…'}
             {a && (
               <div className="mt-1">
@@ -106,7 +106,7 @@ export default function ScenarioMenu(p: Props) {
       )}
       <button
         onClick={() => setOpen((o) => !o)}
-        className={`rounded-full px-4 py-2 text-[13px] ring-1 transition ${open ? 'text-slate-200 ring-slate-600' : 'text-slate-500 ring-slate-800 hover:text-slate-300'}`}
+        className={`rounded-full px-4 py-2 text-[13px] ring-1 transition ${open ? 'text-fg ring-fg-2' : 'text-fg-2 ring-line hover:text-fg'}`}
       >
         Scenario
       </button>
@@ -117,7 +117,7 @@ export default function ScenarioMenu(p: Props) {
 function Group({ title, children, last }: { title: string; children: ReactNode; last?: boolean }) {
   return (
     <div className={last ? '' : 'mb-4'}>
-      <div className="mb-2 text-slate-500">{title}</div>
+      <div className="mb-2 text-fg-2">{title}</div>
       {children}
     </div>
   )
@@ -125,9 +125,9 @@ function Group({ title, children, last }: { title: string; children: ReactNode; 
 
 function Btn({ children, onClick, disabled, hint }: { children: ReactNode; onClick: () => void; disabled?: boolean; hint?: string }) {
   return (
-    <button onClick={onClick} disabled={disabled} className="rounded-lg bg-slate-800/80 px-3 py-1.5 text-slate-200 hover:bg-slate-700 disabled:opacity-40">
+    <button onClick={onClick} disabled={disabled} className="rounded-lg bg-line/80 px-3 py-1.5 text-fg hover:bg-line disabled:opacity-40">
       {children}
-      {hint && <span className="ml-2 text-slate-500">{hint}</span>}
+      {hint && <span className="ml-2 text-fg-2">{hint}</span>}
     </button>
   )
 }
