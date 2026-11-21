@@ -1,40 +1,46 @@
 import type { CountryStatus, NodeState, Verdict } from './types'
 
+// Three accents only: teal = ok, orange = issue, grey = explained / neutral.
+export const TEAL = '#2dd4bf'
+export const ORANGE = '#f97316'
+export const ORANGE_SOFT = '#fdba74'
+export const GREY = '#94a3b8'
+export const GREY_DIM = '#64748b'
+
 export const STATUS_COLOR: Record<CountryStatus, string> = {
-  ok: '#2dd4bf',
-  watch: '#fbbf24',
-  incident: '#f43f5e',
-  explained: '#94a3b8',
-  waiting: '#7c8db5',
+  ok: TEAL,
+  watch: ORANGE_SOFT,
+  incident: ORANGE,
+  explained: GREY,
+  waiting: GREY_DIM,
 }
 
 export const STATUS_LABEL: Record<CountryStatus, string> = {
   ok: 'Healthy',
   watch: 'Watching',
-  incident: 'Incident',
-  explained: 'Explained',
+  incident: 'Issue',
+  explained: 'Explained change',
   waiting: 'Waiting for data',
 }
 
 export const NODE_COLOR: Record<NodeState, string> = {
-  root: '#f43f5e',
+  root: ORANGE,
   broken: '#fb923c',
-  symptom: '#facc15',
+  symptom: ORANGE_SOFT,
   normal: '#475569',
 }
 
 export const VERDICT_COLOR: Record<Verdict, string> = {
-  supported: '#2dd4bf',
-  partial: '#fbbf24',
-  rejected: '#64748b',
+  supported: TEAL,
+  partial: ORANGE_SOFT,
+  rejected: GREY_DIM,
 }
 
-// Potential gradient stops: deep indigo → violet → magenta → amber.
+// Potential: one-hue ramp from slate to teal.
 export const POTENTIAL_STOPS: [number, string][] = [
-  [0, '#1e1b4b'],
-  [0.35, '#6d28d9'],
-  [0.7, '#d946ef'],
-  [1, '#fcd34d'],
+  [0, '#1e293b'],
+  [0.5, '#246b66'],
+  [1, '#5eead4'],
 ]
 
 export function potentialColor(t: number) {
@@ -55,7 +61,7 @@ function mix(a: string, b: string, t: number) {
 
 export const usd = (v: number, digits = 0) => {
   const a = Math.abs(v)
-  const s = a >= 1_000_000 ? `$${(a / 1e6).toFixed(2)}M` : a >= 1000 ? `$${(a / 1000).toFixed(1)}k` : `$${a.toFixed(digits)}`
+  const s = a >= 1_000_000 ? `$${(a / 1e6).toFixed(2)}M` : a >= 1000 ? `$${(a / 1000).toFixed(a >= 100_000 ? 0 : 1)}k` : `$${a.toFixed(digits)}`
   return v < 0 ? `−${s}` : s
 }
 
