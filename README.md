@@ -1,11 +1,97 @@
 # Argus
 
-**A self-driving analyst that lives inside a hierarchical, causal digital twin of a rewarded-ad marketplace.**
+**A self-driving analyst that lives inside a causal digital twin of a rewarded-ad marketplace.**
 HackLab #2 Berlin Robotics & AI Hackathon, Almedia track ("Eye of the System"), 21–22 Nov 2026.
 
-Argus watches every metric of a Freecash-like marketplace, finds the broken link in the causal graph, proves the cause with a counterfactual in the twin, tests fixes in the twin before acting, and explains it to the CEO, the manager and the engineer, on a 3D globe.
+Rewarded-ad marketplaces like Freecash move fast: a bot farm looks like growth, a broken advertiser postback looks
+like a dip, a planned promo looks like an anomaly. Argus watches 20 countries × 6 KPIs every hour against a digital
+twin that learned the business from 14 days of data. When something breaks, it localises the problem (country →
+platform × offer category → individual users), walks the causal graph to separate root cause from symptoms, **proves
+the cause with a counterfactual in the twin**, fast-forwards every candidate fix 7 days before touching anything,
+recommends one, and — after a human clicks Approve — checks 24 h later whether its prediction came true. Each
+incident is explained three ways: a plain issue card for the CEO, an action plan for the manager, and the
+z-scores, Shapley contributions and query trail for the engineer.
 
-Status: work in progress. See [`docs/HANDOFF.md`](docs/HANDOFF.md) for the design and the build plan.
+**Try it live: https://argus-cmlk.onrender.com** (first load may take ~50 s on the free tier while the container wakes up).
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph R["Reality (simulator, hidden truth)"]
+        SIM["Hourly marketplace<br/>20 countries · iOS/Android · 6 offer categories<br/>calibrated to public data"]
+        INC["Injected incidents<br/>promo · bot farm · tracking break · data delay"]
+    end
+    subgraph T["Twin (Argus's beliefs, learned from 14 days)"]
+        L1["L1 country KPIs<br/>seasonal forecast + backtest σ"]
+        L2["L2 platform × category<br/>causal chain, z given parents,<br/>exact Shapley, counterfactuals"]
+        L3["L3 users (on demand)<br/>taste model: coherence vs payout focus"]
+        FF["Fast-forward<br/>7-day Monte Carlo per fix"]
+    end
+    subgraph A["Agent loop (every sim hour)"]
+        W["Watch · data check ·<br/>naive vs twin"] --> LOC["Localise L2"] --> DAG["Walk DAG:<br/>root vs symptoms"] --> U["L3 if impact × uncertainty"] --> H["Hypotheses<br/>(explained share)"] --> FX["Fixes in twin"] --> AP["Approve → apply → verify 24 h"]
+    end
+    subgraph V["Views"]
+        G["3D globe: health / potential"]
+        C["Issue cards · CEO / Manager / Engineer"]
+        API["FastAPI /api · /api/meta data panel"]
+    end
+    SIM -- "observed metrics only<br/>(+ public calendar, unlabeled samples)" --> L1
+    INC --> SIM
+    L1 --> L2 --> L3
+    T <--> A
+    AP -- "approved action" --> SIM
+    A --> V
+```
+
+Design notes and the original build plan: [`docs/HANDOFF.md`](docs/HANDOFF.md); API contract: [`docs/API.md`](docs/API.md).
+
+Argus never reads the simulator's hidden state (bot labels, farms, breaks); a test enforces it. It sees only the
+observed metric stream, the public marketing calendar, unlabeled user samples and the actions it applied.
+
+## What is real vs simulated
+
+- **Real (public data, cited):** scale ($1B run rate → $2.74M revenue/day), each country's share of user payouts
+  (US 57.9%, DE 9.7%, GB 8.2%, CA 3.7%, FR 3.2%), iOS share per country (StatCounter, Oct 2026), country payout
+  levels and the iOS premium (AppsFlyer CPI benchmarks, Q3 2026). See [`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md)
+  and the in-app Data panel (`GET /api/meta`).
+- **Simulated:** offer categories and conversion rates, taste archetypes and regional mixes, the production feed,
+  noise, the incidents, advertiser reactions and fix effects. See [`docs/ASSUMPTIONS.md`](docs/ASSUMPTIONS.md).
+- No private Almedia data is used.
+
+## Demo scenes
+
+The **Demo** menu in the top bar (or `POST /api/demo/{scene}`) jumps a fixed-seed world to each part of the story;
+calling a later scene first runs the earlier ones.
+
+| Scene | What happens |
+|---|---|
+| `start` | Fresh world after 14 days of history; the globe is green, 20 countries × 6 KPIs watched |
+| `promo` | Planned "Weekend Boost" in Germany: a naive detector alerts, Argus logs it as explained by the calendar |
+| `bot_farm` | Fake accounts on Android in Canada: revenue goes *up*; Argus opens a high-severity incident within ~3 h |
+| `investigate` | Decision trail: country → Android × fintech/strategy → root cause new accounts → user-level taste check → counterfactual (~94% explained) |
+| `approve` | Human approves the recommended fix (verify new accounts); Canada returns to green within ~2 h |
+| `verify` | 24 h later: actual margin lands inside the predicted band → "Prediction verified" |
+| `new_metric` | "Reward cost per completed offer" is added in plain words, validated and monitored |
+| `tracking_break` | Advertisers stop confirming UK iOS game completions: root cause revenue, no user-level run needed, pause + notify |
+
+Keyboard shortcuts: none yet; the Demo menu and the top-bar controls (play, +1 h, +6 h, inject, add metric) drive
+everything.
+
+## Honest limitations
+
+- **The marketplace is simulated.** Scale, country mix, platform split and payout levels are calibrated to public
+  figures; conversion rates, taste, incidents and advertiser behaviour are invented. Numbers are illustrative, not
+  forecasts for Almedia.
+- **Incidents are injected**, and the twin was designed with these failure modes in mind; unknown failure types would
+  surface as "anomaly, cause unclear" rather than a confident diagnosis.
+- **Fix effects in the twin are assumptions** (e.g. verification removes 95% of fake activity), validated only against
+  the simulator. Verification after 24 h checks the prediction, not the assumption.
+- **Potential mode is conservative and model-dependent:** the twin shows +2–3.5% margin from a taste-matched feed;
+  the simulator's truth for the same feed is higher, because the twin's taste model is flatter than reality.
+- **One country can carry one open incident at a time**; overlapping causes in the same country are not separated.
+- **Free-tier hosting:** sessions live in memory (up to 13, idle expiry 30 min, LRU eviction); a restart resets them.
+- LLM-written reports are optional; without a key Argus uses deterministic templates.
 
 ## Run the backend
 ```bash
