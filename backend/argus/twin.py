@@ -375,7 +375,8 @@ class Twin:
             phi[m] = float(sum(w[sizes[s]] * (v[s | (1 << i)] - v[s]) for s in without))
         return {"phi": phi, "v_all": float(v[-1]), "v_none": float(v[0])}
 
-    def explained_share(self, c: int, ts: list[int], hyp: dict[int, list[str]], kpi: str) -> float:
+    def explained_share(self, c: int, ts: list[int], hyp: dict[int, list[str]], kpi: str,
+                        platform: int | None = None) -> float:
         """Counterfactual: share of the KPI change removed when the hypothesis mechanisms are set to expected.
 
         hyp: platform -> mechanisms the hypothesis explains. Chain over the whole country.
@@ -385,7 +386,18 @@ class Twin:
         for p, mechs in hyp.items():       # all \ H
             for m in mechs:
                 M[2, p, MECHANISMS.index(m)] = False
-        v = self.chain(c, ts, M)[kpi]
+        out = self.chain(c, ts, M)
+        if platform is None:
+            v = out[kpi]
+        else:                               # measured on one platform only (another problem may sit on the other)
+            sg = out["segments"]
+            if kpi in ("new_accounts", "active_users"):
+                v = sg[kpi][:, platform]
+            else:
+                g = {k: sg[k][:, platform].sum(1) for k in ("completions", "revenue", "rewards", "quality")}
+                g["margin"] = g["revenue"] - g["rewards"]
+                g["quality_per_completion"] = g["quality"] / np.maximum(g["completions"], 1e-9)
+                v = g[kpi]
         total = v[0] - v[1]
         if abs(total) < 1e-9:
             return 0.0

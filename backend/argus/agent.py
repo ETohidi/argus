@@ -29,6 +29,8 @@ SUPPORTED, PARTIAL = 0.8, 0.3
 QUIET_TO_RESOLVE = 6
 SEV_HIGH_USD, SEV_HIGH_SOON_USD = 25_000, 10_000       # 7-day cost of doing nothing (USD)
 SEV_MEDIUM_USD, SEV_MEDIUM_SOON_USD = 5_000, 1_000     # "soon" = advertisers react within 24 h
+FAMILY = {**{m: "users" for m in USER_SIDE}, "revenue": "revenue", "rewards": "rewards"}   # cause families
+NEW_CAUSE_Z = 5.0             # a second cause in a country with an open issue needs a strong root, 2 h in a row
 STATUS_LABEL = {"open": "Open", "persisting": "Still going", "fix_applied": "Fix applied", "verified": "Fix verified",
                 "resolved": "Resolved"}
 EVENT_LABEL = {"chargeback": "Advertisers start reclaiming money", "budget_cut": "Advertiser cuts the budget",
@@ -177,6 +179,7 @@ class Agent:
         self.explaining = np.zeros(cfg.C, dtype=bool)
         self.extensions: dict[str, dict] = {}
         self.llm_rejections: list[dict] = []           # LLM reports that failed the grounding check
+        self.cand_prev: dict[int, set] = {}             # root candidates per country in the previous hour
         self.investigations = 0
         self.l3_runs = 0
         self.last: dict | None = None
@@ -247,18 +250,30 @@ class Agent:
         for c in np.argsort(-impact):
             if not alert[c].any():
                 continue
-            inc = self._active_incident(int(c))
-            if inc is not None:                       # same country still deviating: merge, never report twice
-                inc["alerts_merged"] += 1
-                inc["last_seen_at"] = t
-                if inc["status"] == "open":
-                    inc["status"] = "persisting"
-                    inc["trail"].append({"t": t, "level": "L1", "action": "Re-check the country one hour later",
-                                         "finding": "Still going; same issue, merged instead of a new report"})
-                elif inc["status"] == "verified":
-                    inc["status"] = "persisting"
-                    inc["trail"].append({"t": t, "level": "L1", "action": "Watch after verification",
-                                         "finding": "The KPI deviates again; issue re-opened"})
+            active = self._active_incidents(int(c))
+            if active:
+                # Same country: merge only into the issue with the same cause (platform × cause family); a strong
+                # root of another family that holds for 2 h is a different problem and gets its own issue.
+                cands = self._root_candidates(int(c), [t - i for i in range(WINDOW)][::-1])
+                now_keys = {(cp, fam) for _, cp, _, _, fam in cands}
+                prev = self.cand_prev.get(int(c), set())
+                self.cand_prev[int(c)] = now_keys
+                open_keys = {(i["p"], i["family"]) for i in active}
+                new_cause = None
+                matched = [i for i in active if (i["p"], i["family"]) in now_keys]
+                for _, cp, ck, croot, fam in cands:
+                    if (cp, fam) in open_keys or (cp, fam) not in prev:
+                        continue
+                    parent = self._downstream_of(active, cp, ck, croot, t)
+                    if parent is not None:          # predicted consequence of an open issue, not a new problem
+                        if parent not in matched:
+                            matched.append(parent)
+                        continue
+                    new_cause = new_cause or (cp, ck, fam)
+                for inc in matched or [active[-1]]:
+                    self._merge_alert(inc, t)
+                if new_cause is not None:
+                    self.investigate(int(c), t, res, alert[c], focus=new_cause)
                 continue
             if impact[c] <= INCIDENT_IMPACT and np.abs(z[c][alert[c]]).max() < INCIDENT_Z:
                 continue                                                  # stays amber ("watch")
@@ -288,10 +303,67 @@ class Agent:
             self.potential = self.compute_potential()
 
     def _active_incident(self, c: int) -> dict | None:
-        for inc in self.incidents:
-            if inc["c"] == c and inc["status"] != "resolved":
-                return inc
+        act = self._active_incidents(c)
+        return act[0] if act else None
+
+    def _active_incidents(self, c: int) -> list[dict]:
+        return [inc for inc in self.incidents if inc["c"] == c and inc["status"] != "resolved"]
+
+    def _merge_alert(self, inc: dict, t: int) -> None:
+        """Another alert for the same problem: fold it into the issue instead of reporting it again."""
+        inc["alerts_merged"] += 1
+        inc["last_seen_at"] = t
+        if inc["status"] == "open":
+            inc["status"] = "persisting"
+            inc["trail"].append({"t": t, "level": "L1", "action": "Re-check the country one hour later",
+                                 "finding": "Still going; same cause, merged instead of a new report"})
+        elif inc["status"] == "verified":
+            inc["status"] = "persisting"
+            inc["trail"].append({"t": t, "level": "L1", "action": "Watch after verification",
+                                 "finding": "The KPI deviates again; issue re-opened"})
+
+    def _downstream_of(self, active: list[dict], p: int, k: int, root: str, t: int) -> dict | None:
+        """Is this root the advertiser reaction an open fraud issue predicted (same categories, mechanism, timing)?
+
+        Chargebacks lower revenue per completion; a budget cut lowers impressions. Both hit the farm's offer
+        categories on every platform. Matches are recorded on the issue as downstream effects.
+        """
+        for inc in active:
+            if inc["kind"] not in ("fraud", "user") or k not in inc["fix_categories"]:
+                continue
+            pred = {e["label"]: e["after_h"] for e in inc["fixes"][0]["events"]}
+            kind = ("chargeback" if root == "revenue" else "budget_cut" if root == "impressions" else None)
+            if kind is None or EVENT_LABEL[kind] not in pred:
+                continue
+            after = t - inc["detected_at"]
+            expected = pred[EVENT_LABEL[kind]]
+            if not 0.5 * expected <= after <= 2 * expected + 24:
+                continue
+            key = [kind, cfg.PLATFORMS[p], cfg.CATEGORIES[k]]
+            seen = inc.setdefault("downstream", [])
+            if key not in [[d["effect"], d["platform"], d["category"]] for d in seen]:
+                what = ("Advertisers reclaiming money" if kind == "chargeback" else "Advertiser cut the budget")
+                seen.append({"effect": kind, "platform": cfg.PLATFORMS[p], "category": cfg.CATEGORIES[k],
+                             "t": t, "label": hour_label(t), "after_h": after, "predicted_after_h": expected,
+                             "text": f"{what}: {cfg.CATEGORIES[k].lower()} on {cfg.PLATFORMS[p]}, caused by the "
+                                     f"farm, as predicted (~{expected} h, seen after {after} h)"})
+                inc["trail"].append({"t": t, "level": "L2", "action": "Check a new deviation against open issues",
+                                     "finding": seen[-1]["text"] + "; attached to this issue, not reported again"})
+            return inc
         return None
+
+    def _root_candidates(self, c: int, ts: list[int]) -> list[tuple]:
+        """Strong roots per platform × category segment: (|z|, platform, category, root, cause family)."""
+        gp = self.twin.given_parents(ts)
+        out = []
+        for p in range(cfg.P):
+            zu = {m: self.twin.z_of(gp[m], c, p) for m in ("new_accounts", "active_users")}
+            for k in range(cfg.K):
+                mz = {**zu, **{m: self.twin.z_of(gp[m], c, p, k) for m in MECHANISMS if m not in zu}}
+                root = next((m for m in MECHANISMS if abs(mz[m]) > ROOT_Z), None)
+                if root is not None and abs(mz[root]) >= NEW_CAUSE_Z:
+                    out.append((abs(mz[root]), p, k, root, FAMILY[root]))
+        return sorted(out, reverse=True)
 
     def _elapsed(self, c: int) -> int:
         n = 0
@@ -302,7 +374,9 @@ class Agent:
         return n + 1
 
     # ================================================================== investigation
-    def investigate(self, c: int, t: int, res: dict, alert_row: np.ndarray) -> dict:
+    def investigate(self, c: int, t: int, res: dict, alert_row: np.ndarray,
+                    focus: tuple[int, int, str] | None = None) -> dict:
+        """focus = (platform, category, family) of a new cause found while another issue is open in the country."""
         self.investigations += 1
         tw = self.twin
         country = cfg.COUNTRIES[c]
@@ -328,12 +402,16 @@ class Agent:
         d_rev, d_rew = dsum("revenue"), dsum("rewards")
         score = np.abs(d_rev) + np.abs(d_rew)                                       # (P,K)
         gp = tw.given_parents(ts)
-        if "new_accounts" in alerting:
+        if focus is not None:
+            p = focus[0]
+        elif "new_accounts" in alerting:
             p = int(np.argmax([abs(tw.z_of(gp["new_accounts"], c, pp)) for pp in range(cfg.P)]))
         else:
             p = int(np.argmax(score.sum(1)))
         p_share = float(score[p].sum() / max(score.sum(), 1e-9))
         order = np.argsort(-score[p])
+        if focus is not None:
+            order = [focus[1]] + [kk for kk in order if kk != focus[1]]
         cats, cum = [], 0.0
         for k in order:
             cats.append(int(k))
@@ -411,11 +489,16 @@ class Agent:
 
         # --- hypotheses (counterfactuals in the twin)
         kpi = max(alerting, key=lambda kk: abs(z[KPIS.index(kk)]))         # explain the change that alerted
+        on_p = None
+        if focus is not None:               # a second cause in the same country: explain it on its own platform
+            kpi = {"users": kpi if kpi == "new_accounts" else "margin", "revenue": "revenue",
+                   "rewards": "rewards"}.get(focus[2], "margin")
+            on_p = p
         ki = KPIS.index(kpi)
         delta = float(dl[ki])
-        e_user = tw.explained_share(c, ts, {p: USER_SIDE}, kpi)
-        e_track = tw.explained_share(c, ts, {pp: ["revenue"] for pp in range(cfg.P)}, kpi)
-        e_rew = tw.explained_share(c, ts, {pp: ["rewards"] for pp in range(cfg.P)}, kpi)
+        e_user = tw.explained_share(c, ts, {p: USER_SIDE}, kpi, on_p)
+        e_track = tw.explained_share(c, ts, {pp: ["revenue"] for pp in range(cfg.P)}, kpi, on_p)
+        e_rew = tw.explained_share(c, ts, {pp: ["rewards"] for pp in range(cfg.P)}, kpi, on_p)
         fc_cal = sum(tw._l1(tw.forecast(x))[c, ki] for x in ts)
         fc_nocal = sum(tw._l1(tw.forecast(x, calendar=False))[c, ki] for x in ts)
         obs_k = float(res["obs"][c, ki])
@@ -495,6 +578,7 @@ class Agent:
                "delta_revenue_usd_h": round(float(dl[KPIS.index("revenue")]) / WINDOW, 1),
                "delta_margin_usd_h": round(float(dl[KPIS.index("margin")]) / WINDOW, 1),
                "excess_accounts": est_total, "cause_spec": cause_spec,
+               "family": FAMILY.get(root, "unknown"),
                "alerts_merged": 0, "last_seen_at": t, "resolved_at": None,
                "recurrence_of": next((o["id"] for o in reversed(self.incidents)
                                       if o["fingerprint"] == [country.iso, plat, root]), None)}
@@ -1114,7 +1198,8 @@ class Agent:
                 "first_seen": left["label"] if left else hour_label(inc["detected_at"]),
                 "last_seen": hour_label(inc["last_seen_at"]),
                 "resolved_at": hour_label(inc["resolved_at"]) if inc.get("resolved_at") is not None else None,
-                "alerts_merged": inc["alerts_merged"], "recurrence_of": inc.get("recurrence_of")}
+                "alerts_merged": inc["alerts_merged"], "recurrence_of": inc.get("recurrence_of"),
+                "downstream": inc.get("downstream", [])}
 
     def _excess_accounts(self, c: int, p: int, t: int, hours: int = 12) -> int:
         """Sign-ups above the twin's baseline on this platform over the recent anomaly (estimate of new accounts)."""

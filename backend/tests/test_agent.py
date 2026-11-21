@@ -140,6 +140,11 @@ def test_issue_states_and_no_duplicates():
     assert len(ca) == 1
     s = w.agent.incident_summary(inc)
     assert s["status_label"] == "Still going" and s["alerts_merged"] >= 10 and s["first_seen"] == "Mon 04:00"
+    # the advertisers' chargebacks (revenue per completion drops on iOS fintech/strategy) are the farm's predicted
+    # downstream effect: attached to this issue, not a new one
+    ds = s["downstream"]
+    assert ds and all(d["effect"] == "chargeback" and d["category"] in ("Fintech apps", "Strategy games") for d in ds)
+    assert all(abs(d["after_h"] - d["predicted_after_h"]) <= 6 for d in ds)
 
 
 def test_issue_resolves_by_itself_when_the_problem_stops():
@@ -155,3 +160,18 @@ def test_issue_resolves_by_itself_when_the_problem_stops():
     w.inject("bot_farm", "CA", "Android")                     # it comes back: a new issue that links to the old one
     new = w._step_until_incident("CA", 10)
     assert new is not None and new["recurrence_of"] == inc["id"]
+
+
+def test_different_causes_in_one_country_are_separate_issues():
+    w = World(seed=42)
+    w.demo("bot_farm")
+    w.inject("tracking_break", "CA", "iOS")                   # a second, unrelated problem in the same country
+    w.step(12)
+    ca = [i for i in w.agent.incidents if i["country"] == "CA"]
+    assert len(ca) == 2
+    farm = next(i for i in ca if i["platform"] == "Android")
+    brk = next(i for i in ca if i["platform"] == "iOS")
+    assert farm["family"] == "users" and farm["root"] == "new_accounts"
+    assert brk["family"] == "revenue" and brk["root"] == "revenue" and brk["kind"] == "tracking"
+    assert farm["alerts_merged"] >= 10                       # the farm's repeated alerts still merge into one issue
+    assert brk["hypotheses"][0]["verdict"] == "supported"

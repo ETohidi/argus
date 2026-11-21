@@ -87,8 +87,10 @@ metrics and runs watch → detect → investigate → explain on its own.
   alternatives are rejected (< 30%); a fraud verdict also needs the user-level cluster. Otherwise it is reported as
   "likely" or "unclear" and Argus keeps watching. After a fix, it checks 24 h later whether its prediction held.
 
-**Limits worth stating:** the causal graph is specified from how the business works (its parameters are learned); one
-unresolved issue per country at a time; the marketplace and its faults are simulated (see below).
+**Limits worth stating:** the causal graph is specified from how the business works (its parameters are learned);
+issues are kept apart by cause family per country and platform (users, revenue confirmation, reward pricing), so two
+different problems of the same family on the same platform and country at once would be merged; the marketplace and
+its faults are simulated (see below).
 
 ## Technical approach
 
@@ -147,7 +149,8 @@ add metric) drive everything.
   the simulator. Verification after 24 h checks the prediction, not the assumption.
 - **Potential mode is conservative and model-dependent:** the twin shows +2–3.5% margin from a taste-matched feed;
   the simulator's truth for the same feed is higher, because the twin's taste model is flatter than reality.
-- **One country can carry one open incident at a time**; overlapping causes in the same country are not separated.
+- **Issues are separated by cause family** (users / revenue confirmation / reward pricing) per country and platform;
+  two problems of the same family on the same platform and country at the same time would be merged.
 - **Free-tier hosting:** sessions live in memory (up to 13, idle expiry 30 min, LRU eviction); a restart resets them.
 - LLM-written reports are optional; without a key Argus uses deterministic templates.
 

@@ -42,6 +42,10 @@ Globe state.
       "resolved_at": null,             // time label once resolved
       "alerts_merged": 3,              // later alerts for the same problem folded into this issue (never reported twice)
       "recurrence_of": null,           // id of an earlier resolved issue with the same country/platform/root cause
+      "downstream": [                  // predicted consequences attached to this issue (not reported separately)
+        { "effect": "chargeback", "platform": "iOS", "category": "Fintech apps", "t": 365, "label": "Tue 11:00",
+          "after_h": 29, "predicted_after_h": 28,
+          "text": "Advertisers reclaiming money: fintech apps on iOS, caused by the farm, as predicted (~28 h, seen after 29 h)" } ],
       "card": { ... } }           // plain-language issue card, see below
   ],
   "added_metrics": [               // metrics added via POST /api/metrics, now monitored
@@ -56,8 +60,10 @@ Globe state.
 }
 ```
 Incident `status`: `open` | `persisting` | `fix_applied` | `verified` | `resolved` (show `status_label`).
-Issue tracking: one unresolved issue per country; any further alert there is merged into it (`alerts_merged`,
-`last_seen`). With a fix: resolved after verification plus 6 healthy hours. Without a fix: resolved after 6 healthy
+Issue tracking: an alert is merged into an open issue only if it has the same country and the same cause (platform ×
+cause family: users / revenue / rewards). A strong new root of another family, holding 2 h, opens its own issue. An
+advertiser reaction the issue predicted (chargebacks: revenue per completion, budget cut: impressions, in the issue's
+offer categories, near the predicted hour) is attached to it as `downstream` instead of a new issue. With a fix: resolved after verification plus 6 healthy hours. Without a fix: resolved after 6 healthy
 hours ("Recovered without action" in the trail). A returning problem opens a new issue with `recurrence_of` set. `severity`: `low` | `medium` | `high`,
 from risk rather than hourly impact: high if `risk_7d_usd` ≥ $25k, or ≥ $10k with advertisers reacting within 24 h;
 medium if ≥ $5k, or ≥ $1k with a reaction within 24 h; low otherwise.
