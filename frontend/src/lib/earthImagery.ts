@@ -48,9 +48,10 @@ export class EarthImagery {
     return new EarthImagery(day, night)
   }
 
-  // Blend for one UTC hour; resolves to an object URL of the texture (previous one is revoked) and the colour of its
-  // top rows, which the caller uses for the polar cap MapLibre paints above 85° (otherwise a darker disc shows).
-  async render(utcHour: number): Promise<{ url: string; poleColor: string }> {
+  // Blend for one UTC hour; resolves to an object URL of the texture (previous one is revoked) and the average colour
+  // of its top and bottom rows. MapLibre paints both polar caps (beyond ±85°) with the background colour, so the
+  // caller sets it to the pole facing the camera (otherwise a dark disc shows over the Arctic or Antarctica).
+  async render(utcHour: number): Promise<{ url: string; poles: { north: [number, number, number]; south: [number, number, number] } }> {
     const sun = subsolar(utcHour)
     const sS = Math.sin(sun.lat * RAD)
     const cS = Math.cos(sun.lat * RAD)
@@ -77,15 +78,18 @@ export class EarthImagery {
         o[k + 3] = 255
       }
     }
-    let pr = 0, pg = 0, pb = 0
-    for (let k = 0; k < SIZE * 4 * 4; k += 4) (pr += o[k]), (pg += o[k + 1]), (pb += o[k + 2])
-    const cnt = SIZE * 4
-    const poleColor = `rgb(${Math.round(pr / cnt)}, ${Math.round(pg / cnt)}, ${Math.round(pb / cnt)})`
+    const rowsMean = (from: number): [number, number, number] => {
+      let r = 0, g = 0, b = 0
+      for (let k = from * SIZE * 4; k < (from + 4) * SIZE * 4; k += 4) (r += o[k]), (g += o[k + 1]), (b += o[k + 2])
+      const n = SIZE * 4
+      return [r / n, g / n, b / n]
+    }
+    const poles = { north: rowsMean(0), south: rowsMean(SIZE - 4) }
     ctx.putImageData(out, 0, 0)
     const blob: Blob = await new Promise((res) => this.canvas.toBlob((b) => res(b!), 'image/jpeg', 0.9))
     if (this.lastUrl) URL.revokeObjectURL(this.lastUrl)
     this.lastUrl = URL.createObjectURL(blob)
-    return { url: this.lastUrl, poleColor }
+    return { url: this.lastUrl, poles }
   }
 }
 

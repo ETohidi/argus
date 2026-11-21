@@ -332,7 +332,7 @@ export default function App() {
         iso: lf?.country.iso ?? LAUNCH.iso,
         lng: lf?.country.lng ?? LAUNCH.lng,
         lat: lf?.country.lat ?? LAUNCH.lat,
-        zoom: 2.4,
+        zoom: 2.85,
         // Predicted colour on the Opportunities scale: where its daily margin would rank among the watched countries.
         color: potentialColor(lf ? Math.max(0.45, state.countries.filter((c) => c.kpis.margin * 24 < lf.margin_per_day_usd.p50).length / state.countries.length) : 0.5),
         sources: (lf?.learned_from ?? []).map((s) => state.countries.find((c) => c.iso === s.iso)).filter(Boolean).map((c) => [c!.lng, c!.lat] as [number, number]),

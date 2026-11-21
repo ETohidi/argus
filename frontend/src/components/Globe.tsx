@@ -78,6 +78,9 @@ function opacityExpr(countries: CountryState[], pulse: number): unknown {
 
 // Only issues get a marker; explained / waiting markets are already told apart by their fill.
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
+// Launch camera: centre a little south of the country so it sits higher in view, zoomed in enough that only a sliver
+// of Antarctica shows; never tilted.
+const LAUNCH_LAT_SHIFT = -2
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
 // Great-circle path between two points (lng/lat), with continuous longitudes.
@@ -129,6 +132,21 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
   const hourRef = useRef(utcHour ?? 12)
   const earthRef = useRef<EarthImagery | null>(null)
   const launchRef = useRef(launch)
+  // Polar caps: MapLibre fills both with the background colour. Use the colour of the pole facing the camera, blended
+  // across the equator (where both caps sit edge-on at the limb), so neither pole shows a dark disc at any angle.
+  const polesRef = useRef<{ north: [number, number, number]; south: [number, number, number] } | null>(null)
+  const poleKey = useRef('')
+  const paintPoles = () => {
+    const map = mapRef.current
+    const p = polesRef.current
+    if (!map || !p) return
+    const t = Math.min(1, Math.max(0, 0.5 + map.getCenter().lat / 16)) // 0 = south faces the camera, 1 = north
+    const c = p.north.map((n, i) => Math.round(p.south[i] + (n - p.south[i]) * t))
+    const key = c.join(', ')
+    if (key === poleKey.current) return
+    poleKey.current = key
+    map.setPaintProperty('ocean', 'background-color', `rgb(${key})`)
+  }
   launchRef.current = launch
   countriesRef.current = countries
   modeRef.current = mode
@@ -245,9 +263,10 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
       EarthImagery.load()
         .then(async (earth) => {
           earthRef.current = earth
-          const { url, poleColor } = await earth.render(hourRef.current)
+          const { url, poles } = await earth.render(hourRef.current)
           if (!mapRef.current) return
-          map.setPaintProperty('ocean', 'background-color', poleColor)
+          polesRef.current = poles
+          paintPoles()
           map.addSource('earth', { type: 'image', url, coordinates: WORLD_COORDS })
           map.addLayer({ id: 'earth', type: 'raster', source: 'earth', paint: { 'raster-fade-duration': 0, 'raster-opacity': 1 } }, 'land')
           map.setPaintProperty('land', 'fill-opacity-transition', { duration: 800 } as any)
@@ -334,6 +353,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
     })
     // The globe moves under a still pointer (auto-rotation, fly-to), so a stale hover is cleared on movement too.
     map.on('movestart', clearHover)
+    map.on('move', paintPoles)
     canvas.addEventListener('mouseleave', clearHover)
     map.on('click', (e) => {
       const iso = countryAt(e.point)
@@ -398,10 +418,11 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
     const earth = earthRef.current
     if (earth && map?.getSource('earth')) {
       const hour = utcHour
-      earth.render(hour).then(({ url, poleColor }) => {
+      earth.render(hour).then(({ url, poles }) => {
         if (hour !== hourRef.current) return
         ;(map.getSource('earth') as ImageSource | undefined)?.updateImage({ url, coordinates: WORLD_COORDS })
-        map.setPaintProperty('ocean', 'background-color', poleColor)
+        polesRef.current = poles
+        paintPoles()
       })
     } else {
       const src = map?.getSource('night') as ImageSource | undefined
@@ -449,7 +470,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
       map.setFilter('launch-outline', filter)
       const arcs = map.getSource('launch-arcs') as GeoJSONSource
       // Reduced motion: the camera jumps instead of flying; the country only fades.
-      const move = (o: maplibregl.FlyToOptions) => (reducedMotion() ? map.jumpTo({ center: o.center, zoom: o.zoom, padding: o.padding as maplibregl.PaddingOptions }) : map.flyTo(o))
+      const move = (o: maplibregl.FlyToOptions) => (reducedMotion() ? map.jumpTo({ center: o.center, zoom: o.zoom, pitch: o.pitch, bearing: o.bearing, padding: o.padding as maplibregl.PaddingOptions }) : map.flyTo(o))
       if (!launch) {
         map.setPaintProperty('launch-fill', 'fill-opacity', 0)
         arcs.setData({ type: 'FeatureCollection', features: [] })
@@ -463,13 +484,13 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
         map.setPaintProperty('launch-fill', 'fill-opacity', 0.75)
         map.setPaintProperty('launch-outline', 'line-opacity', 0.6)
         map.setPaintProperty('watched', 'fill-opacity', 0.15)
-        move({ center: [launch.lng, launch.lat - 4], zoom: launch.zoom ?? 2.7, padding: { top: 0, bottom: 0, left: 0, right: insetRight }, duration: 1800, curve: 1.3, easing: easeOutCubic, essential: true })
+        move({ center: [launch.lng, launch.lat + LAUNCH_LAT_SHIFT], zoom: launch.zoom ?? 2.7, pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: insetRight }, duration: 1800, curve: 1.3, easing: easeOutCubic, essential: true })
         return
       }
       map.setPaintProperty('launch-fill', 'fill-color', launch.color)
       map.setPaintProperty('launch-fill', 'fill-opacity', 0.85)
       map.setPaintProperty('launch-outline', 'line-opacity', 0)
-      move({ center: [launch.lng, launch.lat - 4], zoom: launch.zoom ?? 2.7, padding: { top: 0, bottom: 0, left: 0, right: insetRight }, duration: 900, easing: easeOutCubic, essential: true })
+      move({ center: [launch.lng, launch.lat + LAUNCH_LAT_SHIFT], zoom: launch.zoom ?? 2.7, pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: insetRight }, duration: 900, easing: easeOutCubic, essential: true })
       if (reducedMotion() || !launch.sources.length) return
       const to: [number, number] = [launch.lng, launch.lat]
       arcs.setData({ type: 'FeatureCollection', features: launch.sources.map((s) => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: arc(s, to) } })) })
