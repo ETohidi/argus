@@ -152,7 +152,7 @@ def test_incident_series_normal_zone():
 
 
 def test_incident_counterfactual_removes_the_cause():
-    S = {"X-Session": "series"}
+    S = {"X-Session": "counterfactual"}
     inc_id = client.post("/api/demo/bot_farm", headers=S).json()["incident_id"]
     d = client.get(f"/api/incidents/{inc_id}", headers=S).json()
     cf = d["counterfactual"]
