@@ -86,6 +86,15 @@ def _country_phrase(name: str) -> str:
     return f"the {name}" if name.startswith(("United", "Philippines", "Netherlands")) else name
 
 
+DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
+def hour_label(t: int) -> str:
+    """Simulated UTC time label, e.g. "Mon 03:00" (sim day 0 is a Monday)."""
+    day, hour = divmod(int(t), 24)
+    return f"{DOW[day % 7]} {hour:02d}:00"
+
+
 def _fmt_usd(x: float) -> str:
     return f"${x:,.0f}" if abs(x) >= 1 else f"${x:,.2f}"
 
@@ -936,6 +945,74 @@ class Agent:
         return {"title": inc["title"], "looks_like": looks, "at_stake_7d_usd": inc["risk_7d_usd"],
                 "what_happened": happened, "why": why, "what_to_do": todo, "status_line": status_line}
 
+    # ------------------------------------------------------------------ visual series
+    def _seg_cats(self, inc: dict) -> list[int]:
+        return list(inc["fix_categories"]) if inc["kind"] == "tracking" else [inc["k"]]
+
+    @staticmethod
+    def _seg_value(r: dict, kpi: str, c: int, p: int, cats: list[int]) -> float:
+        if kpi in ("new_accounts", "active_users"):
+            return float(r[kpi][c, p])
+
+        def g(key: str) -> float:
+            return float(np.asarray(r[key][c, p])[cats].sum())
+        if kpi == "margin":
+            return g("revenue") - g("rewards")
+        if kpi == "quality_per_completion":
+            return g("quality") / max(g("completions"), 1e-9)
+        return g(kpi)
+
+    def _seg_sigma(self, kpi: str, c: int, p: int, k: int) -> float:
+        """Hourly relative (log) noise of the segment's KPI, from the twin's learned mechanism noise."""
+        tw = self.twin
+        if kpi == "new_accounts":
+            return float(tw.sig_new[c, p])
+        if kpi == "active_users":
+            return float(tw.sig_ret[c, p])
+        if kpi == "quality_per_completion":
+            return float(tw.sig["quality"][c, p, k])
+        acc = tw.sig_ret[c, p] ** 2 + sum(tw.sig[m][c, p, k] ** 2 for m in ("impressions", "starts", "completions"))
+        if kpi in ("revenue", "margin"):
+            acc += tw.sig["revenue"][c, p, k] ** 2
+        elif kpi == "rewards":
+            acc += tw.sig["rewards"][c, p, k] ** 2
+        elif kpi == "quality":
+            acc += tw.sig["quality"][c, p, k] ** 2
+        return float(np.sqrt(acc))
+
+    def series(self, inc: dict, hours: int = 48) -> dict:
+        """Alerting KPI for the root segment, hourly up to now, with the twin's expectation and a ±2σ band."""
+        tw = self.twin
+        c, p, kpi = inc["c"], inc["p"], inc["kpi"]
+        cats = self._seg_cats(inc)
+        sig = self._seg_sigma(kpi, c, p, cats[0])
+        start = max(min(tw.rows), self.t - hours + 1)
+        pts = []
+        for t in range(start, self.t + 1):
+            actual = self._seg_value(tw.rows[t], kpi, c, p, cats)
+            exp = self._seg_value(tw.forecast(t), kpi, c, p, cats)
+            lo = exp - abs(exp) * (1 - np.exp(-2 * sig))
+            hi = exp + abs(exp) * (np.exp(2 * sig) - 1)
+            pts.append({"t": t, "label": hour_label(t), "actual": round(actual, 3), "expected": round(exp, 3),
+                        "lo": round(float(lo), 3), "hi": round(float(hi), 3)})
+        # First hour of the excursion that led to detection: the start of the last run of out-of-band hours
+        # at or before detection.
+        left = None
+        outside = [pt for pt in pts if pt["t"] <= inc["detected_at"] and not pt["lo"] <= pt["actual"] <= pt["hi"]]
+        if outside:
+            run_end = outside[-1]["t"]
+            left = run_end
+            out_ts = {pt["t"] for pt in outside}
+            while left - 1 in out_ts:
+                left -= 1
+        seg_name = f"{cfg.COUNTRIES[c].name} · {inc['platform']}"
+        if kpi not in ("new_accounts", "active_users"):
+            seg_name += " · " + ", ".join(cfg.CATEGORIES[x] for x in cats)
+        return {"kpi": kpi, "label": f"{KPI_LABEL[kpi].capitalize()}, {seg_name}",
+                "unit": "USD/h" if kpi in ("revenue", "rewards", "margin") else "ratio"
+                if kpi == "quality_per_completion" else "per hour",
+                "points": pts, "left_zone_at": None if left is None else {"t": left, "label": hour_label(left)}}
+
     def incident_detail(self, inc: dict) -> dict:
         keys = ("id", "title", "status", "country", "platform", "category", "detected_at", "trail", "graph",
                 "contributions", "hypotheses", "l3", "fixes", "recommended", "applied", "verification", "reports",
@@ -943,6 +1020,10 @@ class Agent:
         out = {k: inc[k] for k in keys}
         out["reports"] = self.reports_for(inc)
         out["card"] = self.card(inc)
+        ser = self.series(inc)
+        out["series"] = ser["points"]
+        out["series_meta"] = {k: ser[k] for k in ("kpi", "label", "unit")}
+        out["left_zone_at"] = ser["left_zone_at"]
         return out
 
     def country_status(self, c: int) -> str:

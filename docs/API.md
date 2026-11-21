@@ -89,7 +89,12 @@ After approval `what_to_do` becomes "Done: <fix> applied."
   "applied": null,                                                                         // fix id once approved
   "verification": { "status": "pending", "predicted": [10, 50, 90], "actual": null },       // status: "pending" | "verified" | "missed"
   "reports": { "ceo": "...", "manager": "...", "engineer": "...", "source": "template" },  // source: "template" | "llm"
-  "card": { ... }                                                                           // issue card (above)
+  "card": { ... },                                                                          // issue card (above)
+  "series_meta": { "kpi": "new_accounts", "label": "New accounts, Canada · Android", "unit": "per hour" },
+  "series": [                                     // alerting KPI for the root segment, hourly, last 48 h up to now
+    { "t": 344, "label": "Mon 08:00", "actual": 77.8, "expected": 47.5, "lo": 41.7, "hi": 54.2 }   // lo/hi = twin ±2σ
+  ],
+  "left_zone_at": { "t": 344, "label": "Mon 08:00" }   // first hour of the excursion that led to detection; null if none
 }
 ```
 

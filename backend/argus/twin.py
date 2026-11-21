@@ -299,6 +299,9 @@ class Twin:
             masks = full
         M = masks.shape[0]
         out = {k: np.zeros(M) for k in ("new_accounts", "completions", "revenue", "rewards", "quality")}
+        # Per-segment detail: (M,P) for new/active users, (M,P,K) for the offer funnel.
+        seg = {"new_accounts": np.zeros((M, cfg.P)), "active_users": np.zeros((M, cfg.P)),
+               **{k: np.zeros((M, cfg.P, cfg.K)) for k in ("completions", "revenue", "rewards", "quality")}}
         mi = {m: i for i, m in enumerate(MECHANISMS)}
         for t in ts:
             r = self.rows[t]
@@ -342,8 +345,15 @@ class Twin:
                 out["revenue"] += rev.sum(1)
                 out["rewards"] += rew.sum(1)
                 out["quality"] += q.sum(1)
+                seg["new_accounts"][:, p] += new_now
+                seg["active_users"][:, p] += act
+                seg["completions"][:, p] += co
+                seg["revenue"][:, p] += rev
+                seg["rewards"][:, p] += rew
+                seg["quality"][:, p] += q
         out["margin"] = out["revenue"] - out["rewards"]
         out["quality_per_completion"] = out["quality"] / np.maximum(out["completions"], 1e-9)
+        out["segments"] = seg
         return out
 
     @staticmethod

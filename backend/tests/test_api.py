@@ -134,3 +134,18 @@ def test_health_reports_sessions_and_memory():
     h = client.get("/api/health").json()
     keys(h, ["ok", "sessions", "max_sessions", "session_ttl_s", "rss_mb", "mem_budget_mb"])
     assert h["max_sessions"] >= 2 and h["session_ttl_s"] == 1800
+
+
+def test_incident_series_normal_zone():
+    S = {"X-Session": "series"}
+    inc_id = client.post("/api/demo/bot_farm", headers=S).json()["incident_id"]
+    d = client.get(f"/api/incidents/{inc_id}", headers=S).json()
+    assert d["series_meta"]["kpi"] == "new_accounts" and "Android" in d["series_meta"]["label"]
+    pts = d["series"]
+    assert len(pts) == 48 and pts[-1]["t"] == client.get("/api/state", headers=S).json()["clock"]["t"]
+    keys(pts[0], ["t", "label", "actual", "expected", "lo", "hi"])
+    assert all(p["lo"] <= p["expected"] <= p["hi"] for p in pts)
+    lz = d["left_zone_at"]
+    assert lz is not None and lz["t"] <= d["detected_at"] and len(lz["label"]) == 9   # e.g. "Mon 08:00"
+    before = [p for p in pts if p["t"] < lz["t"] - 1]
+    assert sum(not p["lo"] <= p["actual"] <= p["hi"] for p in before) <= 3
