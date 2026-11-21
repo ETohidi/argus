@@ -232,3 +232,24 @@ def test_demo_story_clock():
     assert out["state"]["clock"]["label"].endswith("Mon 06:00 UTC")
     ev = {e["kind"]: e["time_label"] for e in client.get("/api/timeline", headers=S).json()["events"]}
     assert ev["planned"] == "Mon 01:00" and ev["detected"] == "Mon 06:00"
+
+
+def test_graph_edge_types_and_tree():
+    S = {"X-Session": "graph"}
+    client.post("/api/reset", headers=S)
+    g = client.get("/api/graph", headers=S).json()
+    assert {t["type"] for t in g["edge_types"]} == {"formula", "breakdown", "mechanism", "exogenous"}
+    assert all(e["label"] for e in g["edges"]) and {e["type"] for e in g["edges"]} == {"formula", "mechanism", "exogenous"}
+    node_ids = {n["id"] for n in g["nodes"]} | {"calendar"}
+    assert all(e["source"] in node_ids and e["target"] in node_ids for e in g["edges"])   # edges stay drawable
+    dims = {d["id"] for d in g["dimensions"]}
+    assert all(e["type"] == "breakdown" and e["target"] in dims for e in g["breakdown_edges"])
+    nodes = {n["id"]: n for n in g["nodes"]}
+    assert nodes["new_accounts"]["breakdown"] == ["country", "platform"]
+    assert nodes["margin"]["breakdown"] == ["country", "platform", "offer category"]
+    t = client.get("/api/graph/tree", headers=S).json()
+    assert t["roots"][:2] == ["margin", "quality_per_completion"]
+    rows = t["rows"]
+    assert rows[0]["id"] == "margin" and rows[0]["depth"] == 0 and rows[0]["relation"] is None
+    assert {"formula", "mechanism"} <= {r["relation"] for r in rows}
+    assert any(r["repeat"] for r in rows)                                                  # shared inputs shown once

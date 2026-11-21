@@ -85,14 +85,80 @@ class MetricGraph:
         visit(node_id)
         return seen
 
+    def breakdown_dims(self, node_id: str) -> list[str]:
+        """Dimensions a metric can be broken down by (users have no offer category; formulas inherit from inputs)."""
+        n = self.nodes[node_id]
+        if n.edge == "formula" and n.parents:
+            dims = None
+            for p in n.parents:
+                d = self.breakdown_dims(p)
+                dims = d if dims is None else [x for x in dims if x in d]
+            return dims or []
+        return ["country", "platform"] if node_id in ("new_accounts", "active_users") else \
+            ["country", "platform", "offer category"]
+
     def to_dict(self) -> dict:
-        nodes = [n.to_dict() for n in self.nodes.values()]
-        edges = [{"source": p, "target": n.id, "type": n.edge} for n in self.nodes.values() for p in n.parents]
-        edges += [{"source": "calendar", "target": t, "type": "exogenous"} for t in ("active_users", "starts", "rewards")]
-        return {"nodes": nodes, "edges": edges,
+        nodes = [{**n.to_dict(), "breakdown": self.breakdown_dims(n.id)} for n in self.nodes.values()]
+        edges = [{"source": p, "target": n.id, "type": n.edge if n.edge == "formula" else "mechanism",
+                  "label": EDGE_TYPES["formula" if n.edge == "formula" else "mechanism"]["label"]}
+                 for n in self.nodes.values() for p in n.parents]
+        edges += [{"source": "calendar", "target": t, "type": "exogenous", "label": EDGE_TYPES["exogenous"]["label"]}
+                  for t in ("active_users", "starts", "rewards")]
+        # Breakdown edges (separate list, targets are dimension nodes): metric -> first dimension, then the chain
+        # country -> platform -> offer category.
+        breakdown_edges = [{"source": n.id, "target": "dim:" + self.breakdown_dims(n.id)[0].replace(" ", "_"),
+                   "type": "breakdown", "label": EDGE_TYPES["breakdown"]["label"]}
+                  for n in self.nodes.values() if self.breakdown_dims(n.id)]
+        breakdown_edges += [{"source": f"dim:{a}", "target": f"dim:{b}", "type": "breakdown",
+                   "label": EDGE_TYPES["breakdown"]["label"]}
+                  for a, b in (("country", "platform"), ("platform", "offer_category"))]
+        return {"nodes": nodes, "edges": edges, "breakdown_edges": breakdown_edges,
+                "dimensions": [{"id": "dim:country", "label": "Country (20)"},
+                               {"id": "dim:platform", "label": "Platform (iOS, Android)"},
+                               {"id": "dim:offer_category", "label": "Offer category (6)"}],
                 "exogenous": [{"id": "calendar", "label": "Planned events (marketing calendar)"}],
+                "edge_types": [{"type": k, **v} for k, v in EDGE_TYPES.items()],
                 "levels": {"L1": "Global and country totals", "L2": "Country x platform x advertiser category",
                            "L3": "Individual accounts (taste model, on demand)"}}
+
+    def tree(self) -> dict:
+        """Browsable tree: business outcomes at the top, then formula inputs, then possible causes, with breakdowns."""
+        used = {p for n in self.nodes.values() for p in n.parents}
+        outcomes = [r for r in ("margin", "quality_per_completion") if r in self.nodes]
+        roots = outcomes + [n.id for n in self.nodes.values() if n.origin == "extension"] + \
+            [n.id for n in self.nodes.values() if n.id not in used and n.id not in outcomes and n.origin != "extension"]
+        rows: list[dict] = []
+        shown: set[str] = set()
+
+        def visit(nid: str, depth: int, relation: str | None) -> None:
+            n = self.nodes[nid]
+            again = nid in shown
+            rows.append({"depth": depth, "id": nid, "label": n.label, "relation": relation,
+                         "relation_label": EDGE_TYPES[relation]["label"] if relation else None,
+                         "expr": n.expr, "unit": n.unit, "origin": n.origin,
+                         "breakdown": " → ".join(["global"] + self.breakdown_dims(nid)), "repeat": again})
+            if again:
+                return
+            shown.add(nid)
+            rel = "formula" if n.edge == "formula" else "mechanism"
+            for p in n.parents:
+                visit(p, depth + 1, rel)
+
+        for r in roots:
+            visit(r, 0, None)
+        return {"roots": roots, "rows": rows, "edge_types": [{"type": k, **v} for k, v in EDGE_TYPES.items()]}
+
+
+EDGE_TYPES = {
+    "formula": {"label": "Formula", "meaning": "the metric is computed from its inputs (e.g. margin = revenue − rewards)",
+                "reasoning": "exact decomposition: how much each input contributes to a change"},
+    "breakdown": {"label": "Breakdown", "meaning": "the same metric split by country → platform → offer category",
+                  "reasoning": "localise: find the segment that carries the change"},
+    "mechanism": {"label": "Possible cause", "meaning": "the upstream metric drives this one (e.g. starts → completions)",
+                  "reasoning": "root cause: test each link given its parents, counterfactual proof"},
+    "exogenous": {"label": "Known event", "meaning": "planned marketing events change these metrics on purpose",
+                  "reasoning": "explain innocent changes instead of alerting"},
+}
 
 
 SAFE_NAME = re.compile(r"^[a-z][a-z0-9_]*$")

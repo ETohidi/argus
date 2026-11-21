@@ -157,6 +157,13 @@ def get_graph(x_session: str | None = Header(default=None)) -> dict:
         return s.world.agent.graph.to_dict()
 
 
+@app.get("/api/graph/tree")
+def get_graph_tree(x_session: str | None = Header(default=None)) -> dict:
+    s = _world(x_session)
+    with s.lock:
+        return s.world.agent.graph.tree()
+
+
 @app.get("/api/incidents")
 def get_incidents(x_session: str | None = Header(default=None)) -> list[dict]:
     s = _world(x_session)
