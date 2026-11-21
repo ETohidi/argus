@@ -189,3 +189,48 @@ svg text {
 .argus-popup .maplibregl-popup-tip {
   display: none;
 }
+
+/* Argus' eye (TopBar). */
+.argus-eye {
+  display: block;
+  overflow: visible;
+}
+.argus-eye__lid {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transition: transform 0.09s ease-in;
+}
+.argus-eye--blink .argus-eye__lid {
+  transform: scaleY(0.08);
+}
+.argus-eye__iris {
+  transition: transform 0.7s cubic-bezier(0.3, 0.7, 0.2, 1);
+}
+.argus-eye__iris circle {
+  transition: fill 0.6s ease, stroke 0.6s ease;
+}
+.argus-eye__ring {
+  transform-box: view-box;
+  transform-origin: 18px 11px;
+}
+.argus-eye--scan .argus-eye__ring {
+  stroke-dasharray: 7 3.3;
+  animation: eye-scan 6s linear infinite;
+}
+@keyframes eye-scan {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .argus-eye__lid,
+  .argus-eye__iris {
+    transition: none;
+  }
+  .argus-eye--blink .argus-eye__lid {
+    transform: none;
+  }
+  .argus-eye--scan .argus-eye__ring {
+    animation: none;
+  }
+}

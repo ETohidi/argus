@@ -299,7 +299,7 @@ export default function App() {
     <div className="relative h-full overflow-hidden bg-bg">
       {state && <Globe countries={state.countries} mode={mode} selectedIso={focusIso} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
 
-      <TopBar clock={state ? shortClock(state.clock) : 'Connecting…'} status={state ? statusSentence(state) : { text: 'Connecting…', tone: 'neutral' }} mode={mode} onMode={setMode} />
+      <TopBar clock={state ? shortClock(state.clock) : 'Connecting…'} status={state ? statusSentence(state) : { text: 'Connecting…', tone: 'neutral', mood: 'calm' }} mode={mode} onMode={setMode} />
 
       {/* Right column: an explained change as a quiet note, then the issue card or the country sheet. */}
       <div className="pointer-events-none absolute bottom-8 right-8 top-24 z-20 flex flex-col items-end gap-4 overflow-y-auto">

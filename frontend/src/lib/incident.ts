@@ -56,23 +56,25 @@ export function whatToDo(d: IncidentDetail) {
 export const eventName = (event: string) => event.split(/[(:]/)[0].trim()
 
 // One status sentence for the home screen, most urgent first.
-export function statusSentence(state: WorldState): { text: string; tone: 'ok' | 'issue' | 'neutral' } {
+// mood drives Argus' eye in the header: problem (a decision is waiting), investigating (watching or checking a fix), calm.
+export type StatusSentence = { text: string; tone: 'ok' | 'issue' | 'neutral'; mood: 'calm' | 'problem' | 'investigating' }
+export function statusSentence(state: WorldState): StatusSentence {
   const name = (iso: string) => state.countries.find((c) => c.iso === iso)?.name ?? iso
   const decide = [...new Set(state.incidents.filter(needsDecision).map((i) => i.country))]
-  if (decide.length) return { text: decide.length === 1 ? `${name(decide[0])} needs attention` : `${decide.length} countries need attention`, tone: 'issue' }
+  if (decide.length) return { text: decide.length === 1 ? `${name(decide[0])} needs attention` : `${decide.length} countries need attention`, tone: 'issue', mood: 'problem' }
   const applied = state.incidents.filter((i) => i.status === 'fix_applied')
-  if (applied.length) return { text: `Fix applied in ${name(applied[0].country)} · checking the result`, tone: 'neutral' }
+  if (applied.length) return { text: `Fix applied in ${name(applied[0].country)} · checking the result`, tone: 'neutral', mood: 'investigating' }
   const watch = state.countries.filter((c) => c.status === 'watch')
-  if (watch.length) return { text: watch.length === 1 ? `${watch[0].name} looks unusual · watching` : `${watch.length} countries look unusual · watching`, tone: 'issue' }
+  if (watch.length) return { text: watch.length === 1 ? `${watch[0].name} looks unusual · watching` : `${watch.length} countries look unusual · watching`, tone: 'issue', mood: 'investigating' }
   const waiting = state.countries.filter((c) => c.status === 'waiting')
-  if (waiting.length) return { text: `Data still arriving from ${waiting.map((c) => c.name).join(', ')}`, tone: 'neutral' }
+  if (waiting.length) return { text: `Data still arriving from ${waiting.map((c) => c.name).join(', ')}`, tone: 'neutral', mood: 'investigating' }
   const explained = state.countries.filter((c) => c.status === 'explained')
   if (explained.length === 1) {
     const ev = state.explained.find((e) => e.country === explained[0].iso)
-    return { text: `${explained[0].name}: ${ev ? eventName(ev.event) : 'planned change'}, as planned`, tone: 'neutral' }
+    return { text: `${explained[0].name}: ${ev ? eventName(ev.event) : 'planned change'}, as planned`, tone: 'neutral', mood: 'calm' }
   }
-  if (explained.length) return { text: `${explained.length} planned changes, as expected`, tone: 'neutral' }
-  return { text: `All ${state.countries.length} countries as expected`, tone: 'ok' }
+  if (explained.length) return { text: `${explained.length} planned changes, as expected`, tone: 'neutral', mood: 'calm' }
+  return { text: `All ${state.countries.length} countries as expected`, tone: 'ok', mood: 'calm' }
 }
 
 // "Fake-account cluster in Canada (Android)" → "Fake accounts in Canada"; "Tracking break in United Kingdom (iOS, …)"
