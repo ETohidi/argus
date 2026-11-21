@@ -132,6 +132,7 @@ class Agent:
         self.quiet = np.zeros(cfg.C)
         self.zmax_hist: list[np.ndarray] = []
         self.wait_info: dict[int, dict] = {}
+        self.wait_log: list[dict] = []
         self.waiting = np.zeros(cfg.C, dtype=bool)
         self.explaining = np.zeros(cfg.C, dtype=bool)
         self.extensions: dict[str, dict] = {}
@@ -160,6 +161,8 @@ class Agent:
                 i = int(np.argmax(np.abs(zn[c])))
                 self.wait_info[c] = {"t": t, "naive_z": float(zn[c, i]),
                                      "share": float(self.twin.rows[t]["completeness"][c])}
+                self.wait_log.append({"t": t, "country": cfg.COUNTRIES[c].iso,
+                                      "share": self.wait_info[c]["share"]})
             elif not self.waiting[c] and c in self.wait_info:
                 info = self.wait_info.pop(c)
                 self.explained.append({"t": info["t"], "country": cfg.COUNTRIES[c].iso,
@@ -456,6 +459,7 @@ class Agent:
                       "finding": f"Recommend {rec['name']}: 7-day margin {_signed_usd(rec['delta_p50_usd'])} vs "
                                  f"doing nothing (p50)" if rec["id"] != "none"
                                  else "Doing nothing is best; keep monitoring"})
+        inc["left_zone_at"] = self.series(inc)["left_zone_at"]     # frozen at detection (series window moves on)
         inc["title"] = self._title(inc)
         inc["reports"] = self._reports(inc)
         self.incidents.append(inc)
@@ -644,6 +648,7 @@ class Agent:
         ok = lo <= actual <= hi
         inc["verification"] = {"status": "verified" if ok else "missed", "predicted": [lo, mid, hi],
                                "actual": round(actual)}
+        inc["verified_at"] = t
         if ok:
             inc["status"] = "verified"
             finding = f"Prediction verified: actual {_fmt_usd(actual)} within band {_fmt_usd(lo)}–{_fmt_usd(hi)}"
@@ -1038,6 +1043,9 @@ class Agent:
         # at or before detection.
         left = None
         outside = [pt for pt in pts if pt["t"] <= inc["detected_at"] and not pt["lo"] <= pt["actual"] <= pt["hi"]]
+        if "left_zone_at" in inc:
+            outside = []
+            left = inc["left_zone_at"]["t"] if inc["left_zone_at"] else None
         if outside:
             run_end = outside[-1]["t"]
             left = run_end
@@ -1087,6 +1095,41 @@ class Agent:
         else:
             label = "Without: " + top["name"].split(" (")[0].lower()
         return {"label": label, "series": pts, "explained_share": top["explained"]}
+
+    def timeline(self) -> dict:
+        """What Argus knows, in time order: calendar, first unusual hour, detection, approval, verification, waits."""
+        ev: list[dict] = []
+        for e in self.view.calendar:
+            if e.start <= self.t:
+                ev.append({"t": e.start, "label": f"Planned: {e.name} ({', '.join(e.to_dict()['categories'])})",
+                           "kind": "planned", "country": e.country})
+        for inc in self.incidents:
+            iso = inc["country"]
+            left = inc.get("left_zone_at")
+            if left is not None:
+                ev.append({"t": left["t"], "label": f"First unusual hour: {KPI_LABEL[inc['kpi']]} on "
+                                                    f"{inc['platform']} left the normal zone",
+                           "kind": "anomaly", "country": iso})
+            ev.append({"t": inc["detected_at"], "label": f"Detected: {inc['title']}", "kind": "detected", "country": iso})
+            if inc["applied_at"] is not None:
+                ev.append({"t": inc["applied_at"], "label": f"Approved: {FIX_INFO[inc['applied']][0]}",
+                           "kind": "approved", "country": iso})
+            if inc.get("verified_at") is not None:
+                ok = inc["verification"]["status"] == "verified"
+                ev.append({"t": inc["verified_at"], "label": "Prediction verified" if ok else
+                           "Prediction missed, model recalibrated", "kind": "verified", "country": iso})
+        for w in self.wait_log:
+            ev.append({"t": w["t"], "label": f"Waiting for data ({w['share']:.0%} of rows arrived)", "kind": "waiting",
+                       "country": w["country"]})
+        for e in self.explained:
+            if not e["event"].startswith("Late data"):
+                ev.append({"t": e["t"], "label": "Explained: " + e["event"].split(":")[0], "kind": "explained",
+                           "country": e["country"]})
+        order = {"planned": 0, "explained": 1, "waiting": 2, "anomaly": 3, "detected": 4, "approved": 5, "verified": 6}
+        ev.sort(key=lambda x: (x["t"], order[x["kind"]]))
+        for x in ev:
+            x["time_label"] = hour_label(x["t"])
+        return {"events": ev}
 
     def incident_detail(self, inc: dict) -> dict:
         keys = ("id", "title", "status", "country", "platform", "category", "detected_at", "trail", "graph",

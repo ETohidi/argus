@@ -136,6 +136,21 @@ L2 heatmap.
                    "demand_index": { "Casual games": 1.02, "Strategy games": 0.92, "...": 1.0 } } ] }  // local / global demand
 ```
 
+### `GET /api/timeline`
+What Argus knows, in time order. Built only from the public calendar, observed data and Argus's own decisions; never
+from simulator ground truth (e.g. the true start of a bot farm).
+```jsonc
+{ "events": [
+  { "t": 342, "time_label": "Mon 06:00", "kind": "planned",   "country": "DE", "label": "Planned: Weekend Boost (Casual games, Strategy games)" },
+  { "t": 348, "time_label": "Mon 12:00", "kind": "anomaly",   "country": "CA", "label": "First unusual hour: new accounts on Android left the normal zone" },
+  { "t": 350, "time_label": "Mon 14:00", "kind": "detected",  "country": "CA", "label": "Detected: Fake-account cluster in Canada (Android)" },
+  { "t": 352, "time_label": "Mon 16:00", "kind": "approved",  "country": "CA", "label": "Approved: Verify new accounts" },
+  { "t": 376, "time_label": "Tue 16:00", "kind": "verified",  "country": "CA", "label": "Prediction verified" }
+] }
+```
+`kind`: `planned` | `anomaly` (= the incident's `left_zone_at`) | `detected` | `waiting` (data arrived incomplete) |
+`approved` | `verified` (also when the prediction missed) | `explained`. Same-hour events are ordered as listed.
+
 ### `GET /api/meta`
 Public data behind the simulation, for a "Data" panel.
 ```jsonc

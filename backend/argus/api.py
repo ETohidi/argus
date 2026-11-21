@@ -223,6 +223,13 @@ def post_demo(scene: str, x_session: str | None = Header(default=None)) -> dict:
         return s.world.demo(scene)
 
 
+@app.get("/api/timeline")
+def get_timeline(x_session: str | None = Header(default=None)) -> dict:
+    s = _world(x_session)
+    with s.lock:
+        return s.world.agent.timeline()
+
+
 @app.get("/api/meta")
 def get_meta(x_session: str | None = Header(default=None)) -> dict:
     s = _world(x_session)

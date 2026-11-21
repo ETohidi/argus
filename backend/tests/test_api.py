@@ -196,3 +196,21 @@ def test_l3_fake_account_picture():
         assert a["flagged"] and b["flagged"] and a["device"] == b["device"] and ln["a"] != ln["b"]
     assert sum(g["count"] for g in l3["groups"]) == sum(p["flagged"] for p in pts)
     assert l3["groups"][0]["count"] >= 5
+
+
+def test_timeline_uses_only_what_argus_knows():
+    S = {"X-Session": "timeline"}
+    client.post("/api/demo/start", headers=S)
+    client.post("/api/inject", json={"type": "data_delay", "country": "FR"}, headers=S)
+    client.post("/api/step", json={"hours": 4}, headers=S)
+    for scene in ("promo", "bot_farm", "approve", "verify"):
+        client.post(f"/api/demo/{scene}", headers=S)
+    ev = client.get("/api/timeline", headers=S).json()["events"]
+    keys(ev[0], ["t", "label", "kind", "country"])
+    kinds = [e["kind"] for e in ev]
+    for k in ("waiting", "planned", "explained", "anomaly", "detected", "approved", "verified"):
+        assert k in kinds, k
+    assert [e["t"] for e in ev] == sorted(e["t"] for e in ev)
+    ca = [e for e in ev if e["country"] == "CA"]
+    assert [e["kind"] for e in ca] == ["anomaly", "detected", "approved", "verified"]
+    assert all("farm" not in e["label"].lower() for e in ev)
