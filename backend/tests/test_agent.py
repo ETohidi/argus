@@ -111,3 +111,20 @@ def test_potential_story_differs_by_region(world):
     assert pot["US"]["top_categories"][0] != pot["BR"]["top_categories"][0]
     assert pot["KR"]["demand_index"]["Strategy games"] > 1.3        # strong strategy-games audience
     assert pot["BR"]["demand_index"]["Surveys"] > pot["DE"]["demand_index"]["Surveys"]
+
+
+def test_issue_card_is_plain_language(world):
+    world.inject("bot_farm", "CA", "Android")
+    inc = world._step_until_incident("CA", 10)
+    card = world.agent.card(inc)
+    assert set(card) == {"title", "looks_like", "at_stake_7d_usd", "what_happened", "why", "what_to_do", "status_line"}
+    text = " ".join(str(v) for v in card.values())
+    for jargon in ("z=", "σ", "sigma", "Shapley", "mechanism", "L1", "L2", "L3"):
+        assert jargon not in text, jargon
+    assert "growth" in card["looks_like"] and "explained" in card["why"] and card["status_line"] == "Needs a decision"
+    assert card["at_stake_7d_usd"] == inc["risk_7d_usd"] > 0
+    world.agent.approve(inc["id"], inc["recommended"])
+    assert world.agent.card(inc)["status_line"] == "Fix applied · verifying"
+    world.step(25)
+    assert "Prediction verified" in world.agent.card(inc)["status_line"] or \
+        "prediction verified" in world.agent.card(inc)["status_line"]

@@ -28,7 +28,8 @@ Globe state.
     { "id": "inc-1", "title": "...", "country": "CA", "status": "open", "severity": "high",
       "impact_usd_h": 134.0,      // current deviation in USD/h
       "risk_7d_usd": 114042,      // 7-day margin lost by doing nothing vs the recommended fix (p50, twin)
-      "reaction_h": 21 }          // hours until advertisers react (chargebacks); 0 = losses accrue now; null = n/a
+      "reaction_h": 21,           // hours until advertisers react (chargebacks); 0 = losses accrue now; null = n/a
+      "card": { ... } }           // plain-language issue card, see below
   ],
   "explained": [
     { "t": 350, "country": "DE", "event": "Weekend Boost (games)", "naive_z": 5.1, "twin_z": 0.7 }
@@ -39,6 +40,23 @@ Globe state.
 Incident `status`: `open` | `persisting` | `fix_applied` | `verified` | `resolved`. `severity`: `low` | `medium` | `high`,
 from risk rather than hourly impact: high if `risk_7d_usd` ≥ $25k, or ≥ $10k with advertisers reacting within 24 h;
 medium if ≥ $5k, or ≥ $1k with a reaction within 24 h; low otherwise.
+
+### Issue card (`incident.card`, in `/api/state` incidents and `/api/incidents/{id}`)
+Plain short sentences for the issue card; no z-scores or model terms (those stay in `reports.engineer`).
+Recomputed on every read, so `status_line` follows the incident.
+```jsonc
+{
+  "title": "Fake-account cluster in Canada (Android)",
+  "looks_like": "+$85/h of 'growth'",              // how it looks on a naive dashboard
+  "at_stake_7d_usd": 156194,                        // = risk_7d_usd
+  "what_happened": "About 103 fake accounts appeared on Android in Canada and are completing high-paying strategy-game and fintech offers.",
+  "why": "Their stated interests don't match what they do and they share emulator devices (proven, 94% explained).",
+  "what_to_do": "Verify new accounts: require phone and device checks for new Android sign-ups. Saves about $156,194 over the next 7 days.",
+  "status_line": "Needs a decision"                 // "Needs a decision" | "Fix applied · verifying" | "Prediction verified" |
+                                                    // "Fix applied · prediction missed, model recalibrated" | "Resolved[ · prediction verified]"
+}
+```
+After approval `what_to_do` becomes "Done: <fix> applied."
 
 ### `GET /api/incidents/{id}`
 ```jsonc
@@ -67,7 +85,8 @@ medium if ≥ $5k, or ≥ $1k with a reaction within 24 h; low otherwise.
   "recommended": "block_cluster",
   "applied": null,                                                                         // fix id once approved
   "verification": { "status": "pending", "predicted": [10, 50, 90], "actual": null },       // status: "pending" | "verified" | "missed"
-  "reports": { "ceo": "...", "manager": "...", "engineer": "..." }
+  "reports": { "ceo": "...", "manager": "...", "engineer": "...", "source": "template" },  // source: "template" | "llm"
+  "card": { ... }                                                                           // issue card (above)
 }
 ```
 

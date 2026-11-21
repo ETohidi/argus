@@ -79,6 +79,13 @@ class RealityView:
         self._reality.apply(intervention)
 
 
+OFFER_NOUN = ["casual-game", "strategy-game", "fintech", "streaming", "shopping-cashback", "survey"]
+
+
+def _country_phrase(name: str) -> str:
+    return f"the {name}" if name.startswith(("United", "Philippines", "Netherlands")) else name
+
+
 def _fmt_usd(x: float) -> str:
     return f"${x:,.0f}" if abs(x) >= 1 else f"${x:,.2f}"
 
@@ -410,7 +417,10 @@ class Agent:
                "verification": {"status": "pending", "predicted": None, "actual": None},
                "z": {KPI_LABEL[kk]: round(float(z[i]), 1) for i, kk in enumerate(KPIS)},
                "mechanism_z": {m: round(v, 1) for m, v in mz.items()}, "root": root, "broken": broken,
-               "symptoms": symptoms, "delta_usd_h": round(delta / WINDOW, 1)}
+               "symptoms": symptoms, "delta_usd_h": round(delta / WINDOW, 1),
+               "delta_revenue_usd_h": round(float(dl[KPIS.index("revenue")]) / WINDOW, 1),
+               "delta_margin_usd_h": round(float(dl[KPIS.index("margin")]) / WINDOW, 1),
+               "excess_accounts": self._excess_accounts(c, p, t)}
         inc["fixes"] = self._fixes(inc, opts, t)
         inc["recommended"] = self._recommend(inc["fixes"], kind)
         rec_fix = next(f for f in inc["fixes"] if f["id"] == inc["recommended"])
@@ -864,8 +874,67 @@ class Agent:
         return next((i for i in self.incidents if i["id"] == inc_id), None)
 
     def incident_summary(self, inc: dict) -> dict:
-        return {k: inc[k] for k in ("id", "title", "country", "status", "severity", "impact_usd_h", "risk_7d_usd",
-                                    "reaction_h")}
+        out = {k: inc[k] for k in ("id", "title", "country", "status", "severity", "impact_usd_h", "risk_7d_usd",
+                                   "reaction_h")}
+        out["card"] = self.card(inc)
+        return out
+
+    def _excess_accounts(self, c: int, p: int, t: int, hours: int = 12) -> int:
+        """Sign-ups above the twin's baseline on this platform over the recent anomaly (estimate of new accounts)."""
+        n = 0.0
+        for x in range(t - hours + 1, t + 1):
+            if x in self.twin.rows:
+                n += max(float(self.twin.rows[x]["new_accounts"][c, p] - self.twin.forecast(x)["new_accounts"][c, p]), 0)
+        return int(round(n))
+
+    def card(self, inc: dict) -> dict:
+        """Plain-language issue card for the UI (no z-scores; those stay in the engineer report)."""
+        name = _country_phrase(cfg.COUNTRIES[inc["c"]].name)
+        plat = inc["platform"]
+        cats = " and ".join(OFFER_NOUN[k] for k in inc["fix_categories"][:2])
+        top = inc["hypotheses"][0]
+        rec = next(f for f in inc["fixes"] if f["id"] == inc["recommended"])
+        word = "proven" if top["verdict"] == "supported" else "likely" if top["verdict"] == "partial" else "unclear"
+        proof = f"{word}, {top['explained']:.0%} explained"
+        d_rev, d_mg = inc["delta_revenue_usd_h"], inc["delta_margin_usd_h"]
+        if inc["kind"] == "fraud":
+            looks = f"+{_fmt_usd(max(d_rev, 0))}/h of 'growth'"
+            happened = (f"About {inc['excess_accounts']} fake accounts appeared on {plat} in {name} and are completing "
+                        f"high-paying {cats} offers.")
+            why = (f"Their stated interests don't match what they do and they share emulator devices ({proof}).")
+        elif inc["kind"] == "tracking":
+            looks = f"{_signed_usd(d_rev)}/h of revenue"
+            happened = (f"Advertisers stopped confirming most {cats} completions from {plat} users in {name}, but we "
+                        f"still pay those users their rewards.")
+            why = f"Revenue per completion collapsed while user activity stayed normal ({proof})."
+        elif inc["kind"] == "organic":
+            looks = f"{_signed_usd(d_rev)}/h of revenue"
+            happened = f"Many new real users joined on {plat} in {name}."
+            why = f"Their tastes look genuine, so this is real growth ({proof})."
+        else:
+            looks = f"{_signed_usd(d_mg)}/h of margin"
+            happened = f"{KPI_LABEL[inc['kpi']].capitalize()} in {name} moved away from what we expected."
+            why = f"The change starts at {MECH_LABEL[inc['root']].lower() if inc['root'] else 'an unknown step'} ({proof})."
+        if rec["id"] == "none":
+            todo = "No action needed; keep watching."
+        else:
+            short = {"block_cluster": "suspend the fake accounts and their devices",
+                     "verify_new_accounts": f"require phone and device checks for new {plat} sign-ups",
+                     "cap_rewards": "lower rewards on the targeted offers",
+                     "notify_advertiser": "ask the advertisers to fix their tracking",
+                     "pause_offers": "pause the affected offers for 18 h",
+                     "pause_notify": "pause the affected offers and ask the advertisers to fix tracking"}[rec["id"]]
+            todo = f"{rec['name']}: {short}. Saves about {_fmt_usd(rec['delta_p50_usd'])} over the next 7 days."
+        v = inc["verification"]["status"]
+        status_line = {
+            "open": "Needs a decision", "persisting": "Needs a decision",
+            "fix_applied": "Fix applied · verifying" if v == "pending" else "Fix applied · prediction missed, model recalibrated",
+            "verified": "Prediction verified", "resolved": "Resolved" + (" · prediction verified" if v == "verified" else ""),
+        }[inc["status"]]
+        if inc["status"] in ("fix_applied", "verified", "resolved") and inc["applied"]:
+            todo = f"Done: {FIX_INFO[inc['applied']][0].lower()} applied."
+        return {"title": inc["title"], "looks_like": looks, "at_stake_7d_usd": inc["risk_7d_usd"],
+                "what_happened": happened, "why": why, "what_to_do": todo, "status_line": status_line}
 
     def incident_detail(self, inc: dict) -> dict:
         keys = ("id", "title", "status", "country", "platform", "category", "detected_at", "trail", "graph",
@@ -873,6 +942,7 @@ class Agent:
                 "severity", "impact_usd_h", "risk_7d_usd", "reaction_h", "kind", "root")
         out = {k: inc[k] for k in keys}
         out["reports"] = self.reports_for(inc)
+        out["card"] = self.card(inc)
         return out
 
     def country_status(self, c: int) -> str:
