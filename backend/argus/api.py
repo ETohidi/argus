@@ -1,0 +1,198 @@
+"""FastAPI app implementing docs/API.md. Run: uvicorn argus.api:app --reload (from backend/)."""
+from __future__ import annotations
+
+import threading
+import time
+from collections import OrderedDict
+from pathlib import Path
+
+from fastapi import Body, FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+from . import config as cfg
+from .world import INJECT_TYPES, SCENES, World
+
+MAX_SESSIONS = 50
+SESSION_TTL = 3600.0
+MAX_STEP_HOURS = 24 * 14
+
+
+class _Session:
+    def __init__(self) -> None:
+        self.world = World(seed=42)
+        self.lock = threading.Lock()
+        self.seen = time.monotonic()
+
+
+class Sessions:
+    def __init__(self) -> None:
+        self._items: OrderedDict[str, _Session] = OrderedDict()
+        self._lock = threading.Lock()
+
+    def get(self, key: str | None) -> _Session:
+        key = (key or "default")[:64]
+        now = time.monotonic()
+        with self._lock:
+            for k in [k for k, s in self._items.items() if now - s.seen > SESSION_TTL]:
+                del self._items[k]
+            s = self._items.get(key)
+            if s is None:
+                s = _Session()
+                self._items[key] = s
+                while len(self._items) > MAX_SESSIONS:
+                    self._items.popitem(last=False)
+            self._items.move_to_end(key)
+            s.seen = now
+            return s
+
+
+sessions = Sessions()
+app = FastAPI(title="Argus", version="0.1")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+
+class StepIn(BaseModel):
+    hours: int = 1
+
+
+class InjectIn(BaseModel):
+    type: str
+    country: str
+    platform: str | None = None
+
+
+class ApproveIn(BaseModel):
+    fix_id: str
+
+
+class MetricIn(BaseModel):
+    name: str
+    description: str = ""
+
+
+def _world(x_session: str | None):
+    return sessions.get(x_session)
+
+
+@app.get("/api/state")
+def get_state(x_session: str | None = Header(default=None)) -> dict:
+    s = _world(x_session)
+    with s.lock:
+        return s.world.agent.state()
+
+
+@app.post("/api/step")
+def post_step(body: StepIn = Body(default=StepIn()), x_session: str | None = Header(default=None)) -> dict:
+    if not 1 <= body.hours <= MAX_STEP_HOURS:
+        raise HTTPException(400, f"hours must be between 1 and {MAX_STEP_HOURS}")
+    s = _world(x_session)
+    with s.lock:
+        s.world.step(body.hours)
+        return s.world.agent.state()
+
+
+@app.post("/api/reset")
+def post_reset(x_session: str | None = Header(default=None)) -> dict:
+    s = _world(x_session)
+    with s.lock:
+        s.world.reset(42)
+        return s.world.agent.state()
+
+
+@app.post("/api/inject")
+def post_inject(body: InjectIn, x_session: str | None = Header(default=None)) -> dict:
+    if body.type not in INJECT_TYPES:
+        raise HTTPException(400, f"type must be one of {', '.join(INJECT_TYPES)}")
+    s = _world(x_session)
+    with s.lock:
+        try:
+            ev = s.world.inject(body.type, body.country, body.platform)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        return {"ok": True, "event": ev}
+
+
+@app.get("/api/graph")
+def get_graph(x_session: str | None = Header(default=None)) -> dict:
+    s = _world(x_session)
+    with s.lock:
+        return s.world.agent.graph.to_dict()
+
+
+@app.get("/api/incidents")
+def get_incidents(x_session: str | None = Header(default=None)) -> list[dict]:
+    s = _world(x_session)
+    with s.lock:
+        return [s.world.agent.incident_summary(i) for i in s.world.agent.incidents]
+
+
+@app.get("/api/incidents/{inc_id}")
+def get_incident(inc_id: str, x_session: str | None = Header(default=None)) -> dict:
+    s = _world(x_session)
+    with s.lock:
+        inc = s.world.agent.get_incident(inc_id)
+        if inc is None:
+            raise HTTPException(404, f"incident {inc_id} not found")
+        return s.world.agent.incident_detail(inc)
+
+
+@app.post("/api/incidents/{inc_id}/approve")
+def approve(inc_id: str, body: ApproveIn, x_session: str | None = Header(default=None)) -> dict:
+    s = _world(x_session)
+    with s.lock:
+        agent = s.world.agent
+        if agent.get_incident(inc_id) is None:
+            raise HTTPException(404, f"incident {inc_id} not found")
+        try:
+            inc = agent.approve(inc_id, body.fix_id)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        return agent.incident_detail(inc)
+
+
+@app.post("/api/metrics")
+def post_metric(body: MetricIn, x_session: str | None = Header(default=None)) -> dict:
+    if not body.name.strip():
+        raise HTTPException(400, "name is required")
+    s = _world(x_session)
+    with s.lock:
+        return s.world.agent.add_metric(body.name.strip()[:80], body.description.strip()[:500])
+
+
+@app.get("/api/country/{iso}")
+def get_country(iso: str, x_session: str | None = Header(default=None)) -> dict:
+    iso = iso.upper()
+    iso = "GB" if iso == "UK" else iso
+    if iso not in cfg.ISO_INDEX:
+        raise HTTPException(404, f"country {iso} not found")
+    s = _world(x_session)
+    with s.lock:
+        return s.world.agent.country_detail(cfg.ISO_INDEX[iso])
+
+
+@app.get("/api/potential")
+def get_potential(x_session: str | None = Header(default=None)) -> dict:
+    s = _world(x_session)
+    with s.lock:
+        return {"countries": list(s.world.agent.potential)}
+
+
+@app.post("/api/demo/{scene}")
+def post_demo(scene: str, x_session: str | None = Header(default=None)) -> dict:
+    if scene not in SCENES:
+        raise HTTPException(404, f"scene must be one of {', '.join(SCENES)}")
+    s = _world(x_session)
+    with s.lock:
+        return s.world.demo(scene)
+
+
+@app.get("/api/health")
+def health() -> dict:
+    return {"ok": True}
+
+
+_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+if _DIST.is_dir():
+    app.mount("/", StaticFiles(directory=_DIST, html=True), name="frontend")
