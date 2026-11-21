@@ -5,6 +5,7 @@ public marketing calendar, unlabeled user samples and the actions it applies.
 """
 from __future__ import annotations
 
+import json
 import re
 
 import numpy as np
@@ -632,15 +633,47 @@ class Agent:
                     + ", ".join(f"{m} {v:+.1f}" for m, v in inc["mechanism_z"].items())
                     + f". Root: {inc['root']}. Shapley Δmargin: {shap}.{l3} Hypothesis test KPI: {inc['kpi']}; "
                       f"supported if explained ≥ {SUPPORTED:.0%}.")
-        reports = {"ceo": ceo, "manager": manager, "engineer": engineer}
-        if llm.configured():
-            out = llm.chat_json(
-                "You rewrite incident reports for three audiences of a rewarded-ad marketplace. Keep every number. "
-                "Keys: ceo (2-3 sentences, money), manager (segment, campaign, action), engineer (mechanisms, z, "
-                "queries).", str(reports))
-            if out and all(isinstance(out.get(k), str) for k in reports):
-                reports = {k: out[k] for k in reports}
-        return reports
+        return {"ceo": ceo, "manager": manager, "engineer": engineer, "source": "template"}
+
+    def reports_for(self, inc: dict) -> dict:
+        """Reports for the incident detail: LLM-written when configured (cached per incident state), else templates."""
+        if not llm.configured():
+            return inc["reports"]
+        key = (inc["status"], inc["applied"], inc["verification"]["status"])
+        cache = inc.setdefault("_llm_reports", {})
+        if key not in cache:
+            cache[key] = self._llm_reports(inc) or inc["reports"]
+        return cache[key]
+
+    def _llm_reports(self, inc: dict) -> dict | None:
+        rec = next(f for f in inc["fixes"] if f["id"] == inc["recommended"])
+        facts = {
+            "incident": inc["title"], "status": inc["status"], "country": cfg.COUNTRIES[inc["c"]].name,
+            "platform": inc["platform"], "segments": inc["categories"], "impact_usd_per_hour": inc["impact_usd_h"],
+            "root_mechanism": inc["root"], "broken": inc["broken"], "symptoms": inc["symptoms"],
+            "mechanism_z": inc["mechanism_z"], "l1_z": inc["z"],
+            "hypotheses": [{k: h[k] for k in ("name", "explained", "verdict")} for h in inc["hypotheses"]],
+            "user_level_check": inc["l3"]["summary"] if inc["l3"] else None,
+            "fixes": [{"name": f["name"], "description": f["description"],
+                       "margin_7d_vs_doing_nothing_usd": f["delta_p50_usd"], "risk": f["advertiser_risk"]}
+                      for f in inc["fixes"]],
+            "recommended": rec["name"], "applied": FIX_INFO[inc["applied"]][0] if inc["applied"] else None,
+            "verification": inc["verification"],
+        }
+        drafts = {k: inc["reports"][k] for k in ("ceo", "manager", "engineer")}
+        out = llm.chat_json(
+            "You are Argus, an analyst for a rewarded-ad marketplace (advertisers pay per completed offer, users get a "
+            "reward share). Write one incident report per audience from the facts. Use only numbers that appear in "
+            "the facts; never invent figures. Keys: ceo (max 3 sentences: business impact in money, cause, the "
+            "decision needed), manager (max 4 sentences: segment, campaigns/advertisers affected, the action and "
+            "follow-up), engineer (max 5 sentences: mechanisms and z-scores, root vs symptoms, counterfactual "
+            "results, what was queried). 'root_mechanism' is the cause; 'broken' are other mechanisms that are "
+            "themselves abnormal; only 'symptoms' are symptoms. If 'applied' is set the decision has been taken: report "
+            "it and the verification status instead of asking for approval. Plain text, no markdown.",
+            json.dumps({"facts": facts, "template_drafts": drafts}, default=str), max_tokens=1200)
+        if not out or not all(isinstance(out.get(k), str) and 20 <= len(out[k]) <= 2000 for k in drafts):
+            return None
+        return {**{k: out[k].strip() for k in drafts}, "source": "llm", "model": llm.model()}
 
     # ================================================================== metric extension
     def _known(self) -> set[str]:
@@ -810,7 +843,9 @@ class Agent:
         keys = ("id", "title", "status", "country", "platform", "category", "detected_at", "trail", "graph",
                 "contributions", "hypotheses", "l3", "fixes", "recommended", "applied", "verification", "reports",
                 "severity", "impact_usd_h", "kind", "root")
-        return {k: inc[k] for k in keys}
+        out = {k: inc[k] for k in keys}
+        out["reports"] = self.reports_for(inc)
+        return out
 
     def country_status(self, c: int) -> str:
         if self.waiting[c]:

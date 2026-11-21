@@ -12,7 +12,10 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import config as cfg
+from . import llm
 from .world import INJECT_TYPES, SCENES, World
+
+llm.load_dotenv()  # LLM_* from backend/.env if present (never committed)
 
 MAX_SESSIONS = 50
 SESSION_TTL = 3600.0
@@ -190,7 +193,7 @@ def post_demo(scene: str, x_session: str | None = Header(default=None)) -> dict:
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"ok": True}
+    return {"ok": True, "llm": llm.model()}
 
 
 _DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
