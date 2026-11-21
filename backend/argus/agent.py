@@ -385,9 +385,14 @@ class Agent:
             {"name": "Planned marketing event (calendar)", "explained": e_cal, "verdict": verdict(e_cal)},
             {"name": "Data gap (late or missing rows)", "explained": e_gap, "verdict": verdict(e_gap)},
         ]
+        # Which mechanisms each hypothesis switches off in a counterfactual replay (None: not a chain mechanism).
+        cause_specs = {user_name: {p: list(USER_SIDE)},
+                       hyps[1]["name"]: {pp: ["revenue"] for pp in range(cfg.P)},
+                       hyps[2]["name"]: {pp: ["rewards"] for pp in range(cfg.P)}}
         for h in hyps:
             h["explained"] = round(float(np.clip(h["explained"], 0, 1)), 3) + 0.0
         hyps.sort(key=lambda h: -h["explained"])
+        cause_spec = cause_specs.get(hyps[0]["name"]) if hyps[0]["verdict"] == "supported" else None
         if kind == "fraud" and hyps[0]["name"] == user_name and hyps[0]["verdict"] == "supported":
             pass
         elif e_track >= SUPPORTED:
@@ -429,7 +434,7 @@ class Agent:
                "symptoms": symptoms, "delta_usd_h": round(delta / WINDOW, 1),
                "delta_revenue_usd_h": round(float(dl[KPIS.index("revenue")]) / WINDOW, 1),
                "delta_margin_usd_h": round(float(dl[KPIS.index("margin")]) / WINDOW, 1),
-               "excess_accounts": self._excess_accounts(c, p, t)}
+               "excess_accounts": self._excess_accounts(c, p, t), "cause_spec": cause_spec}
         inc["fixes"] = self._fixes(inc, opts, t)
         inc["recommended"] = self._recommend(inc["fixes"], kind)
         rec_fix = next(f for f in inc["fixes"] if f["id"] == inc["recommended"])
@@ -1013,6 +1018,42 @@ class Agent:
                 if kpi == "quality_per_completion" else "per hour",
                 "points": pts, "left_zone_at": None if left is None else {"t": left, "label": hour_label(left)}}
 
+    def counterfactual(self, inc: dict, ser: dict) -> dict | None:
+        """Twin replay of the series hours with the supported cause removed (its mechanisms set to expected)."""
+        spec = inc.get("cause_spec")
+        if not spec:
+            return None
+        tw = self.twin
+        c, p, kpi = inc["c"], inc["p"], inc["kpi"]
+        cats = self._seg_cats(inc)
+        M = np.ones((2, cfg.P, len(MECHANISMS)), dtype=bool)
+        for pp, mechs in spec.items():
+            for m in mechs:
+                M[1, int(pp), MECHANISMS.index(m)] = False
+        start = ser["left_zone_at"]["t"] if ser["left_zone_at"] else inc["detected_at"]
+        pts = []
+        for pt in ser["points"]:
+            t = pt["t"]
+            if t < start:
+                v = pt["actual"]                       # before the excursion the cause was not there
+            else:
+                segs = tw.chain(c, [t], M)["segments"]
+                if kpi in ("new_accounts", "active_users"):
+                    v = float(segs[kpi][1, p])
+                else:
+                    g = {k: float(segs[k][1, p, cats].sum()) for k in ("completions", "revenue", "rewards", "quality")}
+                    v = (g["revenue"] - g["rewards"] if kpi == "margin" else
+                         g["quality"] / max(g["completions"], 1e-9) if kpi == "quality_per_completion" else g[kpi])
+            pts.append({"t": t, "value": round(v, 3)})
+        top = inc["hypotheses"][0]
+        if inc["kind"] == "fraud" and inc["l3"]:
+            label = f"Without the {inc['l3']['summary']['n_flagged']} flagged fake accounts"
+        elif inc["kind"] == "tracking":
+            label = "Without the tracking break"
+        else:
+            label = "Without: " + top["name"].split(" (")[0].lower()
+        return {"label": label, "series": pts, "explained_share": top["explained"]}
+
     def incident_detail(self, inc: dict) -> dict:
         keys = ("id", "title", "status", "country", "platform", "category", "detected_at", "trail", "graph",
                 "contributions", "hypotheses", "l3", "fixes", "recommended", "applied", "verification", "reports",
@@ -1024,6 +1065,7 @@ class Agent:
         out["series"] = ser["points"]
         out["series_meta"] = {k: ser[k] for k in ("kpi", "label", "unit")}
         out["left_zone_at"] = ser["left_zone_at"]
+        out["counterfactual"] = self.counterfactual(inc, ser)
         return out
 
     def country_status(self, c: int) -> str:

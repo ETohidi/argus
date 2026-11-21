@@ -149,3 +149,17 @@ def test_incident_series_normal_zone():
     assert lz is not None and lz["t"] <= d["detected_at"] and len(lz["label"]) == 9   # e.g. "Mon 08:00"
     before = [p for p in pts if p["t"] < lz["t"] - 1]
     assert sum(not p["lo"] <= p["actual"] <= p["hi"] for p in before) <= 3
+
+
+def test_incident_counterfactual_removes_the_cause():
+    S = {"X-Session": "series"}
+    inc_id = client.post("/api/demo/bot_farm", headers=S).json()["incident_id"]
+    d = client.get(f"/api/incidents/{inc_id}", headers=S).json()
+    cf = d["counterfactual"]
+    keys(cf, ["label", "series", "explained_share"])
+    assert cf["label"] == f"Without the {d['l3']['summary']['n_flagged']} flagged fake accounts"
+    assert [p["t"] for p in cf["series"]] == [p["t"] for p in d["series"]]
+    assert cf["explained_share"] == d["hypotheses"][0]["explained"] >= 0.8
+    last_actual, last_cf = d["series"][-1], cf["series"][-1]
+    assert last_cf["value"] < last_actual["actual"]                       # removing the fake accounts lowers sign-ups
+    assert last_actual["lo"] <= last_cf["value"] <= last_actual["hi"]      # ... back into the normal zone

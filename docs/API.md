@@ -94,7 +94,12 @@ After approval `what_to_do` becomes "Done: <fix> applied."
   "series": [                                     // alerting KPI for the root segment, hourly, last 48 h up to now
     { "t": 344, "label": "Mon 08:00", "actual": 77.8, "expected": 47.5, "lo": 41.7, "hi": 54.2 }   // lo/hi = twin ±2σ
   ],
-  "left_zone_at": { "t": 344, "label": "Mon 08:00" }   // first hour of the excursion that led to detection; null if none
+  "left_zone_at": { "t": 344, "label": "Mon 08:00" },  // first hour of the excursion that led to detection; null if none
+  "counterfactual": {                             // twin replay with the supported cause removed; null if no supported cause
+    "label": "Without the 28 flagged fake accounts",   // number = accounts flagged in the L3 sample
+    "series": [ { "t": 344, "value": 47.5 } ],          // same hours as `series`; equals `actual` before left_zone_at
+    "explained_share": 0.942
+  }
 }
 ```
 
