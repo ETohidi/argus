@@ -128,3 +128,30 @@ def test_issue_card_is_plain_language(world):
     world.step(25)
     assert "Prediction verified" in world.agent.card(inc)["status_line"] or \
         "prediction verified" in world.agent.card(inc)["status_line"]
+
+
+def test_issue_states_and_no_duplicates():
+    w = World(seed=42)
+    w.demo("bot_farm")
+    inc = w._latest("CA")
+    assert w.agent.incident_summary(inc)["status_label"] == "Open"
+    w.step(30)                                                # nobody acts: one issue, alerts merged into it
+    ca = [i for i in w.agent.incidents if i["country"] == "CA"]
+    assert len(ca) == 1
+    s = w.agent.incident_summary(inc)
+    assert s["status_label"] == "Still going" and s["alerts_merged"] >= 10 and s["first_seen"] == "Mon 04:00"
+
+
+def test_issue_resolves_by_itself_when_the_problem_stops():
+    w = World(seed=42)
+    w.demo("bot_farm")
+    inc = w._latest("CA")
+    for farm in w.reality.farms:                              # test only: the farm stops without any fix in Argus
+        farm.stopped = True
+    w.step(12)
+    s = w.agent.incident_summary(inc)
+    assert s["status_label"] == "Resolved" and inc["applied"] is None
+    assert "Recovered without action" in inc["trail"][-1]["finding"]
+    w.inject("bot_farm", "CA", "Android")                     # it comes back: a new issue that links to the old one
+    new = w._step_until_incident("CA", 10)
+    assert new is not None and new["recurrence_of"] == inc["id"]

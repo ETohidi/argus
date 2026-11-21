@@ -29,6 +29,8 @@ SUPPORTED, PARTIAL = 0.8, 0.3
 QUIET_TO_RESOLVE = 6
 SEV_HIGH_USD, SEV_HIGH_SOON_USD = 25_000, 10_000       # 7-day cost of doing nothing (USD)
 SEV_MEDIUM_USD, SEV_MEDIUM_SOON_USD = 5_000, 1_000     # "soon" = advertisers react within 24 h
+STATUS_LABEL = {"open": "Open", "persisting": "Still going", "fix_applied": "Fix applied", "verified": "Fix verified",
+                "resolved": "Resolved"}
 EVENT_LABEL = {"chargeback": "Advertisers start reclaiming money", "budget_cut": "Advertiser cuts the budget",
                "tracking_fixed": "Advertiser fixes tracking"}
 RESIDUAL_FRAUD = {"none": 1.0, "cap_rewards": 0.4, "verify_new_accounts": 0.05, "block_cluster": 0.0}
@@ -245,19 +247,21 @@ class Agent:
         for c in np.argsort(-impact):
             if not alert[c].any():
                 continue
-            if impact[c] <= INCIDENT_IMPACT and np.abs(z[c][alert[c]]).max() < INCIDENT_Z:
-                continue                                                  # stays amber ("watch")
             inc = self._active_incident(int(c))
-            if inc is not None:
+            if inc is not None:                       # same country still deviating: merge, never report twice
+                inc["alerts_merged"] += 1
+                inc["last_seen_at"] = t
                 if inc["status"] == "open":
                     inc["status"] = "persisting"
                     inc["trail"].append({"t": t, "level": "L1", "action": "Re-check the country one hour later",
-                                         "finding": "Deviation persists; same fingerprint, no duplicate incident"})
+                                         "finding": "Still going; same issue, merged instead of a new report"})
                 elif inc["status"] == "verified":
                     inc["status"] = "persisting"
                     inc["trail"].append({"t": t, "level": "L1", "action": "Watch after verification",
-                                         "finding": "The KPI deviates again; incident re-opened"})
+                                         "finding": "The KPI deviates again; issue re-opened"})
                 continue
+            if impact[c] <= INCIDENT_IMPACT and np.abs(z[c][alert[c]]).max() < INCIDENT_Z:
+                continue                                                  # stays amber ("watch")
             self.investigate(int(c), t, res, alert[c])
 
         # 9-10. verification and resolution
@@ -268,9 +272,17 @@ class Agent:
             if inc["status"] in ("verified", "fix_applied") and t >= inc["due"] and self.quiet[inc["c"]] >= QUIET_TO_RESOLVE:
                 if inc["status"] == "verified" or inc["verification"]["status"] == "missed":
                     inc["status"] = "resolved"
-                    inc["trail"].append({"t": t, "level": "L1", "action": "Close the incident",
+                    inc["resolved_at"] = t
+                    inc["trail"].append({"t": t, "level": "L1", "action": "Close the issue",
                                          "finding": f"{cfg.COUNTRIES[inc['c']].name} healthy for "
                                                     f"{QUIET_TO_RESOLVE} h"})
+            elif (inc["status"] in ("open", "persisting") and inc["applied"] is None
+                  and self.quiet[inc["c"]] >= QUIET_TO_RESOLVE and t - inc["last_seen_at"] >= QUIET_TO_RESOLVE):
+                inc["status"] = "resolved"                # went away by itself
+                inc["resolved_at"] = t
+                inc["trail"].append({"t": t, "level": "L1", "action": "Close the issue",
+                                     "finding": f"Recovered without action: {cfg.COUNTRIES[inc['c']].name} healthy "
+                                                f"for {QUIET_TO_RESOLVE} h"})
         self.last = res
         if t % 24 == 0:
             self.potential = self.compute_potential()
@@ -482,7 +494,10 @@ class Agent:
                "symptoms": symptoms, "delta_usd_h": round(delta / WINDOW, 1),
                "delta_revenue_usd_h": round(float(dl[KPIS.index("revenue")]) / WINDOW, 1),
                "delta_margin_usd_h": round(float(dl[KPIS.index("margin")]) / WINDOW, 1),
-               "excess_accounts": est_total, "cause_spec": cause_spec}
+               "excess_accounts": est_total, "cause_spec": cause_spec,
+               "alerts_merged": 0, "last_seen_at": t, "resolved_at": None,
+               "recurrence_of": next((o["id"] for o in reversed(self.incidents)
+                                      if o["fingerprint"] == [country.iso, plat, root]), None)}
         inc["fixes"] = self._fixes(inc, opts, t)
         inc["recommended"] = self._recommend(inc["fixes"], kind)
         rec_fix = next(f for f in inc["fixes"] if f["id"] == inc["recommended"])
@@ -1087,8 +1102,19 @@ class Agent:
     def incident_summary(self, inc: dict) -> dict:
         out = {k: inc[k] for k in ("id", "title", "country", "status", "severity", "impact_usd_h", "risk_7d_usd",
                                    "reaction_h")}
+        out.update(self._state_fields(inc))
         out["card"] = self.card(inc)
         return out
+
+    @staticmethod
+    def _state_fields(inc: dict) -> dict:
+        """Issue tracking: plain state, how long it has been going, how many alerts were merged into it."""
+        left = inc.get("left_zone_at")
+        return {"status_label": STATUS_LABEL[inc["status"]],
+                "first_seen": left["label"] if left else hour_label(inc["detected_at"]),
+                "last_seen": hour_label(inc["last_seen_at"]),
+                "resolved_at": hour_label(inc["resolved_at"]) if inc.get("resolved_at") is not None else None,
+                "alerts_merged": inc["alerts_merged"], "recurrence_of": inc.get("recurrence_of")}
 
     def _excess_accounts(self, c: int, p: int, t: int, hours: int = 12) -> int:
         """Sign-ups above the twin's baseline on this platform over the recent anomaly (estimate of new accounts)."""
@@ -1295,6 +1321,7 @@ class Agent:
                 "contributions", "hypotheses", "l3", "fixes", "recommended", "applied", "verification", "reports",
                 "severity", "impact_usd_h", "risk_7d_usd", "reaction_h", "kind", "root")
         out = {k: inc[k] for k in keys}
+        out.update(self._state_fields(inc))
         out["reports"] = self.reports_for(inc)
         out["card"] = self.card(inc)
         ser = self.series(inc)
