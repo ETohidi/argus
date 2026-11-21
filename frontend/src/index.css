@@ -1,0 +1,170 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --color-ink-950: #04070d;
+  --color-ink-900: #070c15;
+  --color-ink-850: #0a111c;
+  --color-ink-800: #0e1724;
+  --color-ink-700: #16212f;
+  --color-ink-600: #223044;
+  --color-teal: #2dd4bf;
+  --color-amber: #fbbf24;
+  --color-alert: #f43f5e;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--color-ink-950);
+  color: #e2e8f0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.panel {
+  background: linear-gradient(180deg, rgba(14, 23, 36, 0.92), rgba(7, 12, 21, 0.94));
+  backdrop-filter: blur(14px);
+}
+
+.card {
+  background: rgba(22, 33, 47, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.09);
+  border-radius: 12px;
+}
+
+.section-title {
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #7b8ba3;
+  font-weight: 600;
+}
+
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #223044 transparent;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fade-up {
+  animation: fade-up 0.45s ease-out both;
+}
+
+@keyframes draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: draw 1.2s ease-out forwards;
+}
+
+@keyframes flow {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+.flow {
+  stroke-dasharray: 5 3;
+  animation: flow 0.8s linear infinite;
+}
+
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+.grow-x {
+  animation: grow-x 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Globe markers */
+.argus-marker {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  --c: #f43f5e;
+}
+.argus-marker i {
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow: 0 0 12px var(--c);
+}
+.argus-marker span {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--c);
+  animation: pulse 2s ease-out infinite;
+}
+.argus-marker span:nth-child(2) {
+  animation-delay: 1s;
+}
+.argus-marker--watch {
+  --c: #fbbf24;
+}
+.argus-marker--explained {
+  --c: #cbd5e1;
+}
+.argus-marker--explained span,
+.argus-marker--waiting span {
+  animation-duration: 3.5s;
+}
+.argus-marker--waiting {
+  --c: #93a4cc;
+}
+.argus-marker--explained span:nth-child(2),
+.argus-marker--waiting span:nth-child(2) {
+  display: none;
+}
+@keyframes pulse {
+  from {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(3.6);
+    opacity: 0;
+  }
+}
+
+.argus-popup .maplibregl-popup-content {
+  background: rgba(7, 12, 21, 0.92);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-family: var(--font-sans);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.argus-popup .maplibregl-popup-tip {
+  display: none;
+}
