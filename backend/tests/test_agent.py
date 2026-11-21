@@ -75,3 +75,13 @@ def test_add_metric_is_validated_and_monitored(world):
     assert not dup["validation"]["ok"]
     bad = world.agent.add_metric("Bad", "= rewards / weather")
     assert not bad["validation"]["ok"]
+
+
+def test_potential_is_a_believable_uplift(world):
+    pot = world.agent.potential
+    assert len(pot) == 20
+    for p in pot:
+        assert 2.0 <= p["potential_pct"] <= 5.0, p
+        assert p["potential_usd_day"] > 0 and p["top_categories"] and p["explain"]
+    st = world.agent.state()["countries"][0]
+    assert st["potential_pct"] == pot[0]["potential_pct"]

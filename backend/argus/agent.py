@@ -765,6 +765,7 @@ class Agent:
     def compute_potential(self) -> list[dict]:
         t = self.view.t - 1
         rows = [self.view.observed[x] for x in range(max(0, t - 23), t + 1)]
+        self.potential_alloc = getattr(self, "potential_alloc", {})
         out = []
         for c, country in enumerate(cfg.COUNTRIES):
             users = self.view.sample_users(c, 0, 150) + self.view.sample_users(c, 1, 150)
@@ -791,7 +792,10 @@ class Agent:
             gain = a_best - a_cur
             top = [int(k) for k in np.argsort(-gain)[:2] if gain[k] > 0.005]
             explain = self.taste.explain_signals(top[0]) if top else []
+            self.potential_alloc[c] = a_best
             out.append({"iso": country.iso, "potential_usd_day": round(max(best - cur, 0.0), 0),
+                        "potential_pct": round(max(best / cur - 1, 0.0) * 100, 1) if cur > 0 else 0.0,
+                        "current_margin_usd_day": round(cur, 0),
                         "top_categories": [cfg.CATEGORIES[k] for k in top], "explain": explain})
         return out
 
@@ -824,6 +828,7 @@ class Agent:
         last = self.view.observed[-1]
         s = _with_formulas(_country_sums(last))
         pot = {p["iso"]: p["potential_usd_day"] for p in self.potential}
+        pct = {p["iso"]: p["potential_pct"] for p in self.potential}
         day, hour = divmod(t, 24)
         dow = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][day % 7]
         countries = []
@@ -834,6 +839,7 @@ class Agent:
                 "health_z": round(float(self.health[c]), 2) if self.last is not None else 0.0,
                 "kpis": {k: round(float(s[k][c]), 4 if k == "quality_per_completion" else 2) for k in KPIS},
                 "potential_usd_day": pot.get(country.iso, 0.0),
+                "potential_pct": pct.get(country.iso, 0.0),
             })
         return {
             "clock": {"t": t, "label": f"Day {day + 1} · {dow} {hour:02d}:00 UTC"},

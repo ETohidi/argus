@@ -20,7 +20,8 @@ Globe state.
         "new_accounts": 0, "completions": 0, "revenue": 0,
         "rewards": 0, "margin": 0, "quality_per_completion": 0
       },
-      "potential_usd_day": 1234.0
+      "potential_usd_day": 1234.0,  // twin-estimated margin uplift if the feed matched local taste
+      "potential_pct": 2.4          // same, as % of the country's current daily margin
     }
   ],
   "incidents": [
@@ -82,7 +83,8 @@ L2 heatmap.
 
 ### `GET /api/potential`
 ```jsonc
-{ "countries": [ { "iso": "DE", "potential_usd_day": 5400.0, "top_categories": ["games", "shopping"], "explain": ["gaming", "commuter"] } ] }
+{ "countries": [ { "iso": "DE", "potential_usd_day": 1127.0, "potential_pct": 2.4, "current_margin_usd_day": 46900.0,
+                   "top_categories": ["Surveys", "Shopping cashback"], "explain": ["uses coupons", "parent", "has a side hustle"] } ] }
 ```
 
 ## Write endpoints
