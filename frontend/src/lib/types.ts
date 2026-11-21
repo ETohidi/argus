@@ -26,6 +26,7 @@ export interface CountryState {
   health_z: number
   kpis: Kpis
   potential_usd_day: number
+  potential_pct?: number // potential as % of the country's current daily margin
 }
 
 export interface IncidentSummary {
@@ -128,7 +129,14 @@ export interface CountryDetail {
 }
 
 export interface PotentialResponse {
-  countries: { iso: string; potential_usd_day: number; top_categories: string[]; explain: string[] }[]
+  countries: {
+    iso: string
+    potential_usd_day: number
+    potential_pct?: number
+    current_margin_usd_day?: number
+    top_categories: string[]
+    explain: string[]
+  }[]
 }
 
 export interface MetricResponse {

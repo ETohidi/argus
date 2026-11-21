@@ -283,7 +283,7 @@ function Legend({ mode }: { mode: GlobeMode }) {
         </div>
       ) : (
         <div className="w-48">
-          <div className="mb-1.5 text-[11px] text-slate-300">Untapped potential · USD/day</div>
+          <div className="mb-1.5 text-[11px] text-slate-300">Untapped potential · % of margin</div>
           <div className="h-2 rounded-full" style={{ background: `linear-gradient(90deg, ${POTENTIAL_STOPS.map(([o, c]) => `${c} ${o * 100}%`).join(',')})` }} />
           <div className="mt-1 flex justify-between text-[10px] text-slate-500">
             <span>low</span>

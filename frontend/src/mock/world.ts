@@ -265,8 +265,15 @@ export class MockWorld {
         health_z: Math.round(z * 100) / 100,
         kpis: this.kpis(iso, dau, value, tz, Math.abs(z), kind),
         potential_usd_day: this.potential(iso),
+        potential_pct: this.potentialPct(iso),
       }
     })
+  }
+
+  potentialPct(iso: string) {
+    const c = MOCK_COUNTRIES.find((x) => x[0] === iso)!
+    const dailyMargin = (854_000 * (c[4] / TOTAL_DAU)) * (3.1 * c[5] + 0.5) * 0.42
+    return Math.round((this.potential(iso) / dailyMargin) * 1000) / 10
   }
 
   potential(iso: string) {
@@ -372,6 +379,7 @@ export class MockWorld {
         return {
           iso,
           potential_usd_day: this.potential(iso),
+          potential_pct: this.potentialPct(iso),
           top_categories: [cats[a], cats[b]],
           explain: [why[e], why[(e + 2) % why.length]],
         }

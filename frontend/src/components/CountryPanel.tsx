@@ -141,7 +141,10 @@ export default function CountryPanel({ country, detail, incidents, potential, on
           <section className="card p-3.5">
             <div className="section-title mb-2">Potential · taste model</div>
             <div className="num text-[20px] font-semibold text-fuchsia-300">+{usd(pot.potential_usd_day)}/day</div>
-            <div className="text-[11.5px] text-slate-400">if the offer feed matched local taste</div>
+            <div className="text-[11.5px] text-slate-400">
+              {pot.potential_pct != null && <span className="text-fuchsia-200">+{pot.potential_pct.toFixed(1)}% of daily margin · </span>}
+              if the offer feed matched local taste
+            </div>
             <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
               {pot.top_categories.map((c) => (
                 <span key={c} className="rounded bg-fuchsia-500/15 px-1.5 py-0.5 capitalize text-fuchsia-200">

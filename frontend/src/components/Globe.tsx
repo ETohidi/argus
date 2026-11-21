@@ -26,8 +26,9 @@ const STYLE: maplibregl.StyleSpecification = {
 
 function fillColors(countries: CountryState[], mode: GlobeMode): Record<string, string> {
   if (mode === 'health') return Object.fromEntries(countries.map((c) => [c.iso, STATUS_COLOR[c.status]]))
-  // Rank-based so one large market does not wash out the rest.
-  const ranked = [...countries].sort((a, b) => a.potential_usd_day - b.potential_usd_day)
+  // Rank-based (on % uplift when available) so one large market does not wash out the rest.
+  const v = (c: CountryState) => c.potential_pct ?? c.potential_usd_day
+  const ranked = [...countries].sort((a, b) => v(a) - v(b))
   const n = Math.max(1, ranked.length - 1)
   return Object.fromEntries(ranked.map((c, i) => [c.iso, potentialColor(i / n)]))
 }
@@ -142,7 +143,7 @@ export default function Globe({ countries, mode, selectedIso, onSelect }: Props)
       const line =
         modeRef.current === 'health'
           ? `<span style="color:${STATUS_COLOR[c.status]}">● ${STATUS_LABEL[c.status]}</span> · z ${c.health_z.toFixed(1)}`
-          : `Potential <b>+${usd(c.potential_usd_day)}</b>/day`
+          : `Potential <b>+${usd(c.potential_usd_day)}</b>/day${c.potential_pct != null ? ` · +${c.potential_pct.toFixed(1)}% margin` : ''}`
       popup.setLngLat(e.lngLat).setHTML(`<div class="font-semibold">${c.name}</div><div>${line}</div>`).addTo(map)
     })
     map.on('mouseleave', 'watched', () => {
