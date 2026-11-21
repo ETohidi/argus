@@ -171,8 +171,8 @@ export default function CausalGraph({ nodes, edges }: { nodes: GraphNode[]; edge
               <g key={p.id} transform={`translate(${p.x - NODE_W / 2},${p.y - NODE_H / 2})`} className="fade-in" style={{ animationDelay: `${i * 50}ms` }}>
                 {n.state === 'root' && <rect width={NODE_W} height={NODE_H} rx={8} fill={c} opacity={0.35} filter="url(#glow)" />}
                 <rect width={NODE_W} height={NODE_H} rx={8} fill={active ? `${c}22` : '#0e1724'} stroke={c} strokeWidth={active ? 1.4 : 1} />
-                <text x={8} y={19} fontSize={10.5} fill={active ? '#f1f5f9' : '#94a3b8'} fontWeight={n.state === 'root' ? 700 : 500}>
-                  {n.label.length > 16 ? n.label.slice(0, 15) + '…' : n.label}
+                <text x={8} y={19} fontSize={10} fill={active ? '#f1f5f9' : '#94a3b8'} fontWeight={n.state === 'root' ? 700 : 500}>
+                  {n.label.length > 14 ? n.label.slice(0, 13) + '…' : n.label}
                 </text>
                 <text x={NODE_W - 7} y={19} fontSize={10} textAnchor="end" fill={active ? c : '#64748b'} className="num" fontWeight={600}>
                   {Math.abs(n.z) >= 0.05 ? (n.z > 0 ? '+' : '−') + Math.abs(n.z).toFixed(1) : '0'}

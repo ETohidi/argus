@@ -113,7 +113,12 @@ export default function App() {
         setMetricResult(r.metric ?? null)
         setMetricOpen(true)
       }
-      if (r.incident_id && scene !== 'bot_farm') {
+      if (r.incident_id && scene === 'bot_farm') {
+        // First sighting: fly to the country and show its L2 heatmap; the incident opens on "investigate".
+        const inc = r.state.incidents.find((i) => i.id === r.incident_id)
+        setIncidentId(null)
+        setCountryIso(inc?.country ?? null)
+      } else if (r.incident_id) {
         setCountryIso(null)
         setIncidentId(r.incident_id)
       }

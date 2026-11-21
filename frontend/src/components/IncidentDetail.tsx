@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import CausalGraph from './charts/CausalGraph'
 import FanChart, { relativeSeries } from './charts/FanChart'
 import L3Scatter from './charts/L3Scatter'
@@ -40,6 +40,11 @@ type Props = {
 export default function IncidentDetail({ detail, onBack, onApprove, approving }: Props) {
   const [aud, setAud] = useState<Audience>('engineer')
   const d = detail
+  // Jump back to the top when the incident changes state, so the new verification badge is in view.
+  const scrollRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [d.status, d.applied])
   const show = {
     trail: aud !== 'ceo',
     graph: aud === 'engineer',
@@ -80,7 +85,7 @@ export default function IncidentDetail({ detail, onBack, onApprove, approving }:
         </div>
       </div>
 
-      <div className="scroll-thin flex-1 space-y-3 overflow-y-auto px-5 py-4">
+      <div ref={scrollRef} className="scroll-thin flex-1 space-y-3 overflow-y-auto px-5 py-4">
         <div key={aud} className="card fade-up border-l-2 !border-l-teal-400/70 p-3.5 text-[12.5px] leading-relaxed text-slate-200">
           <div className="section-title mb-1.5">Report for the {AUDIENCES.find((a) => a.id === aud)!.label}</div>
           {d.reports[aud]}
