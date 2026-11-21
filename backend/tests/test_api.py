@@ -113,3 +113,24 @@ def test_meta_lists_public_sources_and_calibration():
     for row in cal["rewards_share"]:
         if row["published"] is not None:
             assert abs(row["sim"] - row["published"]) < 0.01, row
+
+
+def test_sessions_evict_lru_and_expire_idle(monkeypatch):
+    import argus.api as api
+    monkeypatch.setattr(api, "MAX_SESSIONS", 2)
+    pool = api.Sessions()
+    a = pool.get("a")
+    pool.get("b")
+    assert pool.get("a") is a                 # touching "a" makes "b" the least recently used
+    pool.get("c")                             # over the cap: evicts "b", not "a"
+    assert len(pool) == 2 and pool.evicted == 1
+    assert pool.get("a") is a
+    monkeypatch.setattr(api, "SESSION_TTL", 0.0)
+    pool.get("d")                             # everything idle longer than the TTL expires first
+    assert pool.expired >= 1 and len(pool) == 1
+
+
+def test_health_reports_sessions_and_memory():
+    h = client.get("/api/health").json()
+    keys(h, ["ok", "sessions", "max_sessions", "session_ttl_s", "rss_mb", "mem_budget_mb"])
+    assert h["max_sessions"] >= 2 and h["session_ttl_s"] == 1800

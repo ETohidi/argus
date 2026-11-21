@@ -28,6 +28,7 @@ SIGMA_FLOOR = 0.01
 HOUR_GROUPS = 4             # L1 residual sigma per block of 6 local hours
 SIGMA_INFLATE = 1.3         # in-sample backtest is optimistic; inflate for out-of-sample use
 USER_SIDE = ["new_accounts", "active_users", "impressions", "starts", "completions", "quality"]
+FC_CACHE_MAX = 256           # forecast cache entries kept per world (recent window + 7-day fast-forward)
 TOP_PAYOUT = [1, 2]         # strategy games + fintech
 GAMES = [0, 1]
 
@@ -199,6 +200,9 @@ class Twin:
                "starts": st, "completions": co, "revenue": rev, "rewards": rew, "quality": q,
                "completeness": np.ones(cfg.C)}
         self._fc_cache[key] = out
+        if len(self._fc_cache) > FC_CACHE_MAX:              # bound memory: drop the oldest-inserted forecasts
+            for k in list(self._fc_cache)[: len(self._fc_cache) - FC_CACHE_MAX // 2]:
+                del self._fc_cache[k]
         return out
 
     @staticmethod

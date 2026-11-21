@@ -1,6 +1,7 @@
 """FastAPI app implementing docs/API.md. Run: uvicorn argus.api:app --reload (from backend/)."""
 from __future__ import annotations
 
+import os
 import threading
 import time
 from collections import OrderedDict
@@ -17,8 +18,14 @@ from .world import INJECT_TYPES, SCENES, World
 
 llm.load_dotenv()  # LLM_* from backend/.env if present (never committed)
 
-MAX_SESSIONS = 50
-SESSION_TTL = 3600.0
+# Memory budget (Render free tier: 512 MB RAM). Measured on Linux / Python 3.11 in the Docker image:
+# idle process ~65 MB, ~100 MB once the first world and the taste model are loaded; each further session ~16 MB
+# after the full demo script (forecast cache bounded). 18 MB/session leaves headroom: default cap 13, ~310 MB.
+MEM_BUDGET_MB = float(os.environ.get("ARGUS_MEM_BUDGET_MB", 350))
+BASE_MB = 100.0
+SESSION_MB = 18.0
+MAX_SESSIONS = int(os.environ.get("ARGUS_MAX_SESSIONS") or max(2, int((MEM_BUDGET_MB - BASE_MB) // SESSION_MB)))
+SESSION_TTL = float(os.environ.get("ARGUS_SESSION_TTL_S", 30 * 60))   # idle sessions expire after 30 min
 MAX_STEP_HOURS = 24 * 14
 
 
@@ -29,10 +36,33 @@ class _Session:
         self.seen = time.monotonic()
 
 
+def rss_mb() -> float | None:
+    """Current resident memory of this process in MB (Linux /proc; peak RSS elsewhere)."""
+    try:
+        with open("/proc/self/statm") as f:
+            return round(int(f.read().split()[1]) * os.sysconf("SC_PAGE_SIZE") / 2**20, 1)
+    except OSError:
+        try:
+            import resource
+            import sys
+
+            peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            return round(peak / (2**20 if sys.platform == "darwin" else 2**10), 1)
+        except Exception:  # noqa: BLE001
+            return None
+
+
 class Sessions:
+    """Session-scoped worlds: least-recently-used eviction above MAX_SESSIONS, idle expiry after SESSION_TTL."""
+
     def __init__(self) -> None:
         self._items: OrderedDict[str, _Session] = OrderedDict()
         self._lock = threading.Lock()
+        self.evicted = 0
+        self.expired = 0
+
+    def __len__(self) -> int:
+        return len(self._items)
 
     def get(self, key: str | None) -> _Session:
         key = (key or "default")[:64]
@@ -40,12 +70,14 @@ class Sessions:
         with self._lock:
             for k in [k for k, s in self._items.items() if now - s.seen > SESSION_TTL]:
                 del self._items[k]
+                self.expired += 1
             s = self._items.get(key)
             if s is None:
+                while len(self._items) >= MAX_SESSIONS:      # make room first, so memory never exceeds the cap
+                    self._items.popitem(last=False)
+                    self.evicted += 1
                 s = _Session()
                 self._items[key] = s
-                while len(self._items) > MAX_SESSIONS:
-                    self._items.popitem(last=False)
             self._items.move_to_end(key)
             s.seen = now
             return s
@@ -201,7 +233,9 @@ def get_meta(x_session: str | None = Header(default=None)) -> dict:
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"ok": True, "llm": llm.model()}
+    return {"ok": True, "llm": llm.model(), "sessions": len(sessions), "max_sessions": MAX_SESSIONS,
+            "session_ttl_s": SESSION_TTL, "evicted": sessions.evicted, "expired": sessions.expired,
+            "rss_mb": rss_mb(), "mem_budget_mb": MEM_BUDGET_MB}
 
 
 _DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
