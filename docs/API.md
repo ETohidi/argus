@@ -25,7 +25,10 @@ Globe state.
     }
   ],
   "incidents": [
-    { "id": "inc-1", "title": "...", "country": "CA", "status": "open", "severity": "high", "impact_usd_h": 812.0 }
+    { "id": "inc-1", "title": "...", "country": "CA", "status": "open", "severity": "high",
+      "impact_usd_h": 134.0,      // current deviation in USD/h
+      "risk_7d_usd": 114042,      // 7-day margin lost by doing nothing vs the recommended fix (p50, twin)
+      "reaction_h": 21 }          // hours until advertisers react (chargebacks); 0 = losses accrue now; null = n/a
   ],
   "explained": [
     { "t": 350, "country": "DE", "event": "Weekend Boost (games)", "naive_z": 5.1, "twin_z": 0.7 }
@@ -33,12 +36,14 @@ Globe state.
   "attention": { "watched_series": 120, "investigations": 1, "l3_runs": 1 }
 }
 ```
-Incident `status`: `open` | `persisting` | `fix_applied` | `verified` | `resolved`. `severity`: `low` | `medium` | `high`.
+Incident `status`: `open` | `persisting` | `fix_applied` | `verified` | `resolved`. `severity`: `low` | `medium` | `high`,
+from risk rather than hourly impact: high if `risk_7d_usd` ≥ $25k, or ≥ $10k with advertisers reacting within 24 h;
+medium if ≥ $5k, or ≥ $1k with a reaction within 24 h; low otherwise.
 
 ### `GET /api/incidents/{id}`
 ```jsonc
 {
-  "id": "inc-1", "title": "...", "status": "open",
+  "id": "inc-1", "title": "...", "status": "open", "severity": "high", "impact_usd_h": 134.0, "risk_7d_usd": 114042, "reaction_h": 21,
   "country": "CA", "platform": "android", "category": "fintech", "detected_at": 352,
   "trail": [ { "t": 352, "level": "L1", "action": "...", "finding": "..." } ],   // level: "L1" | "L2" | "L3"
   "graph": {

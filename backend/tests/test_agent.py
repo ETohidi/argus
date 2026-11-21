@@ -85,3 +85,20 @@ def test_potential_is_a_believable_uplift(world):
         assert p["potential_usd_day"] > 0 and p["top_categories"] and p["explain"]
     st = world.agent.state()["countries"][0]
     assert st["potential_pct"] == pot[0]["potential_pct"]
+
+
+def test_severity_reflects_risk_not_hourly_impact():
+    from argus.agent import Agent
+    assert Agent._severity(114_000, 21) == "high"     # bot farm: big 7-day risk, chargebacks within a day
+    assert Agent._severity(76_000, 0) == "high"       # tracking break: losses accrue now
+    assert Agent._severity(12_000, 20) == "high"      # moderate risk but advertisers react soon
+    assert Agent._severity(12_000, None) == "medium"
+    assert Agent._severity(300, None) == "low"        # small blip
+    assert Agent._severity(0, None) == "low"
+
+
+def test_state_exposes_impact_and_risk(world):
+    world.inject("tracking_break", "GB", "iOS")
+    world._step_until_incident("GB", 10)
+    s = world.agent.state()["incidents"][0]
+    assert {"impact_usd_h", "risk_7d_usd", "reaction_h", "severity"} <= set(s)

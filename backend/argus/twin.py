@@ -401,7 +401,9 @@ class Twin:
         new3 = np.stack([sum(self.forecast(now + 1 + h - lag)["new_accounts"][c] for lag in range(STAY)) for h in range(H)])
         actv = np.stack([f["active_users"][c] for f in fc])
         new_share = new3 / np.maximum(actv, 1e-9)                   # (H,P)
-        recent = [now - i for i in range(6) if now - i in self.rows]
+        # Excess activity measured only over the hours since onset (up to 6), so pre-attack hours don't dilute it.
+        span = int(min(6, max(1, ctx.get("elapsed", 3))))
+        recent = [now - i for i in range(span) if now - i in self.rows]
         o = lambda key: np.mean([self.rows[t][key][c] for t in recent], axis=0)  # noqa: E731
         e = lambda key: np.mean([self.forecast(t)[key][c] for t in recent], axis=0)  # noqa: E731
         ex_rev = np.zeros((P, K))

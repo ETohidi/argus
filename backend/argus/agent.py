@@ -27,6 +27,8 @@ INCIDENT_Z = 8.0              # ... or a deviation this extreme
 L3_MIN_IMPACT = 50.0          # USD/h before a user-level run is worth it
 SUPPORTED, PARTIAL = 0.8, 0.3
 QUIET_TO_RESOLVE = 6
+SEV_HIGH_USD, SEV_HIGH_SOON_USD = 25_000, 10_000       # 7-day cost of doing nothing (USD)
+SEV_MEDIUM_USD, SEV_MEDIUM_SOON_USD = 5_000, 1_000     # "soon" = advertisers react within 24 h
 RESIDUAL_FRAUD = {"none": 1.0, "cap_rewards": 0.4, "verify_new_accounts": 0.05, "block_cluster": 0.0}
 
 KPI_LABEL = {"new_accounts": "new accounts", "completions": "completions", "revenue": "revenue",
@@ -402,7 +404,7 @@ class Agent:
                "fingerprint": [country.iso, plat, root], "status": "open", "country": country.iso,
                "platform": plat, "category": cfg.CATEGORIES[k], "categories": [cfg.CATEGORIES[x] for x in cats],
                "fix_categories": fcats, "detected_at": t, "impact_usd_h": round(impact, 1),
-               "severity": "high" if impact >= 500 else "medium" if impact >= 150 else "low",
+               "severity": "low", "risk_7d_usd": 0, "reaction_h": None,
                "trail": trail, "graph": graph, "contributions": contributions, "hypotheses": hyps, "l3": l3,
                "ctx": ctx, "applied": None, "applied_at": None, "due": None,
                "verification": {"status": "pending", "predicted": None, "actual": None},
@@ -411,6 +413,12 @@ class Agent:
                "symptoms": symptoms, "delta_usd_h": round(delta / WINDOW, 1)}
         inc["fixes"] = self._fixes(inc, opts, t)
         inc["recommended"] = self._recommend(inc["fixes"], kind)
+        rec_fix = next(f for f in inc["fixes"] if f["id"] == inc["recommended"])
+        # Risk = what doing nothing costs over 7 days vs the recommended fix (p50), plus how soon advertisers react.
+        inc["risk_7d_usd"] = round(max(rec_fix["delta_p50_usd"], 0))
+        inc["reaction_h"] = (max(24 - ctx["elapsed"], 1) if kind in ("fraud", "user")
+                             else 0 if kind == "tracking" else None)          # tracking: losses accrue now
+        inc["severity"] = self._severity(inc["risk_7d_usd"], inc["reaction_h"])
         rec = next(f for f in inc["fixes"] if f["id"] == inc["recommended"])
         trail.append({"t": t, "level": "L1", "action": f"Fast-forward {len(opts)} options 7 days in the twin "
                                                       f"(40 Monte Carlo runs each)",
@@ -485,6 +493,15 @@ class Agent:
                         "p90": [round(x) for x in r["p90"]], "delta_p50_usd": round(r["delta_p50_usd"]),
                         "advertiser_risk": self._risk(inc, r["id"], e, cats)})
         return out
+
+    @staticmethod
+    def _severity(risk_7d: float, reaction_h: int | None) -> str:
+        soon = reaction_h is not None and reaction_h <= 24
+        if risk_7d >= SEV_HIGH_USD or (soon and risk_7d >= SEV_HIGH_SOON_USD):
+            return "high"
+        if risk_7d >= SEV_MEDIUM_USD or (soon and risk_7d >= SEV_MEDIUM_SOON_USD):
+            return "medium"
+        return "low"
 
     @staticmethod
     def _risk(inc: dict, fix: str, elapsed: int, cats: str) -> str:
@@ -837,12 +854,13 @@ class Agent:
         return next((i for i in self.incidents if i["id"] == inc_id), None)
 
     def incident_summary(self, inc: dict) -> dict:
-        return {k: inc[k] for k in ("id", "title", "country", "status", "severity", "impact_usd_h")}
+        return {k: inc[k] for k in ("id", "title", "country", "status", "severity", "impact_usd_h", "risk_7d_usd",
+                                    "reaction_h")}
 
     def incident_detail(self, inc: dict) -> dict:
         keys = ("id", "title", "status", "country", "platform", "category", "detected_at", "trail", "graph",
                 "contributions", "hypotheses", "l3", "fixes", "recommended", "applied", "verification", "reports",
-                "severity", "impact_usd_h", "kind", "root")
+                "severity", "impact_usd_h", "risk_7d_usd", "reaction_h", "kind", "root")
         out = {k: inc[k] for k in keys}
         out["reports"] = self.reports_for(inc)
         return out

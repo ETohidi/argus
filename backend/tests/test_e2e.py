@@ -53,12 +53,14 @@ def test_bot_farm_detected_and_explained(demo):
     assert top["verdict"] == "supported" and top["explained"] >= 0.8 and "Fake-account" in top["name"]
     assert all(h["verdict"] == "rejected" for h in inc["hypotheses"][1:])
     assert inc["recommended"] != "none"
+    assert inc["severity"] == "high" and inc["risk_7d_usd"] >= 25_000 and inc["reaction_h"] <= 24
     fixes = {f["id"]: f for f in inc["fixes"]}
     NUMBERS["bot_farm"] = {
         "detection_delay_h": delay, "root": inc["root"], "explained_share": top["explained"],
         "l3": inc["l3"]["summary"], "recommended": inc["recommended"],
         "fix_delta_p50_usd_7d": {k: f["delta_p50_usd"] for k, f in fixes.items()},
-        "impact_usd_h": inc["impact_usd_h"],
+        "impact_usd_h": inc["impact_usd_h"], "risk_7d_usd": inc["risk_7d_usd"], "reaction_h": inc["reaction_h"],
+        "severity": inc["severity"],
     }
 
 
@@ -87,9 +89,11 @@ def test_new_metric_and_tracking_break(demo):
     inc = w._step_until_incident("GB", 8)
     assert inc is not None and inc["root"] == "revenue" and inc["l3"] is None
     assert inc["hypotheses"][0]["name"].startswith("Tracking") and inc["hypotheses"][0]["verdict"] == "supported"
+    assert inc["severity"] == "high"
     NUMBERS["tracking_break"] = {"detection_delay_h": inc["detected_at"] - start + 1,
                                  "explained_share": inc["hypotheses"][0]["explained"],
-                                 "recommended": inc["recommended"],
+                                 "recommended": inc["recommended"], "severity": inc["severity"],
+                                 "impact_usd_h": inc["impact_usd_h"], "risk_7d_usd": inc["risk_7d_usd"],
                                  "fix_delta_p50_usd_7d": {f["id"]: f["delta_p50_usd"] for f in inc["fixes"]}}
     others = [i for i in w.agent.incidents if i["country"] not in ("CA", "GB")]
     assert others == [], [i["title"] for i in others]
