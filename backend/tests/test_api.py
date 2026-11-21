@@ -72,6 +72,8 @@ def test_other_endpoints():
     keys(c, ["iso", "name", "segments"])
     assert len(c["segments"]) == 12
     keys(c["segments"][0], ["platform", "category", "kpi_z", "deviation_usd_h"])
+    keys(c["segments"][0]["kpi_z"], ["new_accounts", "completions", "revenue", "rewards", "quality_per_completion"])
+    keys(c["platforms"][0], ["platform", "new_accounts_z", "active_users_z", "new_accounts_h", "new_accounts_expected_h"])
     assert client.get("/api/country/XX", headers=H).status_code == 404
     p = client.get("/api/potential", headers=H).json()
     keys(p["countries"][0], ["iso", "potential_usd_day", "top_categories", "explain"])

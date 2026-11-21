@@ -909,9 +909,19 @@ class Agent:
         tw = self.twin
         rows, fcs = [tw.rows[x] for x in ts], [tw.forecast(x) for x in ts]
         segs = []
+        platforms = []
+        gp = tw.given_parents(sorted(ts))
         for p in range(cfg.P):
+            # Platform-level users: sign-ups vs seasonal baseline; active users given sign-ups (returning users).
+            nz = round(tw.z_of(gp["new_accounts"], c, p), 1)
+            az = round(tw.z_of(gp["active_users"], c, p), 1)
+            n_o = sum(r["new_accounts"][c, p] for r in rows)
+            n_f = sum(x["new_accounts"][c, p] for x in fcs)
+            platforms.append({"platform": cfg.PLATFORMS[p], "new_accounts_z": nz, "active_users_z": az,
+                              "new_accounts_h": round(float(n_o / WINDOW), 1),
+                              "new_accounts_expected_h": round(float(n_f / WINDOW), 1)})
             for k in range(cfg.K):
-                kz = {}
+                kz = {"new_accounts": nz}
                 for key, m in (("completions", "completions"), ("revenue", "revenue"), ("rewards", "rewards")):
                     o = sum(r[key][c, p, k] for r in rows)
                     f = sum(x[key][c, p, k] for x in fcs)
@@ -925,7 +935,7 @@ class Agent:
                     sum(x["revenue"][c, p, k] - x["rewards"][c, p, k] for x in fcs)
                 segs.append({"platform": cfg.PLATFORMS[p], "category": cfg.CATEGORIES[k], "kpi_z": kz,
                              "deviation_usd_h": round(float(dm / WINDOW), 2)})
-        return {"iso": cfg.COUNTRIES[c].iso, "name": cfg.COUNTRIES[c].name, "segments": segs}
+        return {"iso": cfg.COUNTRIES[c].iso, "name": cfg.COUNTRIES[c].name, "segments": segs, "platforms": platforms}
 
 
 # ====================================================================== keyword fallback

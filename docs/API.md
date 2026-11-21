@@ -81,9 +81,12 @@ List of the same summaries as `state.incidents`.
 L2 heatmap.
 ```jsonc
 { "iso": "CA", "name": "Canada",
-  "segments": [ { "platform": "android", "category": "fintech",
-                  "kpi_z": { "completions": 7.1, "revenue": 6.0, "rewards": 6.5, "quality_per_completion": -8.2 },
-                  "deviation_usd_h": 310.0 } ] }
+  "segments": [ { "platform": "Android", "category": "Fintech apps",
+                  "kpi_z": { "new_accounts": 12.4,      // platform-level (sign-ups have no category); same for all categories of the platform
+                             "completions": 2.6, "revenue": 2.7, "rewards": 2.6, "quality_per_completion": -1.9 },
+                  "deviation_usd_h": 55.0 } ],          // margin deviation vs the twin, USD/h
+  "platforms": [ { "platform": "Android", "new_accounts_z": 12.4, "active_users_z": -0.3,
+                   "new_accounts_h": 95.5, "new_accounts_expected_h": 64.8 } ] }
 ```
 
 ### `GET /api/potential`

@@ -54,6 +54,10 @@ def test_bot_farm_detected_and_explained(demo):
     assert all(h["verdict"] == "rejected" for h in inc["hypotheses"][1:])
     assert inc["recommended"] != "none"
     assert inc["severity"] == "high" and inc["risk_7d_usd"] >= 25_000 and inc["reaction_h"] <= 24
+    heat = demo["w"].agent.country_detail(cfg.ISO_INDEX["CA"])
+    android = next(p for p in heat["platforms"] if p["platform"] == "Android")
+    ios = next(p for p in heat["platforms"] if p["platform"] == "iOS")
+    assert android["new_accounts_z"] > 4 and abs(ios["new_accounts_z"]) < 3
     fixes = {f["id"]: f for f in inc["fixes"]}
     NUMBERS["bot_farm"] = {
         "detection_delay_h": delay, "root": inc["root"], "explained_share": top["explained"],
