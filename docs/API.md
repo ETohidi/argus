@@ -97,6 +97,17 @@ L2 heatmap.
                    "demand_index": { "Casual games": 1.02, "Strategy games": 0.92, "...": 1.0 } } ] }  // local / global demand
 ```
 
+### `GET /api/meta`
+Public data behind the simulation, for a "Data" panel.
+```jsonc
+{ "data_sources": [ { "label": "Annual revenue run rate", "value": "$1B",
+                      "source": "Almedia release via PPC Land, 15 Oct 2026", "url": "https://ppc.land/..." } ],
+  "calibration_note": "Calibrated to public data: ...",
+  "calibration": { "revenue_usd_day": { "sim": 2740947, "published": 2739726 },
+                   "rewards_share": [ { "iso": "US", "name": "United States", "sim": 0.5788, "published": 0.579 } ] } }
+```
+`published` is `null` for countries without a published payout share.
+
 ## Write endpoints
 
 | Method & path | Body | Effect / response |

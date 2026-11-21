@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import config as cfg
-from . import llm
+from . import llm, meta
 from .world import INJECT_TYPES, SCENES, World
 
 llm.load_dotenv()  # LLM_* from backend/.env if present (never committed)
@@ -189,6 +189,14 @@ def post_demo(scene: str, x_session: str | None = Header(default=None)) -> dict:
     s = _world(x_session)
     with s.lock:
         return s.world.demo(scene)
+
+
+@app.get("/api/meta")
+def get_meta(x_session: str | None = Header(default=None)) -> dict:
+    s = _world(x_session)
+    with s.lock:
+        cal = meta.calibration(s.world.view.observed)
+    return {"data_sources": meta.data_sources(), "calibration_note": meta.CALIBRATION_NOTE, "calibration": cal}
 
 
 @app.get("/api/health")

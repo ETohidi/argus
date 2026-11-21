@@ -99,3 +99,17 @@ def test_demo_scenes_are_deterministic_and_serialisable():
             assert r.status_code == 200, (scene, r.text)
         outs.append(json.dumps(r.json(), sort_keys=True))
     assert outs[0] == outs[1]
+
+
+def test_meta_lists_public_sources_and_calibration():
+    m = client.get("/api/meta", headers=H).json()
+    keys(m, ["data_sources", "calibration_note", "calibration"])
+    keys(m["data_sources"][0], ["label", "value", "source", "url"])
+    labels = [d["label"] for d in m["data_sources"]]
+    assert "Annual revenue run rate" in labels and len([x for x in labels if x.startswith("iOS share")]) == 20
+    assert all(d["url"].startswith("https://") for d in m["data_sources"])
+    cal = m["calibration"]
+    assert abs(cal["revenue_usd_day"]["sim"] / cal["revenue_usd_day"]["published"] - 1) < 0.1
+    for row in cal["rewards_share"]:
+        if row["published"] is not None:
+            assert abs(row["sim"] - row["published"]) < 0.01, row
