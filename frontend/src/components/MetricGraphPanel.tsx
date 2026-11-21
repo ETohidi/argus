@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import CausalGraph from './charts/CausalGraph'
 import { api } from '../lib/api'
-import { plainMetric, replaceWord, splitNameFormula, toOutcome, type MetricOutcome } from '../lib/metrics'
-import type { GraphEdge, GraphNode, MetricGraph } from '../lib/types'
+import { plainMetric, replaceWord, splitNameFormula, toOutcome, type ChoiceOption, type MetricOutcome } from '../lib/metrics'
+import type { GraphEdge, GraphNode, GraphTreeRow, MetricGraph } from '../lib/types'
 
 const EXAMPLES = [
   { name: 'margin_per_signup', formula: 'margin / signups' },
@@ -25,7 +25,7 @@ const breakdownOf = (id: string, parents: string[] = []) =>
 export default function MetricGraphPanel({ graph, highlight, outcome: initial, openForm, onAdded, onClose }: Props) {
   const [formOpen, setFormOpen] = useState(!!openForm || !!initial)
   const [name, setName] = useState(initial?.kind === 'added' ? initial.id : '')
-  const [formula, setFormula] = useState(initial?.kind === 'added' ? initial.expr : '')
+  const [formula, setFormula] = useState(initial?.kind === 'added' ? initial.typed : '')
   const [busy, setBusy] = useState(false)
   const [outcome, setOutcome] = useState<MetricOutcome | null>(initial ?? null)
   const [stage, setStage] = useState(initial?.kind === 'added' ? 0 : -1) // number of steps shown (0..3)
@@ -168,8 +168,8 @@ export default function MetricGraphPanel({ graph, highlight, outcome: initial, o
                   outcome={outcome}
                   stage={stage}
                   onShow={setPointTo}
-                  onChoose={(word, id) => {
-                    const f = replaceWord(formula, word, id)
+                  onChoose={(word, opt) => {
+                    const f = opt.formula ?? replaceWord(formula, word, opt.id)
                     setFormula(f)
                     submit(name, f)
                   }}
@@ -187,7 +187,7 @@ export default function MetricGraphPanel({ graph, highlight, outcome: initial, o
   )
 }
 
-function Outcome({ outcome, stage, onChoose, onShow }: { outcome: MetricOutcome | null; stage: number; onChoose: (word: string, id: string) => void; onShow: (id: string) => void }) {
+function Outcome({ outcome, stage, onChoose, onShow }: { outcome: MetricOutcome | null; stage: number; onChoose: (word: string, option: ChoiceOption) => void; onShow: (id: string) => void }) {
   if (!outcome) return null
   if (outcome.kind === 'exists')
     return (
@@ -204,7 +204,7 @@ function Outcome({ outcome, stage, onChoose, onShow }: { outcome: MetricOutcome 
         <p className="text-[13px] text-fg">{outcome.message}</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {outcome.options.map((o) => (
-            <button type="button" key={o.id} onClick={() => onChoose(outcome.word, o.id)} className="rounded-lg bg-line px-3 py-1.5 text-[13px] text-fg hover:ring-1 hover:ring-accent">
+            <button type="button" key={o.id} onClick={() => onChoose(outcome.word, o)} className="rounded-lg bg-line px-3 py-1.5 text-[13px] text-fg hover:ring-1 hover:ring-accent">
               {o.label}
             </button>
           ))}
@@ -220,9 +220,12 @@ function Outcome({ outcome, stage, onChoose, onShow }: { outcome: MetricOutcome 
   const parents = outcome.parents.map((p) => plainMetric(p)).join(' and ')
   const by = outcome.breakdown.filter((b) => b !== 'global').join(', ')
   const steps = [
-    { title: 'Found its place', detail: `${parents ? `Below ${parents}` : 'In the graph'}${by ? ` · by ${by}` : ''}` },
+    {
+      title: 'Found its place',
+      detail: `${outcome.readAs.map(([w, id]) => `“${w}” = ${plainMetric(id)} · `).join('')}${parents ? `Below ${parents}` : 'In the graph'}${by ? ` · by ${by}` : ''}`,
+    },
     { title: 'Checked it on the data', detail: outcome.fit.charAt(0).toUpperCase() + outcome.fit.slice(1) },
-    { title: 'Watching it now', detail: 'In all 20 countries' },
+    { title: 'Watching it now', detail: `In all ${outcome.countries} countries` },
   ]
   return (
     <ol className="mt-5 space-y-3" aria-live="polite">
@@ -265,9 +268,20 @@ function Legend() {
   )
 }
 
-// Browsable tree: each top-level metric expands into what it is made of; breakdowns appear as thin rows.
+// Browsable tree from GET /api/graph/tree (depth-first rows); falls back to a tree built from the graph.
 function MetricTree({ graph, fresh, breakdown }: { graph: MetricGraph; fresh: string | null; breakdown: string[] }) {
   const [open, setOpen] = useState(false)
+  const [rows, setRows] = useState<GraphTreeRow[] | null>(null)
+  useEffect(() => {
+    let live = true
+    api
+      .graphTree()
+      .then((r) => live && setRows(Array.isArray(r?.rows) ? r.rows : null))
+      .catch(() => live && setRows(null))
+    return () => {
+      live = false
+    }
+  }, [graph])
   const inputs = (id: string) => graph.edges.filter((e) => e.target === id)
   // Top level: metrics nothing else is built from (edges into added metrics don't count, so Margin stays on top).
   const added = new Set(graph.nodes.filter((n) => n.origin === 'extension').map((n) => n.id))
@@ -280,14 +294,56 @@ function MetricTree({ graph, fresh, breakdown }: { graph: MetricGraph; fresh: st
         All metrics
         <span className="text-[13px] text-fg-2">{open ? 'Hide' : 'Show'}</span>
       </button>
-      {open && (
-        <ul className="px-6 pb-5 text-[13px]">
-          {tops.map((n) => (
-            <TreeRow key={n.id} id={n.id} depth={0} inputs={inputs} nodeById={nodeById} fresh={fresh} freshBreakdown={breakdown} seen={new Set()} />
-          ))}
-        </ul>
-      )}
+      {open &&
+        (rows ? (
+          <ServerTree rows={rows} fresh={fresh} />
+        ) : (
+          <ul className="px-6 pb-5 text-[13px]">
+            {tops.map((n) => (
+              <TreeRow key={n.id} id={n.id} depth={0} inputs={inputs} nodeById={nodeById} fresh={fresh} freshBreakdown={breakdown} seen={new Set()} />
+            ))}
+          </ul>
+        ))}
     </section>
+  )
+}
+
+function ServerTree({ rows, fresh }: { rows: GraphTreeRow[]; fresh: string | null }) {
+  // Expanded rows by index; roots start collapsed except a freshly added metric.
+  const [expanded, setExpanded] = useState<Set<number>>(() => new Set(rows.flatMap((r, i) => (r.depth === 0 && r.id === fresh ? [i] : []))))
+  const hasKids = (i: number) => rows[i + 1]?.depth > rows[i].depth
+  const visible: number[] = []
+  const stack: { depth: number; open: boolean }[] = []
+  rows.forEach((r, i) => {
+    while (stack.length && stack[stack.length - 1].depth >= r.depth) stack.pop()
+    if (stack.every((a) => a.open)) visible.push(i)
+    stack.push({ depth: r.depth, open: expanded.has(i) })
+  })
+  const toggle = (i: number) => setExpanded((s) => (s.has(i) ? (s.delete(i), new Set(s)) : new Set(s).add(i)))
+  return (
+    <ul className="px-6 pb-5 text-[13px]">
+      {visible.map((i) => {
+        const r = rows[i]
+        const isOpen = expanded.has(i)
+        const by = r.breakdown?.replace(/^global\s*→\s*/, '').replace(/\s*→\s*/g, ' › ')
+        return (
+          <li key={i}>
+            <button onClick={() => toggle(i)} className="flex w-full items-center gap-2 py-1.5 text-left hover:text-fg" style={{ paddingLeft: r.depth * 20 }}>
+              <span className="w-3 text-fg-2">{hasKids(i) || by ? (isOpen ? '▾' : '▸') : ''}</span>
+              <span className={r.id === fresh ? 'text-ok' : 'text-fg'}>{plainMetric(r.id, r.label)}</span>
+              {r.expr && <span className="num text-fg-2">= {r.expr}</span>}
+              {r.relation && r.relation !== 'formula' && <span className="text-fg-2">· {(r.relation_label ?? 'possible cause').toLowerCase()}</span>}
+              {r.repeat && <span className="text-fg-2">· see above</span>}
+            </button>
+            {isOpen && by && !r.repeat && (
+              <div className="py-1 text-fg-2" style={{ paddingLeft: (r.depth + 1) * 20 + 20 }}>
+                └ by {by}
+              </div>
+            )}
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 

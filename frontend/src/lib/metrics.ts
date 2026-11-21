@@ -60,19 +60,22 @@ export function resolveLocally(formula: string, known: string[]) {
   return { expr: tokens.join(' ').replace(/\s+/g, ' '), parents, ambiguous, unknown, bad }
 }
 
+export type ChoiceOption = { id: string; label: string; formula?: string }
 export type MetricOutcome =
-  | { kind: 'added'; id: string; label: string; expr: string; parents: string[]; breakdown: string[]; fit: string; checks: { name: string; ok: boolean; detail: string }[] }
-  | { kind: 'choose'; message: string; word: string; options: { id: string; label: string }[] }
+  | { kind: 'added'; id: string; label: string; expr: string; typed: string; readAs: [string, string][]; parents: string[]; breakdown: string[]; fit: string; countries: number; checks: { name: string; ok: boolean; detail: string }[] }
+  | { kind: 'choose'; message: string; word: string; options: ChoiceOption[] }
   | { kind: 'exists'; message: string; id: string } // same as a metric Argus already watches
   | { kind: 'error'; message: string }
 
+// Shape of POST /api/metrics (docs/API.md "Automatic extension"); older backends return only node + validation.
 type Raw = MetricResponse & {
-  status?: string
+  status?: 'added' | 'ambiguous' | 'invalid' | 'duplicate'
   message?: string
-  question?: string
-  ambiguous?: Record<string, string[]>
+  ambiguity?: { term: string; candidates: string[]; suggested_formulas?: string[] }
+  ambiguous?: Record<string, string[]> // older / mock shape
   unknown?: Record<string, string[]>
   placement?: { parents?: string[]; breakdown?: string[] }
+  monitoring?: { countries?: number }
   fit?: { text?: string; share?: number } | string
 }
 
@@ -85,43 +88,55 @@ function fitText(raw: Raw): string {
   return m ? `matches ${m[1]}% of hours` : 'matches past data'
 }
 
+const askWhich = (word: string, ids: string[]) => `“${word}” could mean ${ids.map((o) => plainMetric(o).toLowerCase()).join(' or ')}. Which one?`
+
 export function toOutcome(raw: Raw, formula: string, known: string[]): MetricOutcome {
   const node = raw.node as { id?: string; label?: string; expr?: string; formula?: string; parents?: string[]; breakdown?: string[] } | null
-  if (node?.id) {
+  if (node?.id && (raw.status === 'duplicate' || (!raw.status && raw.validation?.checks.some((c) => c.name === 'duplicate' && !c.ok))))
+    return { kind: 'exists', id: node.id, message: `Argus already watches this as ${plainMetric(node.id, node.label)}.` }
+  if (node?.id && (raw.status === 'added' || !raw.status)) {
+    // Words Argus translated, from the formula check: "read 'signups' as new_accounts".
+    const readAs = [...(raw.validation?.checks.find((c) => c.name === 'formula')?.detail ?? '').matchAll(/read '([^']+)' as ([a-z_]+)/g)].map((m) => [m[1], m[2]] as [string, string])
+    const expr = node.expr ?? node.formula ?? formula
+    // What the person typed; when unknown (demo scene), put their words back into the resolved formula.
+    const typed = formula || readAs.reduce((f, [w, id]) => replaceWord(f, id, w), expr)
     return {
       kind: 'added',
       id: node.id,
       label: node.label ?? plainMetric(node.id),
-      expr: node.expr ?? node.formula ?? formula,
+      expr,
+      typed,
+      readAs,
       parents: raw.placement?.parents ?? node.parents ?? [],
       breakdown: raw.placement?.breakdown ?? node.breakdown ?? [],
       fit: fitText(raw),
+      countries: raw.monitoring?.countries ?? 20,
       checks: raw.validation?.checks ?? [],
     }
   }
-  // Ambiguous word: offer the meanings.
+  // Ambiguous word: offer each meaning; with the documented shape each button re-submits a suggested formula.
+  if (raw.ambiguity) {
+    const { term, candidates, suggested_formulas: sf } = raw.ambiguity
+    return { kind: 'choose', word: term, message: askWhich(term, candidates), options: candidates.map((id, i) => ({ id, label: plainMetric(id), formula: sf?.[i] })) }
+  }
   const amb = raw.ambiguous && Object.entries(raw.ambiguous)[0]
   const local = resolveLocally(formula, known)
-  const ambWord = amb ? { word: amb[0], options: amb[1] } : local.ambiguous[0]
-  if (ambWord)
-    return {
-      kind: 'choose',
-      word: ambWord.word,
-      message: `“${ambWord.word}” could mean ${ambWord.options.map((o) => plainMetric(o).toLowerCase()).join(' or ')}. Which one?`,
-      options: ambWord.options.map((id) => ({ id, label: plainMetric(id) })),
-    }
-  // Unknown word with suggestions: offer them.
+  const ambWord = amb ? { word: amb[0], options: amb[1] } : !raw.status ? local.ambiguous[0] : undefined
+  if (ambWord) return { kind: 'choose', word: ambWord.word, message: askWhich(ambWord.word, ambWord.options), options: ambWord.options.map((id) => ({ id, label: plainMetric(id) })) }
+  // "Unknown metric 'revnue'. Did you mean revenue?": a calm choice, not an error.
+  const msg = raw.message ?? ''
+  const dym = msg.match(/Unknown metric '([^']+)'\.\s*Did you mean ([a-z_]+(?:,\s*[a-z_]+)*)\?/i)
+  if (dym) {
+    const ids = dym[2].split(/,\s*/)
+    return { kind: 'choose', word: dym[1], message: `Argus doesn't know “${dym[1]}”. Did you mean…`, options: ids.map((id) => ({ id, label: plainMetric(id) })) }
+  }
   const unk = raw.unknown && Object.entries(raw.unknown).find(([, s]) => s.length)
   if (unk) {
     const ids = unk[1].filter((x) => known.includes(x))
-    if (ids.length)
-      return { kind: 'choose', word: unk[0], message: `Argus doesn't know “${unk[0]}”. Did you mean…`, options: ids.map((id) => ({ id, label: plainMetric(id) })) }
+    if (ids.length) return { kind: 'choose', word: unk[0], message: `Argus doesn't know “${unk[0]}”. Did you mean…`, options: ids.map((id) => ({ id, label: plainMetric(id) })) }
   }
   const failed = raw.validation?.checks.find((c) => !c.ok)
-  // Same as an existing metric: not an error, just point to it.
-  const dup = failed?.name === 'duplicate' ? failed.detail.match(/existing metric ([a-z0-9_]+)/i) : null
-  if (dup) return { kind: 'exists', id: dup[1], message: `Argus already watches this as ${plainMetric(dup[1])}.` }
-  return { kind: 'error', message: raw.message ?? raw.question ?? failed?.detail ?? 'That formula could not be checked.' }
+  return { kind: 'error', message: msg || failed?.detail || 'That formula could not be checked.' }
 }
 
 // Replace one word of the formula by the chosen metric id.

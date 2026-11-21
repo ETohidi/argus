@@ -189,6 +189,19 @@ export interface MetricGraph {
   levels: Record<string, string>
 }
 
+export interface GraphTreeRow {
+  depth: number
+  id: string
+  label: string
+  relation: string | null // null for roots, else 'formula' | 'mechanism' | 'exogenous'
+  relation_label: string | null
+  expr?: string | null
+  unit?: string
+  origin?: string
+  breakdown?: string // "global → country → platform → offer category"
+  repeat?: boolean
+}
+
 export interface TimelineEvent {
   t: number
   time_label: string

@@ -214,7 +214,7 @@ export default function App() {
         case 'new_metric': {
           // Play what Argus did by itself with the metric the scene just added.
           const node = r.metric?.node as { id?: string; expr?: string } | null | undefined
-          const outcome = r.metric ? toOutcome(r.metric as never, node?.expr ?? '', []) : null
+          const outcome = r.metric ? toOutcome(r.metric as never, '', []) : null
           setGraphView({ highlight: node?.id ? [node.id] : [], outcome })
           break
         }
