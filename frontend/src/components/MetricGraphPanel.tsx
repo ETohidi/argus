@@ -115,16 +115,16 @@ export default function MetricGraphPanel({ graph, highlight, outcome: initial, o
   return (
     <div className="fade-in absolute inset-0 z-40 overflow-y-auto bg-bg/85 backdrop-blur-md">
       <div className="mx-auto max-w-[1100px] px-10 pb-16 pt-8">
-        <button onClick={onClose} className="text-[13px] text-fg-2 hover:text-fg">
+        <button onClick={onClose} className="text-[14px] text-fg-2 hover:text-fg">
           ← Back to the Earth
         </button>
         <div className="mt-6 flex items-end justify-between">
           <div>
             <h1 className="text-[24px] font-semibold text-fg">How the numbers connect</h1>
-            <div className="text-[13px] text-fg-2">{graph ? `${graph.nodes.length} metrics, watched in every country` : 'Loading…'}</div>
+            <div className="text-[14px] text-fg-2">{graph ? `${graph.nodes.length} metrics, watched in every country` : 'Loading…'}</div>
           </div>
           {!formOpen && (
-            <button onClick={() => setFormOpen(true)} className="rounded-full px-4 py-2 text-[13px] text-fg ring-1 ring-line hover:ring-accent">
+            <button onClick={() => setFormOpen(true)} className="rounded-full px-4 py-2 text-[14px] text-fg ring-1 ring-line hover:ring-accent">
               + Add a metric
             </button>
           )}
@@ -156,11 +156,11 @@ export default function MetricGraphPanel({ graph, highlight, outcome: initial, o
                 }}
                 className="rounded-2xl bg-panel/70 p-6 ring-1 ring-line"
               >
-                <label className="block text-[13px] text-fg-2" htmlFor="m-name">
+                <label className="block text-[14px] text-fg-2" htmlFor="m-name">
                   Name
                 </label>
                 <input id="m-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="margin_per_signup" autoComplete="off" className="mt-1 w-full rounded-lg bg-bg px-3 py-2 text-[16px] text-fg outline-none ring-1 ring-line focus:ring-accent" />
-                <label className="mt-4 block text-[13px] text-fg-2" htmlFor="m-formula">
+                <label className="mt-4 block text-[14px] text-fg-2" htmlFor="m-formula">
                   Formula
                 </label>
                 <input id="m-formula" value={formula} onChange={(e) => setFormula(e.target.value)} placeholder="margin / signups" autoComplete="off" className="num mt-1 w-full rounded-lg bg-bg px-3 py-2 text-[16px] text-fg outline-none ring-1 ring-line focus:ring-accent" />
@@ -175,7 +175,7 @@ export default function MetricGraphPanel({ graph, highlight, outcome: initial, o
                         setOutcome(null)
                         setStage(-1)
                       }}
-                      className="num rounded-full bg-line/70 px-3 py-1 text-[13px] text-fg-2 hover:text-fg"
+                      className="num rounded-full bg-line/70 px-3 py-1 text-[14px] text-fg-2 hover:text-fg"
                     >
                       {ex.name} = {ex.formula}
                     </button>
@@ -197,7 +197,7 @@ export default function MetricGraphPanel({ graph, highlight, outcome: initial, o
                 />
               </form>
             ) : (
-              <p className="text-[13px] leading-relaxed text-fg-2">Each box is a number Argus watches. Add your own and Argus places it, checks it and starts watching it.</p>
+              <p className="text-[16px] leading-relaxed text-fg-2">Each box is a number Argus watches. Add your own and Argus places it, checks it and starts watching it.</p>
             )}
           </div>
         </div>
@@ -213,8 +213,8 @@ function Outcome({ outcome, stage, onChoose, onShow }: { outcome: MetricOutcome 
   if (outcome.kind === 'exists')
     return (
       <div className="fade-up mt-5 flex items-center justify-between gap-4 rounded-xl bg-bg/60 p-4 ring-1 ring-line">
-        <p className="text-[13px] text-fg">{outcome.message}</p>
-        <button type="button" onClick={() => onShow(outcome.id)} className="shrink-0 rounded-lg bg-line px-3 py-1.5 text-[13px] text-fg hover:ring-1 hover:ring-accent">
+        <p className="text-[14px] text-fg">{outcome.message}</p>
+        <button type="button" onClick={() => onShow(outcome.id)} className="shrink-0 rounded-lg bg-line px-3 py-1.5 text-[14px] text-fg hover:ring-1 hover:ring-accent">
           Show it
         </button>
       </div>
@@ -222,10 +222,10 @@ function Outcome({ outcome, stage, onChoose, onShow }: { outcome: MetricOutcome 
   if (outcome.kind === 'choose')
     return (
       <div className="fade-up mt-5 rounded-xl bg-bg/60 p-4 ring-1 ring-line">
-        <p className="text-[13px] text-fg">{outcome.message}</p>
+        <p className="text-[14px] text-fg">{outcome.message}</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {outcome.options.map((o) => (
-            <button type="button" key={o.id} onClick={() => onChoose(outcome.word, o)} className="rounded-lg bg-line px-3 py-1.5 text-[13px] text-fg hover:ring-1 hover:ring-accent">
+            <button type="button" key={o.id} onClick={() => onChoose(outcome.word, o)} className="rounded-lg bg-line px-3 py-1.5 text-[14px] text-fg hover:ring-1 hover:ring-accent">
               {o.label}
             </button>
           ))}
@@ -234,7 +234,7 @@ function Outcome({ outcome, stage, onChoose, onShow }: { outcome: MetricOutcome 
     )
   if (outcome.kind === 'error')
     return (
-      <div className="fade-up mt-5 rounded-xl bg-problem/15 p-4 text-[13px] text-problem" role="alert">
+      <div className="fade-up mt-5 rounded-xl bg-problem/15 p-4 text-[14px] text-problem" role="alert">
         {outcome.message}
       </div>
     )
@@ -256,13 +256,13 @@ function Outcome({ outcome, stage, onChoose, onShow }: { outcome: MetricOutcome 
             <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-ok ${i === 2 ? 'animate-pulse' : ''}`} />
             <div>
               <div className="text-[16px] text-fg">{s.title}</div>
-              <div className="text-[13px] text-fg-2">{s.detail}</div>
+              <div className="text-[14px] text-fg-2">{s.detail}</div>
             </div>
           </li>
         ) : null,
       )}
       {stage > 2 && outcome.note && (
-        <li className="fade-up pl-5 text-[13px] text-fg-2">
+        <li className="fade-up pl-5 text-[14px] text-fg-2">
           <details>
             <summary className="cursor-pointer list-none hover:text-fg" title={outcome.note}>
               Added because you asked · watching in {outcome.countries} markets <span aria-hidden>▸</span>
@@ -294,7 +294,7 @@ function Legend({ types }: { types?: EdgeType[] }) {
       </>
     )
   return (
-    <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-[13px] text-fg-2">
+    <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-[14px] text-fg-2">
       {items.map((t) => (
         <span key={t.type} className="flex items-center gap-2" title={t.meaning}>
           {t.type === 'breakdown' ? <span>└</span> : <svg width="26" height="8" aria-hidden>{glyph(t.type)}</svg>}
@@ -324,9 +324,9 @@ function MetricTree({ graph, fresh }: { graph: MetricGraph; fresh: string | null
     <section className="mt-8 rounded-2xl bg-panel/50 ring-1 ring-line">
       <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center justify-between px-6 py-4 text-left text-[16px] text-fg">
         All metrics
-        <span className="text-[13px] text-fg-2">{open ? 'Hide' : 'Show'}</span>
+        <span className="text-[14px] text-fg-2">{open ? 'Hide' : 'Show'}</span>
       </button>
-      {open && (rows ? <ServerTree key={rows.length} rows={rows} fresh={fresh} /> : <p className="px-6 pb-5 text-[13px] text-fg-2">The metric list is not available yet.</p>)}
+      {open && (rows ? <ServerTree key={rows.length} rows={rows} fresh={fresh} /> : <p className="px-6 pb-5 text-[14px] text-fg-2">The metric list is not available yet.</p>)}
     </section>
   )
 }
@@ -344,7 +344,7 @@ function ServerTree({ rows, fresh }: { rows: GraphTreeRow[]; fresh: string | nul
   })
   const toggle = (i: number) => setExpanded((s) => (s.has(i) ? (s.delete(i), new Set(s)) : new Set(s).add(i)))
   return (
-    <ul className="px-6 pb-5 text-[13px]">
+    <ul className="px-6 pb-5 text-[14px]">
       {visible.map((i) => {
         const r = rows[i]
         const isOpen = expanded.has(i)

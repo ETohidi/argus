@@ -1,3 +1,4 @@
+import { useSvgFont } from '../../lib/useSvgFont'
 import { bandPath, monotonePath, type Pt } from '../../lib/curves'
 import { isBaseline } from '../../lib/incident'
 import { AURORA, MINT, PINK, usd } from '../../lib/theme'
@@ -5,12 +6,13 @@ import type { Fix } from '../../lib/types'
 
 type Props = { fixes: Fix[]; recommended: string; applied: string | null; width?: number; height?: number }
 
-const FS = 13
 
 // One chart for the decision: each option's cumulative margin over the next 7 days, measured against today's daily
 // pace (day-1 margin of doing nothing, repeated). Doing nothing sinks as advertisers react (event dots); the best
 // option is thick and labelled with its real gain over doing nothing.
 export default function WhichFixChart({ fixes, recommended, applied, width: W = 896, height: H = 380 }: Props) {
+  const { ref: svgRef, px } = useSvgFont<SVGSVGElement>(W)
+  const FS = px(14)
   const base = fixes.find(isBaseline) ?? fixes[0]
   const pace = base.p50[0] // margin per day at today's pace
   const rel = (arr: number[]) => [0, ...arr.map((v, i) => v - pace * (i + 1))]
@@ -48,7 +50,7 @@ export default function WhichFixChart({ fixes, recommended, applied, width: W = 
   }
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Cumulative margin of each fix over the next week">
+    <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Cumulative margin of each fix over the next week">
       <line x1={M.l} x2={W - M.r} y1={y(0)} y2={y(0)} stroke={AURORA.line} />
       {[0, 1, 2, 3, 4, 5, 6, 7].map((d) => (
         <text key={d} x={x(d)} y={H - 4} fontSize={FS} fill={AURORA.fg2} textAnchor={d === 0 ? 'start' : 'middle'}>

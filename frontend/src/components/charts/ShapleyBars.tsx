@@ -21,7 +21,7 @@ export default function ShapleyBars({ items }: { items: { mechanism: string; val
         const w = (Math.abs(it.value_usd) / max) * 50
         const neg = it.value_usd < 0
         return (
-          <div key={it.mechanism} className="grid grid-cols-[150px_1fr_80px] items-center gap-3 text-[13px]">
+          <div key={it.mechanism} className="grid grid-cols-[150px_1fr_80px] items-center gap-3 text-[14px]">
             <span className="truncate text-fg">{NAMES[it.mechanism] ?? it.mechanism}</span>
             <div className="relative h-3.5">
               <div className="absolute inset-y-0 left-1/2 w-px bg-fg-2" />
@@ -40,7 +40,7 @@ export default function ShapleyBars({ items }: { items: { mechanism: string; val
           </div>
         )
       })}
-      <div className="mt-3 flex justify-between border-t border-line pt-3 text-[13px] text-fg-2">
+      <div className="mt-3 flex justify-between border-t border-line pt-3 text-[14px] text-fg-2">
         <span>Each step's share of the change (Shapley values); together they add up to the margin change</span>
         <span className="num font-semibold text-fg">Σ {usd(total)}/h</span>
       </div>

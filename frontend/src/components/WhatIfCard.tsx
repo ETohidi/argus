@@ -26,7 +26,7 @@ export default function WhatIfCard({ f, onClose }: { f: LaunchForecast; onClose:
     <section className="fade-up pointer-events-auto w-[420px] rounded-3xl bg-panel/95 p-7 ring-1 ring-line backdrop-blur">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <span className="inline-block rounded-full bg-accent/15 px-2.5 py-0.5 text-[13px] text-accent">What if · nothing changes live</span>
+          <span className="inline-block rounded-full bg-accent/15 px-2.5 py-0.5 text-[14px] text-accent">What if · nothing changes live</span>
           <h2 className="mt-2 text-[24px] font-semibold leading-tight text-fg">{title}</h2>
         </div>
         <button onClick={onClose} aria-label="Close" className="-mr-2 -mt-1 rounded-full px-2 text-[16px] text-fg-2 hover:text-fg">
@@ -36,9 +36,9 @@ export default function WhatIfCard({ f, onClose }: { f: LaunchForecast; onClose:
 
       {m ? (
         <div className="mt-5">
-          <div className="text-[13px] text-fg-2">{m[1] ? 'About' : 'Expected'}</div>
+          <div className="text-[14px] text-fg-2">{m[1] ? 'About' : 'Expected'}</div>
           <div className="flex items-baseline gap-2">
-            <span className="num text-[34px] font-semibold leading-none text-fg">{m[2]}</span>
+            <span className="num text-[40px] font-semibold leading-none text-fg">{m[2]}</span>
             <span className="text-[16px] text-fg-2">{m[3]}</span>
           </div>
         </div>
@@ -46,9 +46,9 @@ export default function WhatIfCard({ f, onClose }: { f: LaunchForecast; onClose:
         <p className="mt-5 text-[16px] text-fg">{rest}</p>
       )}
 
-      {f.total_line && <div className="mt-2 text-[13px] text-fg">{f.total_line}</div>}
+      {f.total_line && <div className="mt-2 text-[16px] text-fg">{f.total_line}</div>}
 
-      <dl className="mt-6 space-y-3 text-[13px]">
+      <dl className="mt-6 space-y-3 text-[16px]">
         <div>
           <dt className="mb-1.5 text-fg-2">Best offers:</dt>
           <dd className="flex flex-wrap gap-1.5">
@@ -68,7 +68,7 @@ export default function WhatIfCard({ f, onClose }: { f: LaunchForecast; onClose:
       </dl>
 
       {/* The money, best offers and fraud risk first; everything else on request. */}
-      <details className="mt-5 text-[13px]">
+      <details className="mt-5 text-[14px]">
         <summary className="cursor-pointer list-none text-fg-2 hover:text-fg">More ▸</summary>
         <div className="mt-3">
           <div className="relative h-2 rounded-full bg-line/70">

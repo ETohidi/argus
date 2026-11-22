@@ -126,7 +126,7 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
 
   return (
     <div className="fade-in fixed inset-0 z-50 flex flex-col bg-bg/95 backdrop-blur-sm" role="dialog" aria-label="How Argus found this">
-      <div className="flex items-center justify-between px-10 pt-8 text-[13px] text-fg-2">
+      <div className="flex items-center justify-between px-10 pt-8 text-[14px] text-fg-2">
         <span>How Argus found this</span>
         <span className="flex gap-5">
           <button onClick={() => setPaused((p) => !p)} className="hover:text-fg">
@@ -138,16 +138,16 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
         </span>
       </div>
       <div key={cur.key} className="fade-up mx-auto mt-6 max-w-[960px] px-10 text-center">
-        <div className="text-[13px] uppercase tracking-[0.18em] text-accent">{cur.level}</div>
+        <div className="text-[14px] uppercase tracking-[0.18em] text-accent">{cur.level}</div>
         <h2 className="mt-3 whitespace-nowrap text-[28px] font-semibold leading-snug text-fg">{cur.sentence}</h2>
       </div>
 
       <div key={`v-${cur.key}`} className="fade-in mx-auto flex w-full max-w-[960px] flex-1 items-center justify-center px-10">
         {cur.key === 'l1' && series.length > 1 && (
           <div className="w-full">
-            <div className="mb-2 text-[13px] text-fg-2">{r.l1?.metric ?? d.series_meta?.label}, last 24 h</div>
+            <div className="mb-2 text-[14px] text-fg-2">{r.l1?.metric ?? d.series_meta?.label}, last 24 h</div>
             <NormalZoneChart series={series} leftAt={leftAt} width={896} height={300} showStart={false} />
-            <div className="mt-2 text-[13px] text-fg-2">Grey = usual for this time of day</div>
+            <div className="mt-2 text-[14px] text-fg-2">Grey = usual for this time of day</div>
           </div>
         )}
         {cur.key === 'l2' && <Grid detail={d} cells={r.l2?.cells} country={country} />}
@@ -161,7 +161,7 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
               </span>
               Without them
             </div>
-            <div className="mb-2 text-[13px] text-fg-2">{d.series_meta?.label}, last 24 h</div>
+            <div className="mb-2 text-[14px] text-fg-2">{d.series_meta?.label}, last 24 h</div>
             <NormalZoneChart
               series={proofSeries}
               leftAt={d.left_zone_at}
@@ -246,15 +246,15 @@ function StaticList({ steps, onClose }: { steps: Step[]; onClose: () => void }) 
         <ol className="mt-5 space-y-4">
           {steps.map((s, i) => (
             <li key={s.key} className="flex gap-4">
-              <span className="num mt-0.5 text-[13px] text-fg-2">{i + 1}</span>
+              <span className="num mt-0.5 text-[14px] text-fg-2">{i + 1}</span>
               <div>
-                <div className="text-[13px] text-accent">{s.level}</div>
+                <div className="text-[14px] text-accent">{s.level}</div>
                 <div className="text-[16px] text-fg">{s.sentence}</div>
               </div>
             </li>
           ))}
         </ol>
-        <button onClick={onClose} className="mt-6 rounded-full bg-line px-5 py-2 text-[13px] text-fg hover:bg-line/70">
+        <button onClick={onClose} className="mt-6 rounded-full bg-line px-5 py-2 text-[14px] text-fg hover:bg-line/70">
           Back to the issue
         </button>
       </div>

@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useSvgFont } from '../../lib/useSvgFont'
 import { AURORA, MINT, PINK, PINK_SOFT } from '../../lib/theme'
 import type { GraphEdge, GraphNode } from '../../lib/types'
 
@@ -152,9 +153,10 @@ export default function CausalGraph({ nodes, edges, roles = {}, showWords = true
   const roleOf = (id: string): NodeRole => roles[id] ?? (byId.get(id)?.node ? defaultRole(byId.get(id)!.node!) : 'normal')
   const hot = (e: GraphEdge) => roleOf(e.source) !== 'normal' && roleOf(e.target) !== 'normal' && roleOf(e.target) !== 'new'
   const { W, nodeW, nodeH } = dims
+  const { ref: svgRef, px } = useSvgFont<SVGSVGElement>(W)
 
   return (
-    <svg viewBox={`0 0 ${W} ${height}`} className="w-full" style={{ height: 'auto' }} role="img" aria-label="How the business numbers drive each other">
+    <svg ref={svgRef} viewBox={`0 0 ${W} ${height}`} className="w-full" style={{ height: 'auto' }} role="img" aria-label="How the business numbers drive each other">
       <defs>
         <marker id="cg-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
           <path d="M0,0 L8,4 L0,8 z" fill="#3A3F6B" />
@@ -217,12 +219,12 @@ export default function CausalGraph({ nodes, edges, roles = {}, showWords = true
               {pulse === n.id && <rect width={nodeW} height={nodeH} rx={10} fill="none" stroke={PINK} strokeWidth={2} className="cg-pulse" />}
               <rect width={nodeW} height={nodeH} rx={10} fill={waiting ? 'transparent' : st.fill} stroke={waiting ? '#3A3F6B' : st.stroke} strokeWidth={role === 'normal' || waiting ? 1 : 1.6} strokeDasharray={waiting ? undefined : st.dash} style={{ transition: 'fill 0.35s ease, stroke 0.35s ease' }} />
               {lines.map((line, k) => (
-                <text key={k} x={nodeW / 2} y={textTop + k * 15} fontSize={13} fontWeight={role === 'broke' ? 600 : 500} fill={st.text} textAnchor="middle">
+                <text key={k} x={nodeW / 2} y={textTop + k * 15} fontSize={px(14)} fontWeight={role === 'broke' ? 600 : 500} fill={st.text} textAnchor="middle">
                   {line}
                 </text>
               ))}
               {showWords && !waiting && (
-                <text x={nodeW / 2} y={nodeH - 8} fontSize={12} fill={st.word} textAnchor="middle" fontWeight={role === 'broke' ? 600 : 400}>
+                <text x={nodeW / 2} y={nodeH - 8} fontSize={px(14)} fill={st.word} textAnchor="middle" fontWeight={role === 'broke' ? 600 : 400}>
                   {ROLE_WORD[role]}
                 </text>
               )}

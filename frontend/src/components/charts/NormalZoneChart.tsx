@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { useSvgFont } from '../../lib/useSvgFont'
 import { bandPath, monotonePath, type Pt } from '../../lib/curves'
 import type { SeriesPoint } from '../../lib/types'
 
@@ -18,8 +19,10 @@ const ease = (x: number) => 1 - Math.pow(1 - x, 3)
 
 // Grey band = what the twin expected for each hour (lo..hi); line = what happened,
 // white inside the band and orange outside it (exact, via an SVG mask of the band).
-export default function NormalZoneChart({ series, leftAt, values, width: W = 356, height: H = 120, fontSize = 13, showStart = true, markers = [] }: Props) {
+export default function NormalZoneChart({ series, leftAt, values, width: W = 356, height: H = 120, fontSize = 14, showStart = true, markers = [] }: Props) {
   const id = useId().replace(/:/g, '')
+  const { ref: svgRef, px } = useSvgFont<SVGSVGElement>(W)
+  const fs = px(fontSize)
   const target = values ?? series.map((p) => p.actual)
   const [shown, setShown] = useState(target)
   const from = useRef(target)
@@ -40,7 +43,7 @@ export default function NormalZoneChart({ series, leftAt, values, width: W = 356
   }, [target.join(',')])
 
   if (series.length < 2) return null
-  const M = { l: 2, r: 2, t: leftAt || markers.length ? fontSize + 10 : 6, b: fontSize + 10 }
+  const M = { l: 2, r: 2, t: leftAt || markers.length ? fs + 10 : 6, b: fs + 10 }
   const all = [...series.flatMap((p) => [p.lo, p.hi, p.actual]), ...target]
   let lo = Math.min(...all)
   let hi = Math.max(...all)
@@ -57,7 +60,7 @@ export default function NormalZoneChart({ series, leftAt, values, width: W = 356
   const li = leftAt ? series.findIndex((p) => p.t === leftAt.t) : -1
   const labelLeft = li >= 0 && x(li) > W * 0.55
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="What was expected versus what happened">
+    <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="What was expected versus what happened">
       <defs>
         <mask id={`out-${id}`} maskUnits="userSpaceOnUse" x={0} y={0} width={W} height={H}>
           <rect width={W} height={H} fill="white" />
@@ -70,8 +73,8 @@ export default function NormalZoneChart({ series, leftAt, values, width: W = 356
       <path d={line} fill="none" stroke="#FF4D8D" strokeWidth={2.4} strokeLinecap="round" mask={`url(#out-${id})`} />
       {li >= 0 && (
         <g>
-          <line x1={x(li)} x2={x(li)} y1={fontSize + 4} y2={H - M.b} stroke="#FF4D8D" strokeOpacity={0.6} strokeDasharray="2 3" />
-          <text x={x(li) + (labelLeft ? 4 : -4)} y={fontSize} fontSize={fontSize} fill="#FF8FB7" textAnchor={labelLeft ? 'end' : 'start'}>
+          <line x1={x(li)} x2={x(li)} y1={fs + 4} y2={H - M.b} stroke="#FF4D8D" strokeOpacity={0.6} strokeDasharray="2 3" />
+          <text x={x(li) + (labelLeft ? 4 : -4)} y={fs} fontSize={fs} fill="#FF8FB7" textAnchor={labelLeft ? 'end' : 'start'}>
             Unusual since {leftAt!.label.replace(/^[A-Za-z]{3}\s+/, '')}
           </text>
         </g>
@@ -81,20 +84,20 @@ export default function NormalZoneChart({ series, leftAt, values, width: W = 356
         const right = x(i) > W * 0.6
         return (
           <g key={`${m.t}-${m.label}`}>
-            <line x1={x(i)} x2={x(i)} y1={fontSize + 4} y2={H - M.b} stroke="#9A9CC4" strokeOpacity={0.55} strokeDasharray="1.5 3" />
-            <circle cx={x(i)} cy={fontSize + 4} r={2.5} fill="#7B7FA8" />
-            <text x={x(i) + (right ? -6 : 6)} y={fontSize} fontSize={fontSize} fill="#9A9CC4" textAnchor={right ? 'end' : 'start'}>
+            <line x1={x(i)} x2={x(i)} y1={fs + 4} y2={H - M.b} stroke="#9A9CC4" strokeOpacity={0.55} strokeDasharray="1.5 3" />
+            <circle cx={x(i)} cy={fs + 4} r={2.5} fill="#7B7FA8" />
+            <text x={x(i) + (right ? -6 : 6)} y={fs} fontSize={fs} fill="#9A9CC4" textAnchor={right ? 'end' : 'start'}>
               {m.label}
             </text>
           </g>
         )
       })}
       {showStart && (
-        <text x={x(0)} y={H - 3} fontSize={fontSize} fill="#9A9CC4">
+        <text x={x(0)} y={H - 3} fontSize={fs} fill="#9A9CC4">
           {series[0].label}
         </text>
       )}
-      <text x={x(n)} y={H - 3} fontSize={fontSize} fill="#9A9CC4" textAnchor="end">
+      <text x={x(n)} y={H - 3} fontSize={fs} fill="#9A9CC4" textAnchor="end">
         now
       </text>
     </svg>

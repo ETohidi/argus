@@ -87,8 +87,8 @@ export default function ScenarioMenu(p: Props) {
   return (
     <div ref={ref} className="absolute bottom-6 left-8 z-[45]">
       {open && (
-        <div className="fade-up absolute bottom-12 left-0 max-h-[calc(100vh-9rem)] w-[320px] overflow-y-auto rounded-2xl bg-panel/95 p-5 text-[13px] text-fg shadow-2xl ring-1 ring-line/50">
-          <div className="mb-3 text-fg-2">Play the demo</div>
+        <div className="fade-up absolute bottom-12 left-0 max-h-[calc(100vh-9rem)] w-[320px] overflow-y-auto rounded-2xl bg-panel/95 p-5 text-[14px] text-fg shadow-2xl ring-1 ring-line/50">
+          <div className="mb-3 text-[16px] font-semibold text-fg">Play the demo</div>
           <ol className="-mx-2">
             {STORY.map((line, i) => {
               const current = i === p.storyAt
@@ -97,10 +97,10 @@ export default function ScenarioMenu(p: Props) {
                   <button
                     onClick={() => runStep(i)}
                     disabled={p.busy}
-                    className={`flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left disabled:opacity-40 ${current ? 'bg-line/70 text-fg' : i < p.storyAt ? 'text-fg-2 hover:bg-line/50' : 'text-fg hover:bg-line/50'}`}
+                    className={`flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left text-[16px] disabled:opacity-40 ${current ? 'bg-line/70 text-fg' : i < p.storyAt ? 'text-fg-2 hover:bg-line/50' : 'text-fg hover:bg-line/50'}`}
                     aria-current={current ? 'step' : undefined}
                   >
-                    <span className={`num flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[12px] ${current ? 'bg-ok text-bg' : 'text-fg-2 ring-1 ring-line'}`}>{i + 1}</span>
+                    <span className={`num flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[14px] ${current ? 'bg-ok text-bg' : 'text-fg-2 ring-1 ring-line'}`}>{i + 1}</span>
                     {line}
                   </button>
                 </li>
@@ -165,7 +165,7 @@ export default function ScenarioMenu(p: Props) {
                     Watching {a.watched_series} numbers · {a.investigations} investigation{a.investigations === 1 ? '' : 's'} · {a.l3_runs} account-level check{a.l3_runs === 1 ? '' : 's'}
                   </div>
                 )}
-                <div className="mt-3 flex items-center gap-3 text-[12px]">
+                <div className="mt-3 flex items-center gap-3 text-[14px]">
                   {LEGEND.map(([label, color]) => (
                     <span key={label} className="flex items-center gap-1.5">
                       <span className="h-2 w-2 rounded-full" style={{ background: color }} />
@@ -173,14 +173,14 @@ export default function ScenarioMenu(p: Props) {
                     </span>
                   ))}
                 </div>
-                <div className="mt-2 text-[12px] text-fg-2/70">Earth imagery: NASA Visible Earth</div>
+                <div className="mt-2 text-[14px] text-fg-2">Earth imagery: NASA Visible Earth</div>
               </div>
             </div>
           )}
         </div>
       )}
       {p.storyAt >= 0 && !open ? (
-        <div className="flex items-center overflow-hidden rounded-full bg-panel/90 text-[13px] ring-1 ring-line backdrop-blur">
+        <div className="frost flex items-center overflow-hidden rounded-full text-[16px] ring-1 ring-line">
           <button onClick={() => setOpen(true)} className="num px-4 py-2 text-fg-2 hover:text-fg" title={STORY[p.storyAt]}>
             {p.storyAt + 1}/{STORY.length}
           </button>
@@ -191,7 +191,7 @@ export default function ScenarioMenu(p: Props) {
       ) : (
         <button
           onClick={() => setOpen((o) => !o)}
-          className={`rounded-full px-4 py-2 text-[13px] ring-1 transition ${open ? 'text-fg ring-fg-2' : 'text-fg-2 ring-line hover:text-fg'}`}
+          className={`frost rounded-full px-4 py-2 text-[16px] ring-1 transition ${open ? 'text-fg ring-fg-2' : 'text-fg ring-line hover:ring-fg-2'}`}
         >
           Play the demo
         </button>

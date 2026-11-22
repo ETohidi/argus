@@ -39,12 +39,12 @@ export default function IssueCard({ summary, detail, countryName, foundLine, app
     <section className="fade-up pointer-events-auto w-[420px] rounded-3xl bg-panel/95 p-7 ring-1 ring-line backdrop-blur">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <span className={`inline-block rounded-full px-2.5 py-0.5 text-[13px] ${chip}`}>{label}</span>
+          <span className={`inline-block rounded-full px-2.5 py-0.5 text-[14px] ${chip}`}>{label}</span>
           <h2 className="mt-2 text-[24px] font-semibold leading-tight text-fg">{summary.short_title ?? detail?.short_title ?? shortTitle(card?.title ?? summary.title)}</h2>
-          {(summary.title_detail ?? detail?.title_detail) && <p className="mt-1.5 text-[13px] leading-snug text-fg-2">{summary.title_detail ?? detail?.title_detail}</p>}
-          {foundLine && <p className="mt-1 text-[13px] leading-snug text-fg-2">{foundLine}</p>}
+          {(summary.title_detail ?? detail?.title_detail) && <p className="mt-1.5 text-[14px] leading-snug text-fg-2">{summary.title_detail ?? detail?.title_detail}</p>}
+          {foundLine && <p className="mt-1 text-[14px] leading-snug text-fg-2">{foundLine}</p>}
           {onReplay && detail && (
-            <button onClick={onReplay} className="mt-2.5 inline-flex items-center gap-2 rounded-full bg-accent/15 px-3 py-1 text-[13px] text-accent ring-1 ring-accent/30 hover:bg-accent/25">
+            <button onClick={onReplay} className="mt-2.5 inline-flex items-center gap-2 rounded-full bg-accent/15 px-3 py-1 text-[14px] text-accent ring-1 ring-accent/30 hover:bg-accent/25">
               How did Argus find this? <span aria-hidden>▶</span>
             </button>
           )}
@@ -58,13 +58,13 @@ export default function IssueCard({ summary, detail, countryName, foundLine, app
         <>
           <div className="mt-5 grid grid-cols-2 gap-6">
             <Big label="Looks like:" value={amount} note="an hour" />
-            <Big label="Doing nothing costs" value={usd(atStake)} note="this week" tone="text-problem" />
+            <Big label="Doing nothing costs" value={usd(atStake)} note="this week" tone="text-[#FF8FB7]" />
           </div>
           {detail?.series && detail.series.length > 1 && (
             <figure className="mt-6">
-              <div className="mb-1 text-[13px] text-fg-2">{metricLabel(detail.series_meta)}</div>
+              <div className="mb-1 text-[14px] text-fg-2">{metricLabel(detail.series_meta)}</div>
               <NormalZoneChart series={detail.series.slice(-24)} leftAt={detail.left_zone_at} width={364} height={100} showStart={false} />
-              <figcaption className="mt-1 text-[13px] text-fg-2">Grey = usual for this time of day</figcaption>
+              <figcaption className="mt-1 text-[14px] text-fg-2">Grey = usual for this time of day</figcaption>
             </figure>
           )}
           <div className="mt-5 space-y-2 text-[16px] leading-snug">
@@ -83,7 +83,7 @@ export default function IssueCard({ summary, detail, countryName, foundLine, app
         <Outcome detail={detail} countryName={countryName} statusLine={card?.status_line} recovered={recovered} />
       )}
 
-      <button onClick={onEvidence} className="mt-5 text-[13px] text-fg-2 hover:text-fg">
+      <button onClick={onEvidence} className="mt-5 text-[14px] text-fg-2 hover:text-fg">
         See the evidence →
       </button>
     </section>
@@ -93,9 +93,9 @@ export default function IssueCard({ summary, detail, countryName, foundLine, app
 function Big({ label, value, note, tone = 'text-fg' }: { label: string; value: string; note?: string; tone?: string }) {
   return (
     <div>
-      <div className="text-[13px] text-fg-2">{label}</div>
+      <div className="text-[14px] text-fg-2">{label}</div>
       <div className={`num mt-1 text-[40px] font-semibold leading-none tracking-tight ${tone}`}>{value}</div>
-      {note && <div className="mt-2 text-[13px] text-fg-2">{note}</div>}
+      {note && <div className="mt-2 text-[14px] text-fg-2">{note}</div>}
     </div>
   )
 }
@@ -107,7 +107,7 @@ function Outcome({ detail, countryName, statusLine, recovered }: { detail: Incid
     return (
       <div className="mt-6">
         <div className="text-[24px] font-semibold leading-snug text-ok">{countryName} is back to normal.</div>
-        <p className="mt-2 text-[13px] text-fg-2">It recovered on its own; no action was needed.</p>
+        <p className="mt-2 text-[14px] text-fg-2">It recovered on its own; no action was needed.</p>
       </div>
     )
   const v = detail?.verification
@@ -122,7 +122,7 @@ function Outcome({ detail, countryName, statusLine, recovered }: { detail: Incid
           The prediction came true.
         </div>
         {band && v.actual != null && <BandBar band={band} actual={v.actual} />}
-        <p className="mt-4 text-[13px] text-fg-2">
+        <p className="mt-4 text-[14px] text-fg-2">
           {fix ? `${fix.name} was applied. ` : ''}Margin on the first day landed inside the range Argus predicted.
         </p>
       </div>
@@ -131,14 +131,14 @@ function Outcome({ detail, countryName, statusLine, recovered }: { detail: Incid
     return (
       <div className="mt-6">
         <div className="text-[24px] font-semibold text-problem">The prediction missed.</div>
-        <p className="mt-2 text-[13px] text-fg-2">{statusLine ?? 'Argus has adjusted its expectations.'}</p>
+        <p className="mt-2 text-[14px] text-fg-2">{statusLine ?? 'Argus has adjusted its expectations.'}</p>
         {band && v.actual != null && <BandBar band={band} actual={v.actual} />}
       </div>
     )
   return (
     <div className="mt-6">
       <div className="text-[24px] font-semibold leading-snug text-fg">{fix ? `${fix.name} is live.` : 'The fix is live.'}</div>
-      <p className="mt-2 text-[13px] leading-relaxed text-fg-2">
+      <p className="mt-2 text-[16px] leading-relaxed text-fg-2">
         Argus checks its own prediction after 24 hours
         {band ? `: first-day margin should land between ${usd(band[0])} and ${usd(band[2])}.` : '.'}
       </p>
@@ -155,7 +155,7 @@ function BandBar({ band, actual }: { band: number[]; actual: number }) {
       <div className="relative h-2 rounded-full bg-ok/20">
         <div className="absolute -top-1 h-4 w-1 rounded bg-ok" style={{ left: `calc(${pos * 100}% - 2px)` }} />
       </div>
-      <div className="num mt-2 flex justify-between text-[13px] text-fg-2">
+      <div className="num mt-2 flex justify-between text-[14px] text-fg-2">
         <span>{usd(lo)}</span>
         <span className="text-ok">actual {usd(actual)}</span>
         <span>{usd(hi)}</span>

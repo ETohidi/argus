@@ -539,7 +539,7 @@ export default function App() {
         {launch?.phase === 'shown' && lf && launchCardReady ? (
           <WhatIfCard f={lf} onClose={closeLaunch} />
         ) : launch ? null : explained && !country && !card && explainedLine(explained, nameOf(explained.country)) !== status.text && (
-          <div className="fade-in pointer-events-auto max-w-[420px] text-right text-[13px] leading-relaxed text-fg-2">
+          <div className="frost fade-in pointer-events-auto max-w-[420px] rounded-xl px-4 py-2 text-right text-[16px] leading-relaxed text-fg-2">
             <span className="mr-2 inline-block h-2 w-2 rounded-full bg-fg-2" />
             {explainedLine(explained, nameOf(explained.country))}
           </div>
@@ -576,7 +576,7 @@ export default function App() {
       </div>
 
       {state && (state.incidents.some((i) => i.status !== 'resolved') || timeline.some((e) => e.t >= state.clock.t - 72)) && (
-        <div className="pointer-events-none absolute bottom-6 left-48 z-20 transition-[right] duration-300 ease-out" style={{ right: sideOpen ? 480 : 40 }}>
+        <div className="frost pointer-events-none absolute bottom-4 left-48 z-20 rounded-2xl px-4 pb-2 pt-2 transition-[right] duration-300 ease-out" style={{ right: sideOpen ? 480 : 40 }}>
           <TimelineStrip
             events={timeline}
             now={state.clock.t}
@@ -589,7 +589,7 @@ export default function App() {
 
       {subtitleAt != null && storyAt >= 0 && (
         <div className="pointer-events-none absolute inset-x-0 bottom-[68px] z-[44] flex justify-center px-8">
-          <div key={subtitleAt} className="fade-up whitespace-nowrap rounded-full bg-bg/70 px-5 py-2 text-[16px] text-fg ring-1 ring-line/40 backdrop-blur">
+          <div key={subtitleAt} className="frost fade-up whitespace-nowrap rounded-full px-6 py-2.5 text-[24px] text-fg ring-1 ring-line/40">
             {SUBTITLES[subtitleAt]}
           </div>
         </div>
@@ -615,10 +615,10 @@ export default function App() {
 
 
       {crumb && (
-        <div key={crumb.key} className={`crumb pointer-events-none absolute left-8 top-[76px] z-20 flex items-center gap-1.5 text-[13px] text-fg-2${crumb.out ? ' crumb--out' : ''}`} aria-hidden>
+        <div key={crumb.key} className={`crumb frost pointer-events-none absolute left-8 top-[84px] z-20 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[14px] text-fg-2${crumb.out ? ' crumb--out' : ''}`} aria-hidden>
           {crumbParts.map((p, i) => (
             <span key={p} className="crumb-part" style={{ animationDelay: `${i * 220}ms` }}>
-              {i > 0 && <span className="mr-1.5 text-fg-2/60">→</span>}
+              {i > 0 && <span className="mr-1.5 text-fg-2">→</span>}
               <span className={i === crumbParts.length - 1 ? 'text-fg' : ''}>{p}</span>
             </span>
           ))}
@@ -626,7 +626,7 @@ export default function App() {
       )}
 
       {toast && (
-        <div className="fade-up pointer-events-none absolute left-1/2 top-24 z-50 -translate-x-1/2 rounded-full bg-panel/90 px-5 py-2 text-[13px] text-fg ring-1 ring-line/50">
+        <div className="frost fade-up pointer-events-none absolute left-1/2 top-28 z-50 -translate-x-1/2 rounded-full px-5 py-2 text-[16px] text-fg ring-1 ring-line/50">
           {toast}
         </div>
       )}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSvgFont } from '../../lib/useSvgFont'
 import { AURORA, MINT, PINK } from '../../lib/theme'
 import type { L3Result } from '../../lib/types'
 
@@ -22,6 +23,7 @@ function rng(seed: number) {
 // shared device, with lines between accounts that share it.
 export default function FakeAccountPicture({ l3, width: W = 896, height: H = 400 }: Props) {
   const [pulled, setPulled] = useState(false)
+  const { ref: svgRef, px } = useSvgFont<SVGSVGElement>(W)
   useEffect(() => {
     const id = window.setTimeout(() => setPulled(true), 350)
     return () => window.clearTimeout(id)
@@ -74,12 +76,12 @@ export default function FakeAccountPicture({ l3, width: W = 896, height: H = 400
   const links = (l3.links ?? []).filter((l) => l.a < l3.points.length && l.b < l3.points.length)
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Sampled accounts; flagged accounts clustered by shared device">
-      <text x={20} y={14} fontSize={13} fill={AURORA.fg2}>
+    <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Sampled accounts; flagged accounts clustered by shared device">
+      <text x={20} y={14} fontSize={px(14)} fill={AURORA.fg2}>
         Real users
       </text>
       {layout.groups.length > 0 && (
-        <text x={layout.split + 60} y={14} fontSize={13} fill="#FF8FB7">
+        <text x={layout.split + 60} y={14} fontSize={px(14)} fill="#FF8FB7">
           Fake accounts, grouped by the phone they share
         </text>
       )}
@@ -109,7 +111,7 @@ export default function FakeAccountPicture({ l3, width: W = 896, height: H = 400
         return (
           <g key={device} style={{ opacity: pulled ? 1 : 0, transition: 'opacity 400ms ease-out 900ms' }}>
             <circle cx={cx} cy={cy} r={rad} fill="none" stroke={PINK} strokeOpacity={0.35} strokeDasharray="3 4" />
-            <text x={cx} y={cy + rad + 16} fontSize={13} fill={AURORA.fg} textAnchor="middle">
+            <text x={cx} y={cy + rad + 16} fontSize={px(14)} fill={AURORA.fg} textAnchor="middle">
               {deviceName(device)} · {members.length} {members.length === 1 ? 'account' : 'accounts'}
             </text>
           </g>

@@ -50,10 +50,10 @@ export default function TimelineStrip({ events, now, hours = 72, clock, countryN
       {days.map((t) => (
         <div key={t} className="absolute top-[14px] h-3 w-px bg-line" style={{ left: `${pos(t)}%` }} />
       ))}
-      <div className="pointer-events-auto absolute right-0 top-7 cursor-default whitespace-nowrap text-[13px] text-fg-2" title="Simulated time: the marketplace runs hour by hour">
+      <div className="pointer-events-auto absolute right-0 top-7 cursor-default whitespace-nowrap text-[14px] text-fg-2" title="Simulated time: the marketplace runs hour by hour">
         {clock ? <span className="num">{clock}</span> : 'now'}
       </div>
-      <div className="absolute left-0 top-7 text-[13px] text-fg-2">72 h ago</div>
+      <div className="absolute left-0 top-7 text-[14px] text-fg-2">72 h ago</div>
       {placed.map(({ e, left, offset }, i) => (
         <button
           key={`${e.t}-${e.kind}-${i}`}
@@ -69,7 +69,7 @@ export default function TimelineStrip({ events, now, hours = 72, clock, countryN
       ))}
       {active != null && placed[active] && (
         <div
-          className="fade-in pointer-events-none absolute bottom-9 w-max max-w-[360px] -translate-x-1/2 rounded-lg bg-panel px-3 py-2 text-[13px] text-fg ring-1 ring-line"
+          className="fade-in pointer-events-none absolute bottom-9 w-max max-w-[360px] -translate-x-1/2 rounded-lg bg-panel px-3 py-2 text-[14px] text-fg ring-1 ring-line"
           style={{ left: `clamp(120px, calc(${placed[active].left}% + ${placed[active].offset}px), calc(100% - 120px))` }}
         >
           <span className="num text-fg-2">{placed[active].e.time_label}</span> · {countryName(placed[active].e.country)}

@@ -64,7 +64,7 @@ export default function CountrySheet({ country, detail, incident, potential, exp
       )}
 
       {/* Key numbers in plain words. */}
-      <dl className="mt-5 space-y-1.5 text-[13px]">
+      <dl className="mt-5 space-y-1.5 text-[16px]">
         {sum
           ? sum.numbers.slice(0, 3).map((n) => {
               const off = n.usual ? Math.abs(n.value / n.usual - 1) : 0
@@ -80,17 +80,17 @@ export default function CountrySheet({ country, detail, incident, potential, exp
 
       {series.length > 1 && (
         <figure className="mt-5">
-          <div className="mb-1 text-[13px] text-fg-2">{sum?.series.metric ?? 'Margin per hour'}, last 24 h</div>
+          <div className="mb-1 text-[14px] text-fg-2">{sum?.series.metric ?? 'Margin per hour'}, last 24 h</div>
           <NormalZoneChart series={series} width={324} height={84} showStart={false} markers={markers} />
-          <figcaption className="mt-1 text-[13px] text-fg-2">Grey = usual for this time of day</figcaption>
+          <figcaption className="mt-1 text-[14px] text-fg-2">Grey = usual for this time of day</figcaption>
         </figure>
       )}
 
       {/* What's moving: only when something is unusual. */}
       {sum && sum.moving.length > 0 && (
         <div className="mt-5">
-          <h3 className="text-[13px] text-fg-2">What's moving</h3>
-          <ul className="mt-1.5 space-y-1 text-[13px] text-fg">
+          <h3 className="text-[14px] text-fg-2">What's moving</h3>
+          <ul className="mt-1.5 space-y-1 text-[16px] text-fg">
             {sum.moving.slice(0, 2).map((m) => (
               <li key={m.line} className="flex gap-2">
                 <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: color }} />
@@ -102,12 +102,12 @@ export default function CountrySheet({ country, detail, incident, potential, exp
       )}
 
       {pot && (
-        <p className="mt-5 text-[13px] leading-relaxed text-fg-2">
+        <p className="mt-5 text-[16px] leading-relaxed text-fg-2">
           {growthLine(pot, country.name).replace(/^[^:]{1,40}:\s*/, '').replace(/^./, (ch) => ch.toUpperCase())}
         </p>
       )}
 
-      <div className="mt-6 flex items-center justify-between text-[13px]">
+      <div className="mt-6 flex items-center justify-between text-[14px]">
         <button onClick={() => setGrid((g) => !g)} className="text-fg-2 hover:text-fg" aria-expanded={grid}>
           {grid ? 'Hide segments' : 'All segments →'}
         </button>
@@ -138,7 +138,7 @@ function SegmentGrid({ detail, kpi, onKpi }: { detail: CountryDetail; kpi: strin
     <div className="fade-in mt-4">
       <div className="flex flex-wrap gap-x-3 gap-y-1">
         {KPI_OPTIONS.map((o) => (
-          <button key={o.id} onClick={() => onKpi(o.id)} className={`text-[13px] ${kpi === o.id ? 'text-fg' : 'text-fg-2 hover:text-fg'}`}>
+          <button key={o.id} onClick={() => onKpi(o.id)} className={`text-[14px] ${kpi === o.id ? 'text-fg' : 'text-fg-2 hover:text-fg'}`}>
             {o.label}
           </button>
         ))}
@@ -146,13 +146,13 @@ function SegmentGrid({ detail, kpi, onKpi }: { detail: CountryDetail; kpi: strin
       <div className="mt-3 grid items-center gap-x-2 gap-y-1.5" style={{ gridTemplateColumns: `1fr repeat(${platforms.length}, 64px)` }}>
         <div />
         {platforms.map((p) => (
-          <div key={p} className="text-center text-[13px] text-fg-2">
+          <div key={p} className="text-center text-[14px] text-fg-2">
             {PLATFORM_LABEL[p] ?? p}
           </div>
         ))}
         {categories.map((c) => (
           <div key={c} className="contents">
-            <div className="text-[13px] leading-tight text-fg-2">{c}</div>
+            <div className="text-[14px] leading-tight text-fg-2">{c}</div>
             {platforms.map((p) => {
               const s = detail.segments.find((x) => x.platform === p && x.category === c)
               if (!s) return <div key={p} />
@@ -160,7 +160,7 @@ function SegmentGrid({ detail, kpi, onKpi }: { detail: CountryDetail; kpi: strin
               return (
                 <div
                   key={p}
-                  className="num flex h-8 items-center justify-center rounded-lg text-[13px] transition-colors duration-700"
+                  className="num flex h-8 items-center justify-center rounded-lg text-[14px] transition-colors duration-700"
                   style={cellStyle(z)}
                   title={`${c} on ${PLATFORM_LABEL[p] ?? p}: margin ${s.deviation_usd_h >= 0 ? '+' : ''}${usd(s.deviation_usd_h)} an hour vs usual`}
                 >
@@ -172,7 +172,7 @@ function SegmentGrid({ detail, kpi, onKpi }: { detail: CountryDetail; kpi: strin
           </div>
         ))}
       </div>
-      <div className="mt-2 text-[13px] text-fg-2">How unusual: 0 = usual, 4 or more = clearly off</div>
+      <div className="mt-2 text-[14px] text-fg-2">How unusual: 0 = usual, 4 or more = clearly off</div>
     </div>
   )
 }

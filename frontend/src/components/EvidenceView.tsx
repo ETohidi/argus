@@ -108,10 +108,10 @@ export default function EvidenceView({ detail: d, title, initialTab = 'graph', a
   return (
     <div className="fade-in absolute inset-0 z-40 overflow-y-auto bg-bg/80 backdrop-blur-md">
       <div className="mx-auto max-w-[1040px] px-10 pb-16 pt-8">
-        <button onClick={onClose} className="text-[13px] text-fg-2 hover:text-fg">
+        <button onClick={onClose} className="text-[14px] text-fg-2 hover:text-fg">
           ← Back to the Earth
         </button>
-        <div className="mt-6 text-[13px] text-fg-2">The evidence</div>
+        <div className="mt-6 text-[14px] text-fg-2">The evidence</div>
         <h1 className="text-[24px] font-semibold text-fg">{title}</h1>
 
         <nav className="mt-8 flex gap-1 border-b border-line">
@@ -121,9 +121,9 @@ export default function EvidenceView({ detail: d, title, initialTab = 'graph', a
               onClick={() => setTab(t.id)}
               className={`-mb-px border-b-2 px-4 pb-3 text-[16px] transition ${
                 tab === t.id ? 'border-ok text-fg' : 'border-transparent text-fg-2 hover:text-fg'
-              } ${t.id === 'details' ? 'ml-auto !text-[13px] self-end' : ''}`}
+              } ${t.id === 'details' ? 'ml-auto !text-[14px] self-end' : ''}`}
             >
-              {t.id !== 'details' && <span className="num mr-2 text-[13px] text-fg-2">{i + 1}</span>}
+              {t.id !== 'details' && <span className="num mr-2 text-[14px] text-fg-2">{i + 1}</span>}
               {t.label}
             </button>
           ))}
@@ -221,7 +221,7 @@ function StoryGraph({ d }: { d: IncidentDetail }) {
   return (
     <Frame narrow>
       <CausalGraph nodes={nodes} edges={edges} roles={roles} />
-      <div className="mt-6 flex items-center justify-between text-[13px] text-fg-2">
+      <div className="mt-6 flex items-center justify-between text-[14px] text-fg-2">
         <span className="flex gap-5">
           <span className="flex items-center gap-2"><span className="h-3 w-5 rounded bg-problem" /> cause</span>
           <span className="flex items-center gap-2"><span className="h-3 w-5 rounded border border-dashed border-problem" /> affected</span>
@@ -274,7 +274,7 @@ function Proof({ d }: { d: IncidentDetail }) {
           <div className="mt-6">
             <NormalZoneChart series={series} leftAt={d.left_zone_at} values={without ? cfValues : undefined} width={896} height={300} fontSize={13} showStart={false} />
           </div>
-          <div className="mt-3 flex items-baseline justify-between gap-6 text-[13px] text-fg-2">
+          <div className="mt-3 flex items-baseline justify-between gap-6 text-[14px] text-fg-2">
             <span>{metricLabel(d.series_meta)} · grey = usual for this time of day</span>
             <span className={`text-[16px] transition-opacity duration-300 ${without ? 'text-ok opacity-100' : 'opacity-0'}`}>
               {Math.round(share * 100)}% of the change disappears{share >= 0.8 ? ' — cause proven' : ''}
@@ -286,7 +286,7 @@ function Proof({ d }: { d: IncidentDetail }) {
         <h3 className="mb-4 text-[16px] text-fg">Every explanation Argus tested</h3>
         <div className="space-y-4">
           {hyps.map((h) => (
-            <div key={h.name} className="grid grid-cols-[1fr_180px_56px_80px] items-center gap-4 text-[13px]">
+            <div key={h.name} className="grid grid-cols-[1fr_180px_56px_80px] items-center gap-4 text-[14px]">
               <span className={h.verdict === 'supported' ? 'text-fg' : 'text-fg-2'}>{shortHypothesis(h.name)}</span>
               <div className="h-2 overflow-hidden rounded-full bg-line">
                 <div className="h-full rounded-full transition-[width] duration-300 ease-out" style={{ width: `${Math.max(1, h.explained * 100)}%`, background: VERDICT_COLOR[h.verdict] }} />
@@ -298,7 +298,7 @@ function Proof({ d }: { d: IncidentDetail }) {
             </div>
           ))}
         </div>
-        <p className="mt-5 text-[13px] text-fg-2">How much of the change disappears when the week is replayed without that explanation. Counted as proven at 80% or more.</p>
+        <p className="mt-5 text-[14px] text-fg-2">How much of the change disappears when the week is replayed without that explanation. Counted as proven at 80% or more.</p>
       </Frame>
     </div>
   )
@@ -321,7 +321,7 @@ function Fixes({ d, approving, onApprove }: { d: IncidentDetail; approving: bool
       )}
       <Frame>
         <WhichFixChart fixes={d.fixes} recommended={d.recommended} applied={d.applied} />
-        <p className="mt-2 text-[13px] text-fg-2">Shaded = likely range</p>
+        <p className="mt-2 text-[14px] text-fg-2">Shaded = likely range</p>
         {best && !d.applied && (
           <div className="mt-6 flex items-center gap-6">
             <button
@@ -331,16 +331,16 @@ function Fixes({ d, approving, onApprove }: { d: IncidentDetail; approving: bool
             >
               {approving ? 'Applying…' : `Approve: ${best.name.toLowerCase()}`}
             </button>
-            <span className="text-[13px] text-fg-2">{best.description}</span>
+            <span className="text-[14px] text-fg-2">{best.description}</span>
           </div>
         )}
       </Frame>
       {others.length > 0 && (
         <div>
-          <h3 className="mb-3 text-[13px] text-fg-2">Other options</h3>
+          <h3 className="mb-3 text-[14px] text-fg-2">Other options</h3>
           <ul className="divide-y divide-line rounded-2xl bg-panel/60 ring-1 ring-line">
             {others.map((f) => (
-              <li key={f.id} className="flex items-center gap-6 px-6 py-4 text-[13px]">
+              <li key={f.id} className="flex items-center gap-6 px-6 py-4 text-[14px]">
                 <span className="w-44 shrink-0 text-fg">{f.name}</span>
                 <span className="num w-20 shrink-0 text-fg">{f.delta_p50_usd >= 0 ? '+' : ''}{usd(f.delta_p50_usd)}</span>
                 <span className="flex-1 text-fg-2">{f.advertiser_risk}</span>
@@ -371,14 +371,14 @@ function Details({ d }: { d: IncidentDetail }) {
           {d.trail.map((s, i) => (
             <li key={i} className="fade-up relative pb-6 pl-6 last:pb-0" style={{ animationDelay: `${i * 70}ms` }}>
               <span className="absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full bg-fg-2" />
-              <div className="flex items-baseline gap-3 text-[13px] text-fg-2">
+              <div className="flex items-baseline gap-3 text-[14px] text-fg-2">
                 <span>
                   {s.level} · {LEVEL_TEXT[s.level]}
                 </span>
                 <span className="num">hour {s.t}</span>
               </div>
-              <div className="mt-0.5 text-[13px] font-medium text-fg">{s.action}</div>
-              <div className="text-[13px] leading-relaxed text-fg-2">{s.finding}</div>
+              <div className="mt-0.5 text-[14px] font-medium text-fg">{s.action}</div>
+              <div className="text-[16px] leading-relaxed text-fg-2">{s.finding}</div>
             </li>
           ))}
         </ol>
@@ -388,15 +388,15 @@ function Details({ d }: { d: IncidentDetail }) {
           <div className="mb-4 flex items-baseline gap-4">
             <h3 className="text-[16px] font-semibold text-fg">Reports</h3>
             {(['ceo', 'manager', 'engineer'] as const).map((a) => (
-              <button key={a} onClick={() => setAud(a)} className={`text-[13px] ${aud === a ? 'text-ok' : 'text-fg-2 hover:text-fg'}`}>
+              <button key={a} onClick={() => setAud(a)} className={`text-[14px] ${aud === a ? 'text-ok' : 'text-fg-2 hover:text-fg'}`}>
                 {a === 'ceo' ? 'CEO' : a === 'manager' ? 'Manager' : 'Engineer'}
               </button>
             ))}
           </div>
-          <p key={aud} className="fade-in text-[13px] leading-relaxed text-fg">
+          <p key={aud} className="fade-in text-[16px] leading-relaxed text-fg">
             {d.reports[aud]}
           </p>
-          {d.reports.source && <div className="mt-2 text-[13px] text-fg-2">Written by {d.reports.source === 'llm' ? 'the language model' : 'templates'}.</div>}
+          {d.reports.source && <div className="mt-2 text-[14px] text-fg-2">Written by {d.reports.source === 'llm' ? 'the language model' : 'templates'}.</div>}
         </div>
         <div>
           <h3 className="mb-4 text-[16px] font-semibold text-fg">What each step added to the margin change</h3>
