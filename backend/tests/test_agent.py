@@ -212,3 +212,16 @@ def test_country_summary_block():
     assert de["status"] == "explained" and de["verdict"].endswith("planned promo, no alarm") and de["moving"] == []
     us = w.agent.country_detail(cfg.ISO_INDEX["US"])["summary"]
     assert us == {**us, "status": "ok", "verdict": "All fine", "moving": []}
+
+
+def test_attention_for_globe():
+    from argus.world import World
+
+    w = World(seed=42)
+    w.demo("bot_farm")
+    by = {c["iso"]: c for c in w.agent.state()["countries"]}
+    assert 0.5 < by["CA"]["attention"] <= 1 and by["CA"]["attention_usd"] > 100_000
+    assert by["DE"]["status"] == "explained" and by["DE"]["attention"] == 0           # planned promo never scores
+    assert all(c["attention"] == 0 for c in by.values() if c["status"] == "ok")
+    w.demo("approve")
+    assert {c["iso"]: c for c in w.agent.state()["countries"]}["CA"]["attention"] == 0  # fix being verified

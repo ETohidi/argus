@@ -1448,8 +1448,34 @@ class Agent:
             return "watch"
         return "ok"
 
+    ATTENTION_CAP_USD = 250_000.0     # $ at stake per week that maps to attention 1.0 (fixed, so scenes compare)
+
+    def attention_usd(self, c: int, l1: dict | None) -> float:
+        """Money at stake × confidence, for the globe. 0 for ok / explained / waiting countries.
+
+        incident: Σ open issues' 7-day risk (do nothing vs fix) × the share of the move the proven cause explains;
+        watch: the current margin-side deviation held for a week × the chance it becomes an issue (|z| 4 → 0.2, 8 → 1);
+        0 while a fix a human approved is being verified there.
+        """
+        st = self.country_status(c)
+        if st == "incident":
+            return float(sum(i["risk_7d_usd"] * (i["hypotheses"][0]["explained"] if i.get("hypotheses") else 0.5)
+                             for i in self.incidents if i["c"] == c and i["status"] in ("open", "persisting")))
+        if st == "watch" and any(i["c"] == c and i["status"] == "fix_applied" for i in self.incidents):
+            return 0.0                    # a human already acted; the move is the fix working (being verified)
+        if st == "watch" and l1 is not None:
+            dev = float(np.abs(l1["obs"][c, 2:5] - l1["fc"][c, 2:5]).max())       # USD/h, revenue/rewards/margin
+            prob = float(np.clip((abs(self.health[c]) - 3) / 5, 0, 1))
+            return dev * 24 * 7 * prob
+        return 0.0
+
+    def _attention_fields(self, c: int, l1: dict | None) -> dict:
+        usd = self.attention_usd(c, l1)
+        return {"attention": round(min(usd / self.ATTENTION_CAP_USD, 1.0), 3), "attention_usd": round(usd)}
+
     def state(self) -> dict:
         t = self.t
+        l1 = self.twin.l1_z(t) if self.last is not None else None
         last = self.view.observed[-1]
         s = _with_formulas(_country_sums(last))
         pot = {p["iso"]: p["potential_usd_day"] for p in self.potential}
@@ -1465,6 +1491,7 @@ class Agent:
                 "kpis": {k: round(float(s[k][c]), 4 if k == "quality_per_completion" else 2) for k in KPIS},
                 "potential_usd_day": pot.get(country.iso, 0.0),
                 "potential_pct": pct.get(country.iso, 0.0),
+                **self._attention_fields(c, l1),
             })
         return {
             "clock": {"t": t, "label": f"Day {day + 1} · {dow} {hour:02d}:00 UTC", "utc_hour": hour,

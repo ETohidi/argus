@@ -28,7 +28,12 @@ Globe state.
         "rewards": 0, "margin": 0, "quality_per_completion": 0
       },
       "potential_usd_day": 1234.0,  // twin-estimated margin uplift if the feed matched local taste
-      "potential_pct": 2.4          // same, as % of the country's current daily margin
+      "potential_pct": 2.4,         // same, as % of the country's current daily margin
+      "attention": 0.924,           // 0..1: how much this market needs a human now = $ at stake × confidence / $250k (fixed cap)
+      "attention_usd": 230938       // the raw $ figure (7-day). incident: Σ open issues' risk_7d_usd × explained share of
+                                    // the top cause; watch: margin-side deviation (USD/h) × 168 h × P(becomes an issue),
+                                    // P = (|z| − 3) / 5 clipped to 0..1; 0 for ok / explained / waiting, and 0 while an
+                                    // approved fix is being verified. Demo: CA bot farm 0.92, GB tracking break 0.64, DE promo 0
     }
   ],
   "incidents": [
