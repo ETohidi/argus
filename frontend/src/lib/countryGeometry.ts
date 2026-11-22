@@ -90,3 +90,28 @@ export function loadWorldGeoJson(): Promise<WorldGeoJson> {
   })
   return cache
 }
+
+// Visual centre of a country: the area centroid of its largest polygon (area weighted by cos(latitude)), so the US is
+// not pulled toward Alaska and France not toward its overseas territories.
+export function visualCenter(g: Polygon | MultiPolygon): [number, number] {
+  const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates
+  let best: [number, number] = [0, 0]
+  let bestArea = -1
+  for (const poly of polys) {
+    const ring = poly[0]
+    let a = 0, cx = 0, cy = 0
+    for (let i = 0; i < ring.length - 1; i++) {
+      const [x0, y0] = ring[i]
+      const [x1, y1] = ring[i + 1]
+      const f = x0 * y1 - x1 * y0
+      a += f
+      cx += (x0 + x1) * f
+      cy += (y0 + y1) * f
+    }
+    if (!a) continue
+    const centre: [number, number] = [cx / (3 * a), cy / (3 * a)]
+    const area = Math.abs(a / 2) * Math.cos((centre[1] * Math.PI) / 180)
+    if (area > bestArea) (bestArea = area), (best = centre)
+  }
+  return best
+}

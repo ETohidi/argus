@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import maplibregl, { type Map as MapLibreMap } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { loadWorldGeoJson } from '../lib/countryGeometry'
+import { loadWorldGeoJson, visualCenter } from '../lib/countryGeometry'
 import { geometryContains, isOnGlobe } from '../lib/globeHit'
 import { WORLD_COORDS, nightImage } from '../lib/daynight'
 import { EarthImagery, graticule } from '../lib/earthImagery'
@@ -18,7 +18,6 @@ export type LaunchView = {
   iso?: string
   lng: number
   lat: number
-  zoom?: number
   color: string
   sources: [number, number][]
   revealed: boolean
@@ -79,9 +78,12 @@ function opacityExpr(countries: CountryState[], pulse: number): unknown {
 
 // Only issues get a marker; explained / waiting markets are already told apart by their fill.
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
-// Launch camera: centre a little south of the country so it sits higher in view, zoomed in enough that only a sliver
-// of Antarctica shows; never tilted.
-const LAUNCH_LAT_SHIFT = -2
+// One camera for every fly-in (country click, issue, what-if launch): the same on-screen globe size, centred on the
+// country's visual centre, never tilted or rotated. MapLibre's globe draws a given zoom larger away from the equator
+// (by 1/cos(latitude), to match Web Mercator), so the zoom is corrected by log2(cos(latitude)) to keep the globe the
+// same size everywhere. FLY_ZOOM is that size expressed as the zoom at the equator; it suits a mid-size country.
+export const FLY_ZOOM = 3
+const flyZoom = (lat: number) => FLY_ZOOM + Math.log2(Math.cos((Math.min(80, Math.abs(lat)) * Math.PI) / 180))
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
 // Great-circle path between two points (lng/lat), with continuous longitudes.
@@ -133,6 +135,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
   const hourRef = useRef(utcHour ?? 12)
   const earthRef = useRef<EarthImagery | null>(null)
   const launchRef = useRef(launch)
+  const centersRef = useRef(new Map<string, [number, number]>()) // visual centre by ISO-2 code and by name
   // Polar caps: MapLibre fills both with the background colour. Use the colour of the pole facing the camera, blended
   // across the equator (where both caps sit edge-on at the limb), so neither pole shows a dark disc at any angle.
   const polesRef = useRef<{ north: [number, number, number]; south: [number, number, number] } | null>(null)
@@ -225,6 +228,11 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
       map.addSource('world', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
       loadWorldGeoJson().then((world) => {
         geometryByIso = new Map(world.features.filter((f) => f.properties.iso).map((f) => [f.properties.iso, f.geometry]))
+        for (const f of world.features) {
+          const c = visualCenter(f.geometry)
+          if (f.properties.iso) centersRef.current.set(f.properties.iso, c)
+          if (f.properties.name) centersRef.current.set(f.properties.name, c)
+        }
         ;(map.getSource('world') as GeoJSONSource | undefined)?.setData(world as any)
       })
       map.addLayer({
@@ -446,8 +454,10 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
       const c = countriesRef.current.find((x) => x.iso === selectedIso)
       if (c)
         map.flyTo({
-          center: [c.lng, c.lat - 4],
-          zoom: ['US', 'CA', 'BR', 'AU'].includes(c.iso) ? 2.3 : ['IN', 'ID', 'MX', 'ZA'].includes(c.iso) ? 2.8 : 3.3,
+          center: centersRef.current.get(c.iso) ?? [c.lng, c.lat],
+          zoom: flyZoom((centersRef.current.get(c.iso) ?? [c.lng, c.lat])[1]),
+          pitch: 0,
+          bearing: 0,
           padding,
           duration: 1800,
           curve: 1.3,
@@ -475,6 +485,8 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
       map.setFilter('launch-outline', filter)
       const arcs = map.getSource('launch-arcs') as GeoJSONSource
       // Reduced motion: the camera jumps instead of flying; the country only fades.
+      const launchCenter = (): [number, number] =>
+        launch ? (centersRef.current.get(launch.iso ?? '') ?? centersRef.current.get(launch.name) ?? [launch.lng, launch.lat]) : [0, 0]
       const move = (o: maplibregl.FlyToOptions) => (reducedMotion() ? map.jumpTo({ center: o.center, zoom: o.zoom, pitch: o.pitch, bearing: o.bearing, padding: o.padding as maplibregl.PaddingOptions }) : map.flyTo(o))
       if (!launch) {
         map.setPaintProperty('launch-fill', 'fill-opacity', 0)
@@ -489,13 +501,13 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
         map.setPaintProperty('launch-fill', 'fill-opacity', 0.75)
         map.setPaintProperty('launch-outline', 'line-opacity', 0.6)
         map.setPaintProperty('watched', 'fill-opacity', 0.15)
-        move({ center: [launch.lng, launch.lat + LAUNCH_LAT_SHIFT], zoom: launch.zoom ?? 2.7, pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: insetRight }, duration: 1800, curve: 1.3, easing: easeOutCubic, essential: true })
+        move({ center: launchCenter(), zoom: flyZoom(launchCenter()[1]), pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: insetRight }, duration: 1800, curve: 1.3, easing: easeOutCubic, essential: true })
         return
       }
       map.setPaintProperty('launch-fill', 'fill-color', launch.color)
       map.setPaintProperty('launch-fill', 'fill-opacity', 0.85)
       map.setPaintProperty('launch-outline', 'line-opacity', 0)
-      move({ center: [launch.lng, launch.lat + LAUNCH_LAT_SHIFT], zoom: launch.zoom ?? 2.7, pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: insetRight }, duration: 900, easing: easeOutCubic, essential: true })
+      move({ center: launchCenter(), zoom: flyZoom(launchCenter()[1]), pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: insetRight }, duration: 900, easing: easeOutCubic, essential: true })
       if (reducedMotion() || !launch.sources.length) return
       const to: [number, number] = [launch.lng, launch.lat]
       arcs.setData({ type: 'FeatureCollection', features: launch.sources.map((s) => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: arc(s, to) } })) })
