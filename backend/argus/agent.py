@@ -184,6 +184,8 @@ class Agent:
         self.cand_prev: dict[int, set] = {}             # root candidates per country in the previous hour
         self.investigations = 0
         self.l3_runs = 0
+        self.opened_segments: set[tuple[int, int, int]] = set()   # (country, platform, category) walked at L2
+        self.users_checked = 0                                     # user records pulled for account-level checks
         self.last: dict | None = None
         self.t = view.t - 1
         self.potential = self.compute_potential()
@@ -446,6 +448,7 @@ class Agent:
             walk += "; also broken: " + ", ".join(f"{MECH_LABEL[m]} ({mz[m]:+.1f})" for m in broken)
         if symptoms:
             walk += "; symptoms (normal given parents): " + ", ".join(symptoms)
+        self.opened_segments.add((int(c), int(p), int(k)))
         trail.append({"t": t, "level": "L2",
                       "action": f"Walk the causal graph upstream from {KPI_LABEL[kpi_alert]} in "
                                 f"{cfg.PLATFORMS[p]} × {cfg.CATEGORIES[k]}",
@@ -460,6 +463,7 @@ class Agent:
             users = self.view.sample_users(c, p, 600)
             sc = self.taste.score_users(users)
             self.l3_runs += 1
+            self.users_checked += int(sc["n_users"])
             cf, co = sc["coherence_flagged"], sc["coherence_others"]
             cluster = (sc["n_flagged"] >= 5 and sc["device_concentration"] >= 0.6 and cf is not None
                        and cf < co - 0.2)
@@ -1697,7 +1701,9 @@ class Agent:
             "explained": list(self.explained),
             "added_metrics": self._added_metrics_state(),
             "attention": {"watched_series": cfg.C * (len(KPIS) + len(self.extensions)),
-                          "investigations": self.investigations, "l3_runs": self.l3_runs},
+                          "investigations": self.investigations, "l3_runs": self.l3_runs,
+                          "segments_total": cfg.C * cfg.P * cfg.K, "segments_opened": len(self.opened_segments),
+                          "users_total": int(sum(co.dau for co in cfg.COUNTRIES)), "users_checked": self.users_checked},
         }
 
     def country_detail(self, c: int) -> dict:

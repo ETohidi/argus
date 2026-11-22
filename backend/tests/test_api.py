@@ -288,3 +288,12 @@ def test_offer_mix_rollout_and_mix_columns():
     assert abs(r["gain_day_usd"] - us) / us < 0.25                     # same model as the Growth number
     assert client.get("/api/state", headers=h).json() == before        # read-only
     assert client.post("/api/what_if/offer_mix", json={"country": "ZZ"}, headers=h).status_code == 400
+
+
+def test_attention_counts_for_level_rail():
+    h = {"X-Session": "rail-test"}
+    a = client.post("/api/demo/start", headers=h).json()["state"]["attention"]
+    assert a["segments_total"] == 240 and a["segments_opened"] == 0 and a["users_checked"] == 0
+    assert a["users_total"] > 1_000_000
+    a = client.post("/api/demo/tracking_break", headers=h).json()["state"]["attention"]
+    assert a["segments_opened"] == 2 and a["users_checked"] == 600     # farm: 1 segment + 600 users; tracking: 1 segment

@@ -73,7 +73,12 @@ Globe state.
       "kpi": "rewards",                // which KPI moved (KPI label)
       "line": "Germany +36% · planned promo, no alarm" }   // noun: "planned promo" (calendar promo), "late data", else the event name
   ],
-  "attention": { "watched_series": 120, "investigations": 1, "l3_runs": 1 }
+  "attention": { "watched_series": 120, "investigations": 1, "l3_runs": 1,
+                 "segments_total": 240,        // countries × platforms × offer categories = 20 × 2 × 6
+                 "segments_opened": 1,         // distinct segments Argus walked the causal chain in (L2), this session
+                 "users_total": 8816000,       // daily users across the 20 watched countries (simulated, calibrated)
+                 "users_checked": 600 }        // user records pulled for account-level checks (L3), this session
+// Demo: start 0/240 · 0 users; bot_farm 1/240 · 600 of 8,816,000; tracking_break 2/240 · 600 (no user check needed)
 }
 ```
 Incident `status`: `open` | `persisting` | `fix_applied` | `verified` | `resolved` (show `status_label`).
