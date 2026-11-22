@@ -405,7 +405,12 @@ export default function App() {
             detail={countryDetail}
             incident={state?.incidents.find((i) => i.country === country.iso && i.status !== 'resolved')}
             potential={potential}
+            growth={mode === 'potential'}
             onOpenIncident={openIncident}
+            onEvidence={(id) => {
+              openIncident(id)
+              setEvidence({ tab: 'graph' })
+            }}
             onClose={() => setCountryIso(null)}
           />
         ) : card ? (

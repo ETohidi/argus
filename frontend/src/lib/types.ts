@@ -170,6 +170,14 @@ export interface CountryDetail {
     kpi_z: Record<string, number>
     deviation_usd_h: number
   }[]
+  // Simplified country view (docs/API.md "summary").
+  summary?: {
+    status: CountryStatus
+    verdict: string
+    numbers: { label: string; value: number; usual: number; unit: string; line: string }[]
+    series: { metric: string; unit: string; points: { t: number; label: string; value: number; usual: number; lo: number; hi: number }[] }
+    moving: { line: string; platform: string; category: string | null; kpi: string; ratio: number }[]
+  }
 }
 
 export interface PotentialResponse {
