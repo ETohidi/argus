@@ -97,6 +97,8 @@ const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
 // same size everywhere. FLY_ZOOM is that size expressed as the zoom at the equator; it suits a mid-size country.
 export const FLY_ZOOM = 3
 const flyZoom = (lat: number) => FLY_ZOOM + Math.log2(Math.cos((Math.min(80, Math.abs(lat)) * Math.PI) / 180))
+// True while the map can be painted: created, loaded and not removed (style is gone after map.remove()).
+const alive = (map: MapLibreMap | null): map is MapLibreMap => !!map && !!(map as unknown as { style?: unknown }).style
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
 // Great-circle path between two points (lng/lat), with continuous longitudes.
@@ -262,7 +264,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
           if (f.properties.iso) centersRef.current.set(f.properties.iso, c)
           if (f.properties.name) centersRef.current.set(f.properties.name, c)
         }
-        ;(map.getSource('world') as GeoJSONSource | undefined)?.setData(world as any)
+        if (alive(map)) (map.getSource('world') as GeoJSONSource | undefined)?.setData(world as any)
       })
       map.addLayer({
         id: 'land',
@@ -426,7 +428,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
 
   function paint() {
     const map = mapRef.current
-    if (!map || !loadedRef.current) return
+    if (!alive(map) || !loadedRef.current) return
     map.setPaintProperty('watched', 'fill-color', matchExpr(fillColors(countriesRef.current, modeRef.current), BASE_LAND))
     map.setPaintProperty('watched', 'fill-opacity', launchRef.current ? 0.15 : ((modeRef.current === 'health' ? opacityExpr(countriesRef.current, 0.5, attentionRef.current) : growthOpacity(countriesRef.current)) as any))
     const problems = modeRef.current === 'health' && !launchRef.current ? countriesRef.current.filter((c) => c.status === 'incident') : []
@@ -473,10 +475,11 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
     hourRef.current = utcHour
     const map = mapRef.current
     const earth = earthRef.current
-    if (earth && map?.getSource('earth')) {
+    if (!alive(map)) return
+    if (earth && map.getSource('earth')) {
       const hour = utcHour
       earth.render(hour).then(({ url, poles }) => {
-        if (hour !== hourRef.current) return
+        if (hour !== hourRef.current || !alive(map)) return
         ;(map.getSource('earth') as ImageSource | undefined)?.updateImage({ url, coordinates: WORLD_COORDS })
         polesRef.current = poles
         paintPoles()
@@ -492,6 +495,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
     const map = mapRef.current
     if (!map) return
     const run = () => {
+      if (!alive(map)) return
       map.setFilter('selected-outline', ['==', ['get', 'iso'], selectedIso ?? '__none__'])
       if (launchRef.current) return
       const padding = { top: 0, bottom: 0, left: 0, right: insetRight }
@@ -524,9 +528,11 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
     if (!map || (!launchKey && !was)) return
     let raf = 0
     const run = () => {
+      if (!alive(map)) return
       const filter: any = launch ? (launch.iso ? ['any', ['==', ['get', 'name'], launch.name], ['==', ['get', 'iso'], launch.iso]] : ['==', ['get', 'name'], launch.name]) : ['==', ['get', 'name'], '__none__']
       map.setFilter('launch-fill', filter)
       map.setFilter('launch-outline', filter)
+      if (!alive(map)) return
       const arcs = map.getSource('launch-arcs') as GeoJSONSource
       // Reduced motion: the camera jumps instead of flying; the country only fades.
       const launchCenter = (): [number, number] =>
@@ -558,6 +564,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
       const t0 = performance.now()
       const step = (now: number) => {
         const t = (now - t0) / 1600
+        if (!alive(map)) return
         if (t >= 1) return map.setPaintProperty('launch-arcs', 'line-gradient', shimmer(0, 0))
         const fade = Math.min(1, t / 0.12, (1 - t) / 0.3)
         map.setPaintProperty('launch-arcs', 'line-gradient', shimmer(-0.05 + t * 1.3, fade))

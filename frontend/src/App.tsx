@@ -7,6 +7,7 @@ import MetricGraphPanel from './components/MetricGraphPanel'
 import ScenarioMenu, { SCENE_LABEL, STORY } from './components/ScenarioMenu'
 import TimelineStrip from './components/TimelineStrip'
 import TopBar from './components/TopBar'
+import ErrorBoundary from './components/ErrorBoundary'
 import WhatIfCard from './components/WhatIfCard'
 import ReplayView from './components/ReplayView'
 import { growthLevel, potentialColor, usd } from './lib/theme'
@@ -251,7 +252,12 @@ export default function App() {
               ...s,
               clock: f.clock ?? s.clock,
               countries: s.countries.map((c) => ({ ...c, ...(f.countries.find((x) => x.iso === c.iso) ?? {}) })),
-              incidents: f.incidents ? f.incidents.map((fi) => ({ ...(s.incidents.find((x) => x.id === fi.id) ?? {}), ...fi }) as IncidentSummary) : s.incidents,
+              incidents: f.incidents
+                ? f.incidents.map((fi) => {
+                    const prev = s.incidents.find((x) => x.id === fi.id)
+                    return { ...(prev ?? {}), ...fi, title: fi.title ?? prev?.title ?? fi.short_title ?? '' } as IncidentSummary
+                  })
+                : s.incidents,
             }
           : s,
       )
@@ -539,7 +545,7 @@ export default function App() {
   // The path at the top-left (persistent breadcrumb), shown below Earth level; each part zooms back to its level.
   const pathIso = countryIso ?? card?.country ?? null
   const pathDetail = card && detail?.id === card.id ? detail : null
-  const pathPlatform = pathDetail?.platform ?? card?.title.match(/\b(iOS|Android)\b/i)?.[1]
+  const pathPlatform = pathDetail?.platform ?? (card?.title ?? card?.short_title ?? '').match(/\b(iOS|Android)\b/i)?.[1]
   const pathParts: { label: string; to: Level }[] =
     level === 'earth' || !pathIso
       ? []
@@ -570,10 +576,13 @@ export default function App() {
     <div className="relative h-full overflow-hidden bg-bg">
       {state && <Globe countries={state.countries} mode={mode} selectedIso={launch ? null : focusIso} launch={launchView} lookAt={lookIso} notes={notes} growthNotes={growthNotes} paused={!!(replayId || evidence || graphView)} attention={attention} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
 
+      <ErrorBoundary name="header">
       <TopBar status={launch?.phase === 'flying' ? { ...status, mood: 'investigating' } : status} mode={mode} onMode={changeMode} level={level} onMetrics={openMetricGraph} growth={growthSummary ? { ...growthSummary, launchLabel: `New market: ${LAUNCH.name}`, onLaunch: whatIfLaunch } : undefined} />
+      </ErrorBoundary>
 
       {/* Right column: an explained change as a quiet note, then the issue card or the country sheet. */}
       <div className="pointer-events-none absolute bottom-8 right-8 top-24 z-20 flex flex-col items-end gap-4 overflow-y-auto">
+        <ErrorBoundary name="panel">
         {launch?.phase === 'shown' && lf && launchCardReady ? (
           <WhatIfCard f={lf} onClose={closeLaunch} />
         ) : null}
@@ -622,8 +631,10 @@ export default function App() {
             onClose={closeCard}
           />
         ) : null}
+        </ErrorBoundary>
       </div>
 
+      <ErrorBoundary name="timeline" quiet>
       {state && (state.incidents.some((i) => i.status !== 'resolved') || timeline.some((e) => e.t >= state.clock.t - 72)) && (
         <div className="frost pointer-events-none absolute bottom-4 left-48 z-20 rounded-2xl px-4 pb-2 pt-2 transition-[right] duration-300 ease-out" style={{ right: sideOpen ? 480 : 40 }}>
           <TimelineStrip
@@ -635,8 +646,10 @@ export default function App() {
           />
         </div>
       )}
+      </ErrorBoundary>
 
 
+      <ErrorBoundary name="subtitle" quiet>
       {subtitleAt != null && storyAt >= 0 && subtitleShown && !sideOpen && !evidence && !graphView && !replayId && (
         <div className="pointer-events-none absolute inset-x-0 bottom-[68px] z-[44] flex justify-center px-8">
           <div key={subtitleAt} className="frost fade-up whitespace-nowrap rounded-full px-6 py-2.5 text-[24px] text-fg ring-1 ring-line/40">
@@ -644,7 +657,9 @@ export default function App() {
           </div>
         </div>
       )}
+      </ErrorBoundary>
 
+      <ErrorBoundary name="demo panel">
       <ScenarioMenu
         state={state}
         backend={backend}
@@ -662,8 +677,10 @@ export default function App() {
         storyAt={storyAt}
         onStory={runStory}
       />
+      </ErrorBoundary>
 
 
+      <ErrorBoundary name="path" quiet>
       {pathParts.length > 0 && (
         <nav aria-label="Where you are" className={`frost pointer-events-auto absolute left-8 z-[45] flex ${mode === 'potential' ? 'top-[140px]' : 'top-[92px]'} items-center gap-1.5 rounded-full px-4 py-1.5 text-[16px]`}>
           {pathParts.map((p, i) => {
@@ -683,6 +700,7 @@ export default function App() {
           })}
         </nav>
       )}
+      </ErrorBoundary>
 
       {toast && (
         <div className="frost fade-up pointer-events-none absolute left-1/2 top-28 z-50 -translate-x-1/2 rounded-full px-5 py-2 text-[16px] text-fg ring-1 ring-line/50">
@@ -690,9 +708,12 @@ export default function App() {
         </div>
       )}
 
+      <ErrorBoundary name="replay">
       {replayId && detail?.id === replayId && (
         <ReplayView detail={detail} countryName={nameOf(detail.country)} onClose={() => setReplayId(null)} />
       )}
+      </ErrorBoundary>
+      <ErrorBoundary name="evidence">
       {evidence && card && (
         <EvidenceView
           detail={detail?.id === card.id ? detail : null}
@@ -706,6 +727,8 @@ export default function App() {
           onClose={() => setEvidence(null)}
         />
       )}
+      </ErrorBoundary>
+      <ErrorBoundary name="metrics">
       {graphView && (
         <MetricGraphPanel
           key={graphView.outcome?.kind === 'added' ? graphView.outcome.id : 'graph'}
@@ -721,6 +744,7 @@ export default function App() {
           onClose={() => setGraphView(null)}
         />
       )}
+      </ErrorBoundary>
 
     </div>
   )

@@ -83,8 +83,8 @@ export function statusSentence(state: WorldState): StatusSentence {
 
 // "Fake-account cluster in Canada (Android)" → "Fake accounts in Canada"; "Tracking break in United Kingdom (iOS, …)"
 // → "Tracking break in the United Kingdom".
-export function shortTitle(title: string) {
-  let t = title.replace(/\s*\(.*\)\s*$/, '').replace(/^Fake-account cluster/i, 'Fake accounts')
+export function shortTitle(title: string | undefined | null) {
+  let t = (title ?? '').replace(/\s*\(.*\)\s*$/, '').replace(/^Fake-account cluster/i, 'Fake accounts')
   t = t.replace(/ in (United Kingdom|United States|Netherlands|Philippines)\b/, ' in the $1')
   return t
 }

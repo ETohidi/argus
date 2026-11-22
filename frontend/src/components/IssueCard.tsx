@@ -30,7 +30,7 @@ export default function IssueCard({ summary, detail, countryName, foundLine, che
   const decided = status !== 'open' && status !== 'persisting'
   const amount = amountOf(card?.looks_like ?? `${usd(summary.impact_usd_h)}`)
   const atStake = card?.at_stake_7d_usd ?? summary.risk_7d_usd ?? 0
-  const [line1, line2] = cardLines(card, detail ? isFraud(detail) : /fake/i.test(card?.title ?? summary.title))
+  const [line1, line2] = cardLines(card, detail ? isFraud(detail) : /fake/i.test(card?.title ?? summary.title ?? summary.short_title ?? ''))
   // Status chip from the issue tracker: pink only while open, mint once verified or resolved.
   const recovered = status === 'resolved' && detail != null && !detail.applied
   const label = recovered ? 'Recovered without action' : (summary.status_label ?? card?.status_line ?? 'Open')
@@ -41,7 +41,7 @@ export default function IssueCard({ summary, detail, countryName, foundLine, che
       <div className="flex items-start justify-between gap-4">
         <div>
           <span className={`inline-block rounded-full px-2.5 py-0.5 text-[14px] ${chip}`}>{label}</span>
-          <h2 className="mt-2 text-[24px] font-semibold leading-tight text-fg">{summary.short_title ?? detail?.short_title ?? shortTitle(card?.title ?? summary.title)}</h2>
+          <h2 className="mt-2 text-[24px] font-semibold leading-tight text-fg">{summary.short_title ?? detail?.short_title ?? shortTitle(card?.title ?? summary.title ?? '')}</h2>
           {(summary.title_detail ?? detail?.title_detail) && <p className="mt-1.5 text-[14px] leading-snug text-fg-2">{summary.title_detail ?? detail?.title_detail}</p>}
           {foundLine && <p className="mt-1 text-[14px] leading-snug text-fg-2">{foundLine}</p>}
           {checkedLine && <p className="mt-1 text-[14px] leading-snug text-fg-2">{checkedLine}</p>}

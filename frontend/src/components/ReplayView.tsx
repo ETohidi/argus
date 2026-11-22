@@ -71,8 +71,8 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
   const fit = (backend: string | undefined, short: string) => (backend && backend.length <= 60 ? backend : short)
   const cause = walk.find((w) => w.verdict === 'cause')
   const causeWord = cause ? plain(cause.node).toLowerCase() : 'the cause'
-  const fraud = /fake/i.test(d.short_title ?? d.title)
-  const tracking = /confirm/i.test(d.short_title ?? d.title) // advertisers stopped confirming offers
+  const fraud = /fake/i.test(d.short_title ?? d.title ?? '')
+  const tracking = /confirm/i.test(d.short_title ?? d.title ?? '') // advertisers stopped confirming offers
   const steps: Step[] = [
     { key: 'l1', level: 'Level 1 · countries', sentence: fit(r.l1?.sentence, `${metricWord} left the usual range${leftAt ? ` at ${timeOf(leftAt.label)}` : ''}.`), ms: STEP_MS },
     { key: 'l2', level: `Level 2 · inside ${countryName}`, sentence: fit(r.l2?.sentence, `It's ${/^(United|Netherlands|Philippines)/.test(countryName) ? 'the ' : ''}${countryName}, ${platform}.`), ms: STEP_MS },
