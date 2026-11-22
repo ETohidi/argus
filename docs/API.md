@@ -202,6 +202,32 @@ L2 heatmap.
                    "new_accounts_h": 95.5, "new_accounts_expected_h": 64.8 } ] }
 ```
 
+`summary` (added for the simplified country view; same response, extra key):
+```jsonc
+"summary": {
+  "status": "ok" | "watch" | "incident" | "explained" | "waiting",   // same as the globe
+  "verdict": "Fake-account cluster (Android)",     // ONE sentence: incident title without the country; explained:
+                                                   // "+22% · planned promo, no alarm"; waiting: "Data arriving late: ...";
+                                                   // watch: "Something unusual: watching ..."; ok: "All fine"
+  "numbers": [                                     // always 3, averages of the last 3 h vs the twin's usual
+    { "label": "Margin", "value": 2964.2, "usual": 2810.5, "unit": "USD/h", "line": "$3.0k an hour · usual $2.8k" },
+    { "label": "New sign-ups", "value": 214, "usual": 176, "unit": "per hour", "line": "214 an hour · usual 176" },
+    { "label": "Completed offers", "value": 1475, "usual": 1435, "unit": "per hour", "line": "1,475 an hour · usual 1,435" } ],
+  "series": { "metric": "Margin per hour", "unit": "USD/h",
+              "points": [ { "t": 341, "label": "Mon 06:00", "value": 2426.3, "usual": 2360.0, "lo": 1984.7, "hi": 2735.3 } ] },
+                                                   // last 24 h; lo/hi = usual ±2σ (single hour, twin backtest error)
+  "moving": [                                      // ≤ 2, empty when status is "ok" or nothing has |z| ≥ 4
+    { "line": "Android: sign-ups 1.6× usual", "platform": "Android", "category": null, "kpi": "new_accounts", "ratio": 1.58 },
+    { "line": "iOS · casual games: revenue -86% vs usual", "platform": "iOS", "category": "Casual games", "kpi": "revenue", "ratio": 0.14 } ]
+}
+```
+How `moving` is built:
+- **Evidence:** the same as the heatmap, i.e. the twin's calendar-aware z per segment. A planned promo therefore doesn't
+  show up here.
+- **Sign-ups (`kpi: "new_accounts"`):** they are platform-level. `category` is filled only when one category's
+  completions also have |z| ≥ 4.
+- **Ratio format:** a ratio ≥ 1.5 reads "N× usual", otherwise "±N% vs usual".
+
 ### `GET /api/potential`
 ```jsonc
 { "countries": [ { "iso": "DE", "potential_usd_day": 1432.0, "potential_pct": 3.0, "current_margin_usd_day": 48441.0,

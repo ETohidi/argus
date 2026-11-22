@@ -194,3 +194,21 @@ def test_found_line_and_explained_line():
     assert w.agent.incident_detail(w.agent.incidents[0])["found_line"] == inc["found_line"]
     de = [e for e in st["explained"] if e["country"] == "DE"][0]
     assert de["change_pct"] > 0 and de["line"] == f"Germany +{de['change_pct']}% · planned promo, no alarm"
+
+
+def test_country_summary_block():
+    from argus import config as cfg
+    from argus.world import World
+
+    w = World(seed=42)
+    w.demo("bot_farm")
+    ca = w.agent.country_detail(cfg.ISO_INDEX["CA"])["summary"]
+    assert ca["status"] == "incident" and "Fake-account" in ca["verdict"] and "Canada" not in ca["verdict"]
+    assert 2 <= len(ca["numbers"]) <= 3 and all({"label", "value", "usual", "unit", "line"} <= set(n) for n in ca["numbers"])
+    assert len(ca["series"]["points"]) == 24 and all(p["lo"] <= p["usual"] <= p["hi"] for p in ca["series"]["points"])
+    assert 1 <= len(ca["moving"]) <= 2 and ca["moving"][0]["platform"] == "Android" and ca["moving"][0]["kpi"] == "new_accounts"
+    assert ca["moving"][0]["ratio"] > 1.3
+    de = w.agent.country_detail(cfg.ISO_INDEX["DE"])["summary"]
+    assert de["status"] == "explained" and de["verdict"].endswith("planned promo, no alarm") and de["moving"] == []
+    us = w.agent.country_detail(cfg.ISO_INDEX["US"])["summary"]
+    assert us == {**us, "status": "ok", "verdict": "All fine", "moving": []}

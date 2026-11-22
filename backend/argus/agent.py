@@ -1509,7 +1509,86 @@ class Agent:
                     sum(x["revenue"][c, p, k] - x["rewards"][c, p, k] for x in fcs)
                 segs.append({"platform": cfg.PLATFORMS[p], "category": cfg.CATEGORIES[k], "kpi_z": kz,
                              "deviation_usd_h": round(float(dm / WINDOW), 2)})
-        return {"iso": cfg.COUNTRIES[c].iso, "name": cfg.COUNTRIES[c].name, "segments": segs, "platforms": platforms}
+        return {"iso": cfg.COUNTRIES[c].iso, "name": cfg.COUNTRIES[c].name, "segments": segs, "platforms": platforms,
+                "summary": self.country_summary(c, segs, platforms)}
+
+    # ------------------------------------------------------------------ simplified country view
+    def country_summary(self, c: int, segs: list[dict], platforms: list[dict]) -> dict:
+        """One sentence, 2-3 numbers vs usual, margin over the last 24 h with the usual band, and what is moving."""
+        tw, t, name = self.twin, self.t, cfg.COUNTRIES[c].name
+        status = self.country_status(c)
+        ts = [t - i for i in range(WINDOW)]
+        o = sum(tw._l1(tw.rows[x])[c] for x in ts) / WINDOW
+        f = sum(tw._l1(tw.forecast(x))[c] for x in ts) / WINDOW
+
+        def money(v: float) -> str:
+            return f"${v / 1000:.1f}k" if abs(v) >= 1000 else f"${v:,.0f}"
+
+        numbers = [
+            {"label": "Margin", "value": round(float(o[4]), 1), "usual": round(float(f[4]), 1), "unit": "USD/h",
+             "line": f"{money(o[4])} an hour · usual {money(f[4])}"},
+            {"label": "New sign-ups", "value": round(float(o[0])), "usual": round(float(f[0])), "unit": "per hour",
+             "line": f"{o[0]:,.0f} an hour · usual {f[0]:,.0f}"},
+            {"label": "Completed offers", "value": round(float(o[1])), "usual": round(float(f[1])), "unit": "per hour",
+             "line": f"{o[1]:,.0f} an hour · usual {f[1]:,.0f}"},
+        ]
+        # margin per hour, last 24 h, with the usual band (single-hour ±2σ from the twin's backtest error)
+        pts = []
+        for x in range(max(min(tw.rows), t - 23), t + 1):
+            g = ((x + cfg.COUNTRIES[c].tz) % 24) // (24 // 4)
+            sig = float(tw.l1_sigma[c, g, 4]) * np.sqrt(WINDOW)
+            exp = float(tw._l1(tw.forecast(x))[c, 4])
+            pts.append({"t": x, "label": hour_label(x), "value": round(float(tw._l1(tw.rows[x])[c, 4]), 1),
+                        "usual": round(exp, 1), "lo": round(float(exp * (1 - 2 * sig)), 1), "hi": round(float(exp * (1 + 2 * sig)), 1)})
+        # what is moving: the heatmap's evidence (twin z, calendar-aware), at most 2 segments with |z| >= ALERT_Z
+        cand = []
+        for pl in platforms:
+            if abs(pl["new_accounts_z"]) >= ALERT_Z:
+                p = cfg.PLATFORMS.index(pl["platform"])
+                on = [sg for sg in segs if sg["platform"] == pl["platform"]]
+                top = max(on, key=lambda sg: abs(sg["kpi_z"]["completions"]))
+                cat = top["category"] if abs(top["kpi_z"]["completions"]) >= ALERT_Z else None
+                ratio = pl["new_accounts_h"] / max(pl["new_accounts_expected_h"], 1e-9)
+                cand.append((abs(pl["new_accounts_z"]), pl["platform"], cat, "new_accounts", ratio, p))
+        for sg in segs:
+            for kpi in ("revenue", "completions", "rewards"):
+                z = sg["kpi_z"][kpi]
+                if abs(z) >= ALERT_Z:
+                    p, k = cfg.PLATFORMS.index(sg["platform"]), cfg.CATEGORIES.index(sg["category"])
+                    ob = sum(tw.rows[x][kpi][c, p, k] for x in ts)
+                    fc = sum(tw.forecast(x)[kpi][c, p, k] for x in ts)
+                    cand.append((abs(z), sg["platform"], sg["category"], kpi, ob / max(fc, 1e-9), p))
+        cand.sort(key=lambda x: -x[0])
+        moving, seen = [], set()
+        word = {"new_accounts": "sign-ups", "revenue": "revenue", "completions": "completed offers", "rewards": "rewards"}
+        for _, plat, cat, kpi, ratio, _p in cand:
+            key = (plat, kpi if kpi == "new_accounts" else cat)
+            if key in seen or (kpi != "new_accounts" and (plat, "new_accounts") in seen and kpi == "completions"):
+                continue
+            seen.add(key)
+            where = plat + (f" · {cat.lower()}" if cat else "")
+            move = f"{ratio:.1f}× usual" if ratio >= 1.5 else f"{(ratio - 1):+.0%} vs usual"
+            moving.append({"line": f"{where}: {word[kpi]} {move}", "platform": plat, "category": cat, "kpi": kpi,
+                           "ratio": round(float(ratio), 2)})
+            if len(moving) == 2:
+                break
+        # one plain sentence
+        if status == "incident":
+            inc = [i for i in self.incidents if i["c"] == c and i["status"] in ("open", "persisting")][-1]
+            verdict = inc["card"]["title"] if "card" in inc else self._title(inc)
+            verdict = verdict.replace(f" in {name}", "")
+        elif status == "explained":
+            ex = [e for e in self.explained if e["country"] == cfg.COUNTRIES[c].iso]
+            verdict = ex[-1]["line"].replace(f"{name} ", "", 1) if ex and "line" in ex[-1] else "Planned event, no alarm"
+        elif status == "waiting":
+            verdict = "Data arriving late: waiting before judging, no alarm"
+        elif status == "watch":
+            verdict = f"Something unusual: watching {moving[0]['line'].split(': ')[1] if moving else 'closely'}"
+        else:
+            verdict = "All fine"
+            moving = []
+        return {"status": status, "verdict": verdict, "numbers": numbers,
+                "series": {"metric": "Margin per hour", "unit": "USD/h", "points": pts}, "moving": moving}
 
 
 # ====================================================================== keyword fallback
