@@ -254,3 +254,39 @@ def test_short_title_and_detail():
     assert all(len(i["short_title"].split()) <= 7 for i in inc.values())
     d = w.agent.incident_detail(w.agent.incidents[-1])
     assert d["short_title"] == inc["GB"]["short_title"] and d["title"].startswith("Advertisers stopped confirming casual-game")
+
+
+def test_replay_story_is_true_to_the_data():
+    from argus.world import World
+
+    w = World(seed=42)
+    w.demo("tracking_break")
+    farm, track = w.agent.incidents[0], w.agent.incidents[-1]
+    r = w.agent.incident_detail(farm)["replay"]
+    assert r["l1"]["sentence"] == "New sign-ups in Canada left their usual range at 04:00."     # margin never left
+    left = r["l1"]["left_at"]["t"]
+    pt = next(p for p in r["l1"]["series"] if p["t"] == left)
+    assert not pt["lo"] <= pt["actual"] <= pt["hi"]
+    assert r["l2"]["sentence"] == "It's Canada, Android." and any(c["driving"] for c in r["l2"]["cells"])
+    steps = r["walk"]["steps"]
+    assert steps[0]["node"] == "margin" and steps[-1] == {"node": "new_accounts", "label": "new sign-ups", "verdict": "cause"}
+    assert r["walk"]["sentence"].endswith("new sign-ups: the cause.")
+    assert r["l3"]["ran"] and r["l3"]["sentence"].startswith(f"{farm['l3']['summary']['n_flagged']} of 600 users checked look fake")
+    assert r["proof"]["sentence"] == f"Without the fake accounts, {farm['hypotheses'][0]['explained']:.0%} of the change disappears."
+    t = w.agent.replay(track)
+    assert t["walk"]["sentence"] == "Margin moved → revenue: the cause." and not t["l3"]["ran"]
+    assert t["l2"]["sentence"] == "It's the United Kingdom, iOS, casual-game and strategy-game offers."
+    for part in (r, t):
+        txt = " ".join(part[k]["sentence"] for k in ("l1", "l2", "walk", "l3", "proof")).lower()
+        assert not any(j in txt for j in ("cluster", "segment", "kpi", "deviation", " z ", "σ"))
+
+
+def test_country_series_marks_planned_promo():
+    from argus import config as cfg
+    from argus.world import World
+
+    w = World(seed=42)
+    w.demo("promo")
+    ev = w.agent.country_detail(cfg.ISO_INDEX["DE"])["summary"]["series"]["events"]
+    assert ev and ev[0]["label"] == "Planned promo" and ev[0]["kind"] == "start"
+    assert w.agent.country_detail(cfg.ISO_INDEX["US"])["summary"]["series"]["events"] == []

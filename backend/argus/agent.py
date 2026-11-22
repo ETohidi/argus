@@ -815,6 +815,103 @@ class Agent:
             "organic": f"Many new real users on {inc['platform']} in {name}",
         }.get(inc["kind"], f"Unusual {KPI_LABEL[inc['kpi']]} in {name}")
 
+    # ------------------------------------------------------------------ "Watch Argus think" replay
+    WALK = ["margin", "revenue", "rewards", "completions", "starts", "impressions", "active_users", "new_accounts"]
+    PLAIN = {"margin": "margin", "revenue": "revenue", "rewards": "rewards", "completions": "completed offers",
+             "starts": "offer starts", "impressions": "offers shown", "active_users": "active users",
+             "new_accounts": "new sign-ups", "quality_per_completion": "valuable users per completed offer"}
+
+    def replay(self, inc: dict) -> dict:
+        """The story of how Argus found this issue, step by step, in plain words (all from the incident's data)."""
+        c, t = inc["c"], inc["detected_at"]
+        tw, cname = self.twin, _country_phrase(cfg.COUNTRIES[c].name)
+        # L1: the country KPI that alerted (the one with the largest |z| at detection), last 24 h with the usual band
+        z = inc["z"]
+        lab_to_kpi = {KPI_LABEL[k]: k for k in KPIS}
+        kpi = lab_to_kpi[max(z, key=lambda k: abs(z[k]))]
+        ki = KPIS.index(kpi)
+        pts = []
+        for x in range(max(min(tw.rows), t - 23), t + 1):
+            g = ((x + cfg.COUNTRIES[c].tz) % 24) // (24 // 4)
+            sig = float(tw.l1_sigma[c, g, ki]) * np.sqrt(WINDOW)
+            act = float(tw._kpi_values(tw._l1(tw.rows[x]))[c, ki])
+            exp = float(tw._kpi_values(tw._l1(tw.forecast(x)))[c, ki])
+            pts.append({"t": x, "label": hour_label(x), "actual": round(act, 3), "expected": round(exp, 3),
+                        "lo": round(exp * (1 - 2 * sig), 3), "hi": round(exp * (1 + 2 * sig), 3)})
+        out_ts = {pt["t"] for pt in pts if not pt["lo"] <= pt["actual"] <= pt["hi"]}
+        left = None
+        if out_ts:
+            left = max(out_ts)
+            while left - 1 in out_ts:
+                left -= 1
+        name = self.PLAIN[kpi]
+        verb = "left their" if name.endswith("s") else "left its"
+        if left is not None:
+            l1_sentence = f"{name[0].upper() + name[1:]} in {cname} {verb} usual range at {hour_label(left).split()[1]}."
+        else:
+            l1_sentence = (f"{name[0].upper() + name[1:]} in {cname} stayed off its usual level for "
+                           f"{WINDOW} hours, found at {hour_label(t).split()[1]}.")
+        l1 = {"sentence": l1_sentence, "metric": f"{name[0].upper() + name[1:]} per hour, {cname}"
+              if kpi != "quality_per_completion" else f"{name[0].upper() + name[1:]}, {cname}", "kpi": kpi,
+              "series": pts, "left_at": None if left is None else {"t": left, "label": hour_label(left)}}
+        # L2: which platform × category, at detection time
+        segs, _ = self._segment_cells(c, t)
+        zkey = "revenue" if inc["family"] == "revenue" else "rewards" if inc["family"] == "rewards" else "completions"
+        cells = [{"platform": sg["platform"], "category": sg["category"], "z": sg["kpi_z"][zkey],
+                  "driving": sg["platform"] == inc["platform"] and sg["category"] in inc["categories"]} for sg in segs]
+        where = f"{cname}, {inc['platform']}"
+        if inc["kind"] == "tracking":
+            where += ", " + " and ".join(OFFER_NOUN[k] for k in inc["fix_categories"][:2]) + " offers"
+        l2 = {"sentence": f"It's {where}.", "cells": cells, "measure": zkey}
+        # walk: from margin backwards until the cause
+        affected = set(inc["symptoms"]) | set(inc["broken"])
+        steps = []
+        for node in self.WALK:
+            v = "cause" if node == inc["root"] else "affected" if node in affected else "fine"
+            steps.append({"node": node, "label": self.PLAIN[node], "verdict": v})
+            if v == "cause":
+                break
+        groups: list[list] = []
+        for st in steps:
+            if groups and groups[-1][0] == st["verdict"] and st["verdict"] != "cause":
+                groups[-1][1].append(st["label"])
+            else:
+                groups.append([st["verdict"], [st["label"]]])
+        def names(xs: list[str]) -> str:
+            return xs[0] if len(xs) == 1 else ", ".join(xs[:-1]) + " and " + xs[-1]
+        parts = [f"{names(g)}: the cause" if v == "cause" else f"{names(g)} moved" if v == "affected"
+                 else f"{names(g)} fine" for v, g in groups]
+        if inc["root"] is None:
+            parts.append("no single cause found")
+        walk_sentence = " → ".join(parts)
+        walk = {"sentence": walk_sentence[0].upper() + walk_sentence[1:] + ".", "steps": steps}
+        # L3: individual users
+        if inc["l3"]:
+            sm = inc["l3"]["summary"]
+            flagged = [p_["device"] for p_ in inc["l3"]["points"] if p_["flagged"]]
+            counts = sorted({d: flagged.count(d) for d in flagged}.values(), reverse=True)
+            n_dev, cum = 0, 0
+            for k_ in counts:
+                n_dev, cum = n_dev + 1, cum + k_
+                if cum >= 0.8 * max(len(flagged), 1):
+                    break
+            if inc["kind"] == "fraud":
+                l3_sentence = (f"{sm['n_flagged']} of {sm['n_users']} users checked look fake: most share {n_dev} "
+                               f"devices, and their interests don't fit what they do.")
+            else:
+                l3_sentence = (f"Checked {sm['n_users']} users: the new ones have interests that fit what they do, "
+                               f"so they look real.")
+        else:
+            l3_sentence = "Users behave as usual, so no need to check single accounts."
+        # proof: counterfactual in the twin
+        top = inc["hypotheses"][0]
+        lead = {"fraud": "Without the fake accounts", "tracking": "If advertisers confirmed offers as usual",
+                "organic": "Without the new users"}.get(inc["kind"], "Without this cause")
+        proof = {"sentence": f"{lead}, {top['explained']:.0%} of the change disappears.",
+                 "explained": top["explained"]}
+        return {"l1": l1, "l2": l2, "walk": walk, "l3": {"sentence": l3_sentence, "ran": bool(inc["l3"])},
+                "proof": proof}
+
     @staticmethod
     def short_title(inc: dict) -> tuple[str, str | None]:
         """Card title (~6 words) and the rest of the full title as a detail line (None when nothing is left)."""
@@ -1473,6 +1570,7 @@ class Agent:
         out.update(self._state_fields(inc))
         out["found_line"] = self.found_line(inc)
         out["reports"] = self.reports_for(inc)
+        out["replay"] = self.replay(inc)
         out["short_title"], out["title_detail"] = self.short_title(inc)
         out["card"] = self.card(inc)
         ser = self.series(inc)
@@ -1550,7 +1648,12 @@ class Agent:
         }
 
     def country_detail(self, c: int) -> dict:
-        t = self.t
+        segs, platforms = self._segment_cells(c, self.t)
+        return {"iso": cfg.COUNTRIES[c].iso, "name": cfg.COUNTRIES[c].name, "segments": segs, "platforms": platforms,
+                "summary": self.country_summary(c, segs, platforms)}
+
+    def _segment_cells(self, c: int, t: int) -> tuple[list[dict], list[dict]]:
+        """Heatmap evidence for the 3 h window ending at hour t: z per platform × category, and per platform."""
         ts = [t - i for i in range(WINDOW)]
         tw = self.twin
         rows, fcs = [tw.rows[x] for x in ts], [tw.forecast(x) for x in ts]
@@ -1581,8 +1684,7 @@ class Agent:
                     sum(x["revenue"][c, p, k] - x["rewards"][c, p, k] for x in fcs)
                 segs.append({"platform": cfg.PLATFORMS[p], "category": cfg.CATEGORIES[k], "kpi_z": kz,
                              "deviation_usd_h": round(float(dm / WINDOW), 2)})
-        return {"iso": cfg.COUNTRIES[c].iso, "name": cfg.COUNTRIES[c].name, "segments": segs, "platforms": platforms,
-                "summary": self.country_summary(c, segs, platforms)}
+        return segs, platforms
 
     # ------------------------------------------------------------------ simplified country view
     def country_summary(self, c: int, segs: list[dict], platforms: list[dict]) -> dict:
@@ -1660,7 +1762,21 @@ class Agent:
             verdict = "All fine"
             moving = []
         return {"status": status, "verdict": verdict, "numbers": numbers,
-                "series": {"metric": "Margin per hour", "unit": "USD/h", "points": pts}, "moving": moving}
+                "series": {"metric": "Margin per hour", "unit": "USD/h", "points": pts,
+                           "events": self._calendar_marks(c, pts[0]["t"], pts[-1]["t"])}, "moving": moving}
+
+    def _calendar_marks(self, c: int, t0: int, t1: int) -> list[dict]:
+        """Planned events of country c that start or end inside [t0, t1], for small chart markers."""
+        out = []
+        for ev in self.view.calendar:
+            if ev.country != cfg.COUNTRIES[c].iso:
+                continue
+            noun = "Planned promo" if ev.reward_share > cfg.REWARD_SHARE else ev.name
+            if t0 <= ev.start <= t1:
+                out.append({"t": ev.start, "label": noun, "kind": "start", "time_label": hour_label(ev.start)})
+            if t0 <= ev.end - 1 <= t1:
+                out.append({"t": ev.end - 1, "label": f"{noun} ends", "kind": "end", "time_label": hour_label(ev.end - 1)})
+        return out
 
 
 # ====================================================================== keyword fallback

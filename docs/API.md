@@ -154,6 +154,41 @@ After approval `what_to_do` becomes "Done: <fix> applied."
 }
 ```
 
+### `replay` (in `GET /api/incidents/{id}`): "Watch Argus think"
+How Argus found the issue, step by step. Every sentence is built from the incident's own data, in plain words.
+```jsonc
+"replay": {
+  "l1": { "sentence": "New sign-ups in Canada left their usual range at 04:00.",
+          "metric": "New sign-ups per hour, Canada", "kpi": "new_accounts",
+          "series": [ { "t": 318, "label": "Sun 07:00", "actual": 176.2, "expected": 170.9, "lo": 150.1, "hi": 194.6 }, ... ],
+          "left_at": { "t": 339, "label": "Mon 04:00" } },
+  "l2": { "sentence": "It's Canada, Android.", "measure": "completions",
+          "cells": [ { "platform": "Android", "category": "Fintech apps", "z": 2.5, "driving": true }, ... ] },   // 12 cells
+  "walk": { "sentence": "Margin, revenue and rewards moved → completed offers fine → offer starts moved → offers shown and active users fine → new sign-ups: the cause.",
+            "steps": [ { "node": "margin", "label": "margin", "verdict": "affected" }, ...,
+                       { "node": "new_accounts", "label": "new sign-ups", "verdict": "cause" } ] },
+  "l3": { "sentence": "15 of 600 users checked look fake: most share 2 devices, and their interests don't fit what they do.",
+          "ran": true },
+  "proof": { "sentence": "Without the fake accounts, 99% of the change disappears.", "explained": 0.988 }
+}
+```
+How each step is built:
+- **`l1`:** the country number that triggered the alert, i.e. the one with the largest move at detection. For the farm
+  that's new sign-ups, because country margin never left its range.
+  - The series covers the 24 h up to detection, with lo/hi = the usual ±2σ for a single hour.
+  - `left_at` is the start of the last run of hours outside the band. If no single hour was outside, `left_at` is null
+    and the sentence says the number stayed off its usual level for 3 hours.
+- **`l2`:** z per platform × category at detection time. `measure` names which number the z is for: completions for
+  user-side issues, revenue for tracking, rewards for pricing. `driving` marks the issue's own cells.
+- **`walk`:** the causal chain is checked from margin backwards: margin → revenue → rewards → completions → offer starts →
+  offers shown → active users → new sign-ups. It stops at the cause.
+  - verdict "cause" = the root, "affected" = that number moved (it broke or was knock-on), "fine" otherwise.
+- **`l3`:** `ran: false` when Argus didn't need to check single users. The sentence then reads "Users behave as usual,
+  so no need to check single accounts."
+- **Tracking break, same block:** "Margin in the United Kingdom left its usual range at 09:00." → "It's the United
+  Kingdom, iOS, casual-game and strategy-game offers." → "Margin moved → revenue: the cause." → no user check → "If
+  advertisers confirmed offers as usual, 94% of the change disappears."
+
 ### `GET /api/incidents`
 List of the same summaries as `state.incidents`.
 
@@ -225,7 +260,10 @@ L2 heatmap.
     { "label": "New sign-ups", "value": 214, "usual": 176, "unit": "per hour", "line": "214 an hour · usual 176" },
     { "label": "Completed offers", "value": 1475, "usual": 1435, "unit": "per hour", "line": "1,475 an hour · usual 1,435" } ],
   "series": { "metric": "Margin per hour", "unit": "USD/h",
-              "points": [ { "t": 341, "label": "Mon 06:00", "value": 2426.3, "usual": 2360.0, "lo": 1984.7, "hi": 2735.3 } ] },
+              "points": [ { "t": 341, "label": "Mon 06:00", "value": 2426.3, "usual": 2360.0, "lo": 1984.7, "hi": 2735.3 } ],
+              "events": [ { "t": 336, "label": "Planned promo", "kind": "start", "time_label": "Mon 02:00" } ] },
+                                                   // calendar events of this country starting/ending inside the 24 h
+                                                   // (kind "start" | "end", end label "Planned promo ends"); [] if none
                                                    // last 24 h; lo/hi = usual ±2σ (single hour, twin backtest error)
   "moving": [                                      // ≤ 2, empty when status is "ok" or nothing has |z| ≥ 4
     { "line": "Android: sign-ups 1.6× usual", "platform": "Android", "category": null, "kpi": "new_accounts", "ratio": 1.58 },
