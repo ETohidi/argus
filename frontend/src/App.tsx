@@ -503,8 +503,18 @@ export default function App() {
       }
     : null
   // Need for attention per market (0..1): the backend's score, else the open issue's money at stake (cap $250k/week).
+  // The globe follows the same fresh state as the card: once an issue is resolved or its fix verified (state or the
+  // card's fresh detail), its country is calm right away (no leftover pink or attention), unless another issue is open.
+  const settled = new Set<string>()
+  for (const i of state?.incidents ?? []) if (i.status === 'resolved' || i.status === 'verified') settled.add(i.country)
+  if (detail && (detail.status === 'resolved' || detail.status === 'verified' || detail.verification?.status === 'verified')) settled.add(detail.country)
+  for (const i of state?.incidents ?? []) if (i.status === 'open' || i.status === 'persisting') settled.delete(i.country)
+  const globeCountries = (state?.countries ?? []).map((c) =>
+    settled.has(c.iso) && (c.status === 'incident' || c.status === 'watch') ? { ...c, status: 'ok' as const, attention: 0 } : c,
+  )
   const attention: Record<string, number> = Object.fromEntries(
     (state?.countries ?? []).map((c) => {
+      if (settled.has(c.iso)) return [c.iso, 0]
       if (c.attention != null) return [c.iso, c.attention]
       const inc = state?.incidents.find((i) => i.country === c.iso && i.status !== 'resolved' && i.status !== 'verified')
       return [c.iso, inc?.risk_7d_usd != null ? Math.min(1, inc.risk_7d_usd / 250_000) : c.status === 'watch' ? 0.4 : 0]
@@ -581,7 +591,7 @@ export default function App() {
 
   return (
     <div className="relative h-full overflow-hidden bg-bg">
-      {state && <Globe countries={state.countries} mode={mode} selectedIso={launch ? null : focusIso} launch={launchView} lookAt={lookIso} notes={notes} growthNotes={growthNotes} paused={!!(replayId || evidence || graphView)} attention={attention} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
+      {state && <Globe countries={globeCountries} mode={mode} selectedIso={launch ? null : focusIso} launch={launchView} lookAt={lookIso} notes={notes} growthNotes={growthNotes} paused={!!(replayId || evidence || graphView)} attention={attention} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
 
       <ErrorBoundary name="header">
       <TopBar status={launch?.phase === 'flying' ? { ...status, mood: 'investigating' } : status} mode={mode} onMode={changeMode} level={level} onMetrics={openMetricGraph} growth={growthSummary ? { ...growthSummary, launchLabel: `New market: ${LAUNCH.name}`, onLaunch: whatIfLaunch } : undefined} />
