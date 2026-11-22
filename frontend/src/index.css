@@ -356,3 +356,24 @@ svg text {
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
 }
+
+/* Demo: the primary card button is visibly pressed before its view opens. */
+.press-hint {
+  animation: press-hint 0.9s ease-in-out;
+}
+@keyframes press-hint {
+  0%,
+  100% {
+    transform: none;
+    box-shadow: 0 0 0 0 rgba(60, 242, 196, 0);
+  }
+  40% {
+    transform: scale(0.97);
+    box-shadow: 0 0 0 6px rgba(60, 242, 196, 0.35);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .press-hint {
+    animation: none;
+  }
+}

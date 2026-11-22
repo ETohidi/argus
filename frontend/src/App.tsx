@@ -86,6 +86,7 @@ export default function App() {
   const [subtitleAt, setSubtitleAt] = useState<number | null>(null)
   const [storyRunning, setStoryRunning] = useState(false)
   const storyBusy = useRef(false)
+  const [pressing, setPressing] = useState(false)
   const cardIdRef = useRef<string | null>(null)
   // "Watch Argus think" replay; plays by itself the first time an issue opens in this browser session.
   const [replayId, setReplayId] = useState<string | null>(null)
@@ -424,6 +425,9 @@ export default function App() {
         }
       } else if (i === 3) {
         if (cardIdRef.current) {
+          setPressing(true) // the card's "See fixes & approve ›" is pressed, visibly
+          await sleep(900)
+          setPressing(false)
           setEvidence({ tab: 'whatif', play: true }) // the four futures, best one glowing
           await sleep(3000)
           setEvidence(null)
@@ -606,6 +610,7 @@ export default function App() {
             onApprove={approve}
             onEvidence={(tab) => setEvidence({ tab })}
             onReplay={() => setReplayId(card.id)}
+            pressing={pressing}
             onClose={closeCard}
           />
         ) : null}

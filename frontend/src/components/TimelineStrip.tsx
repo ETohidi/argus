@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { AURORA, MINT, PINK } from '../lib/theme'
 import type { TimelineEvent } from '../lib/types'
 
@@ -33,19 +33,30 @@ const KIND_COLOUR: Record<TimelineEvent['kind'], string> = {
 // incident event to open its card.
 export default function TimelineStrip({ events, now, hours = 72, clock, countryName, onOpen }: Props) {
   const [active, setActive] = useState<number | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState(0)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setWidth(el.getBoundingClientRect().width))
+    ro.observe(el)
+    setWidth(el.getBoundingClientRect().width)
+    return () => ro.disconnect()
+  }, [])
   const start = now - hours
   const visible = events.filter((e) => e.t >= start && e.t <= now)
   const pos = (t: number) => ((t - start) / hours) * 100
-  // Same-hour events sit side by side instead of on top of each other.
-  const seen = new Map<number, number>()
-  const placed = visible.map((e) => {
-    const k = seen.get(e.t) ?? 0
-    seen.set(e.t, k + 1)
-    return { e, left: pos(e.t), offset: k * 12 }
-  })
+  // Close events are spread at least 14 px apart, in time order (pushed right, then pulled back if they overflow).
+  const GAP = 14
+  const px = (t: number) => (pos(t) / 100) * width
+  const xs: number[] = []
+  const sorted = [...visible].sort((a, b) => a.t - b.t)
+  sorted.forEach((e, i) => xs.push(i ? Math.max(px(e.t), xs[i - 1] + GAP) : px(e.t)))
+  for (let i = xs.length - 1; i >= 0; i--) xs[i] = Math.min(xs[i], (i === xs.length - 1 ? width : xs[i + 1] - GAP))
+  const placed = sorted.map((e, i) => ({ e, left: width ? (xs[i] / width) * 100 : pos(e.t), offset: 0 }))
   const days = [...Array(Math.floor(hours / 24) + 1).keys()].map((d) => now - (now % 24) - d * 24).filter((t) => t >= start)
   return (
-    <div className="pointer-events-auto relative h-10 w-full select-none" onMouseLeave={() => setActive(null)}>
+    <div ref={ref} className="pointer-events-auto relative h-10 w-full select-none" onMouseLeave={() => setActive(null)}>
       <div className="absolute inset-x-0 top-5 h-px bg-line" />
       {days.map((t) => (
         <div key={t} className="absolute top-[14px] h-3 w-px bg-line" style={{ left: `${pos(t)}%` }} />

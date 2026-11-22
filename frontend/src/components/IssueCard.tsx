@@ -11,6 +11,7 @@ type Props = {
   approving?: boolean
   onApprove?: (fixId: string) => void
   onEvidence: (tab: 'why' | 'who' | 'whatif') => void
+  pressing?: boolean // demo: the primary button is visibly pressed before the fixes open
   onReplay?: () => void // "How did Argus find this?" replay
   onClose: () => void
 }
@@ -22,7 +23,7 @@ function amountOf(s: string): string {
 }
 
 // L2 / manager: one decision, in plain words. No charts here; the evidence is one click away.
-export default function IssueCard({ summary, detail, countryName, foundLine, onEvidence, onReplay, onClose }: Props) {
+export default function IssueCard({ summary, detail, countryName, foundLine, onEvidence, onReplay, pressing, onClose }: Props) {
   const card = summary.card ?? detail?.card
   const status = summary.status
   const decided = status !== 'open' && status !== 'persisting'
@@ -74,20 +75,21 @@ export default function IssueCard({ summary, detail, countryName, foundLine, onE
         <Outcome detail={detail} countryName={countryName} statusLine={card?.status_line} recovered={recovered} />
       )}
 
-      {/* Three questions, one view each: the causal graph, the users, the futures in the twin (with Approve). */}
-      <div className="mt-6 grid grid-cols-3 gap-2">
+      {/* The decision first (the futures in the twin, with Approve); the causal graph and the users as secondary views. */}
+      <button
+        onClick={() => onEvidence('whatif')}
+        className={`mt-6 w-full rounded-xl py-3 text-[16px] font-semibold transition ${decided ? 'bg-line/80 text-fg hover:bg-line' : 'bg-ok text-bg hover:brightness-110'} ${pressing ? 'press-hint' : ''}`}
+      >
+        {decided ? 'See the fixes ›' : 'See fixes & approve ›'}
+      </button>
+      <div className="mt-2 grid grid-cols-2 gap-2">
         {(
           [
             ['why', 'Why?'],
             ['who', 'Who?'],
-            ['whatif', 'What if?'],
           ] as const
         ).map(([tab, label]) => (
-          <button
-            key={tab}
-            onClick={() => onEvidence(tab)}
-            className={`rounded-xl py-3 text-[16px] font-semibold transition ${tab === 'whatif' && !decided ? 'bg-ok text-bg hover:brightness-110' : 'bg-line/80 text-fg hover:bg-line'}`}
-          >
+          <button key={tab} onClick={() => onEvidence(tab)} className="rounded-xl py-2.5 text-[16px] text-fg ring-1 ring-line transition hover:bg-line/60">
             {label}
           </button>
         ))}
