@@ -3,7 +3,6 @@ import ArgusEye from './ArgusEye'
 import type { StatusSentence } from '../lib/incident'
 
 type Props = {
-  clock: string
   status: StatusSentence
   mode: GlobeMode
   onMode: (m: GlobeMode) => void
@@ -11,16 +10,12 @@ type Props = {
 }
 
 // Home bar (L1): logo, clock, one status sentence and the mode toggle. Nothing else.
-export default function TopBar({ clock, status, mode, onMode, growth }: Props) {
+export default function TopBar({ status, mode, onMode, growth }: Props) {
   return (
     <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center gap-8 px-8 py-6">
       <div className="pointer-events-auto flex items-center gap-3">
-        <ArgusEye mood={status.mood} />
+        <ArgusEye mood={status.mood} height={40} />
         <span className="text-[16px] font-semibold tracking-[0.3em] text-fg">ARGUS</span>
-        <span className="num cursor-default text-[13px] text-fg-2" title="Simulated time: the marketplace runs hour by hour">
-          {clock}
-          <span className="text-fg-2/45"> · sim</span>
-        </span>
       </div>
 
       {/* Calm needs no words: the blinking eye says it. The sentence appears only when something is happening. */}

@@ -39,18 +39,6 @@ function deriveWalk(d: IncidentDetail) {
   return order.map((node) => ({ node, verdict: verdict(node) }))
 }
 
-function walkSentence(steps: { node: string; verdict: string }[]) {
-  const moved = steps.filter((s) => s.verdict === 'affected' && (s.node === 'revenue' || s.node === 'rewards')).map((s) => plain(s.node).toLowerCase())
-  const parts: string[] = []
-  if (moved.length) parts.push(`${moved.join(' and ').replace(/^./, (c) => c.toUpperCase())} moved`)
-  for (const s of steps) {
-    if (s.node === 'margin' || moved.includes(plain(s.node).toLowerCase())) continue
-    parts.push(s.verdict === 'cause' ? `${plain(s.node).toLowerCase()}: the cause` : `${plain(s.node).toLowerCase()} ${s.verdict}`)
-    if (s.verdict === 'cause') break
-  }
-  return `${parts.join(' → ')}.`
-}
-
 export default function ReplayView({ detail: d, countryName, onClose }: { detail: IncidentDetail; countryName: string; onClose: () => void }) {
   const r: ReplayBlock = d.replay ?? {}
   const [country, setCountry] = useState<CountryDetail | null>(null)
@@ -75,15 +63,20 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
   const shared = d.l3?.groups?.filter((g) => g.count >= 2).length ?? 0
   const share = d.counterfactual?.explained_share
 
+  // One line per step (≤ 60 characters at 1440×900): the backend's sentence when it is that short, else a short one.
+  const fit = (backend: string | undefined, short: string) => (backend && backend.length <= 60 ? backend : short)
+  const cause = walk.find((w) => w.verdict === 'cause')
+  const causeWord = cause ? plain(cause.node).toLowerCase() : 'the cause'
+  const fraud = /fake/i.test(d.short_title ?? d.title)
   const steps: Step[] = [
-    { key: 'l1', level: 'Level 1 · the whole business', sentence: r.l1?.sentence ?? `${metricWord} in ${countryName} left the usual range${leftAt ? ` at ${timeOf(leftAt.label)}` : ''}.`, ms: 2800 },
-    { key: 'l2', level: `Level 2 · inside ${countryName}`, sentence: r.l2?.sentence ?? `It's ${countryName}, ${platform}.`, ms: 2300 },
-    { key: 'walk', level: 'Level 2 · how the numbers connect', sentence: r.walk?.sentence ?? walkSentence(walk), ms: 600 + walk.length * WALK_MS + 1000 },
+    { key: 'l1', level: 'Level 1 · the whole business', sentence: fit(r.l1?.sentence, `${metricWord} left the usual range${leftAt ? ` at ${timeOf(leftAt.label)}` : ''}.`), ms: 2800 },
+    { key: 'l2', level: `Level 2 · inside ${countryName}`, sentence: fit(r.l2?.sentence, `It's ${/^(United|Netherlands|Philippines)/.test(countryName) ? 'the ' : ''}${countryName}, ${platform}.`), ms: 2300 },
+    { key: 'walk', level: 'Level 2 · how the numbers connect', sentence: `Walking back from margin… ${causeWord} ${/s$/.test(causeWord) ? 'are' : 'is'} the cause.`, ms: 600 + walk.length * WALK_MS + 1000 },
     ...(d.l3 && s
-      ? [{ key: 'l3', level: 'Level 3 · the users', sentence: r.l3?.sentence ?? `${s.n_flagged} new accounts on ${shared || s.top_devices.length} shared devices; their interests don't fit what they do.`, ms: 3000 }]
+      ? [{ key: 'l3', level: 'Level 3 · the users', sentence: fit(r.l3?.sentence, `${s.n_flagged} of ${s.n_users} users look fake, on ${shared || s.top_devices.length} shared devices.`), ms: 3000 }]
       : []),
     ...(d.counterfactual && share != null
-      ? [{ key: 'proof', level: 'Proof', sentence: r.proof?.sentence ?? `Without them, ${Math.round(share * 100)}% of the change disappears.`, ms: 3000 }]
+      ? [{ key: 'proof', level: 'Proof', sentence: fit(r.proof?.sentence, `Without ${fraud ? 'the fake accounts' : 'the cause'}, ${Math.round(share * 100)}% of the change disappears.`), ms: 3000 }]
       : []),
   ]
   const cur = steps[Math.min(step, steps.length - 1)]
@@ -132,7 +125,7 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
       </div>
       <div key={cur.key} className="fade-up mx-auto mt-6 max-w-[960px] px-10 text-center">
         <div className="text-[13px] uppercase tracking-[0.18em] text-accent">{cur.level}</div>
-        <h2 className="mt-3 text-[28px] font-semibold leading-snug text-fg">{cur.sentence}</h2>
+        <h2 className="mt-3 whitespace-nowrap text-[28px] font-semibold leading-snug text-fg">{cur.sentence}</h2>
       </div>
 
       <div key={`v-${cur.key}`} className="fade-in mx-auto flex w-full max-w-[960px] flex-1 items-center justify-center px-10">

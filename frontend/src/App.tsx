@@ -440,7 +440,7 @@ export default function App() {
     <div className="relative h-full overflow-hidden bg-bg">
       {state && <Globe countries={state.countries} mode={mode} selectedIso={launch ? null : focusIso} launch={launchView} notes={notes} growthNotes={growthNotes} attention={attention} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
 
-      <TopBar clock={state ? shortClock(state.clock) : 'Connecting…'} status={launch?.phase === 'flying' ? { ...status, mood: 'investigating' } : status} mode={mode} onMode={setMode} growth={growthSummary ? { ...growthSummary, launchLabel: `New market: ${LAUNCH.name}`, onLaunch: whatIfLaunch } : undefined} />
+      <TopBar status={launch?.phase === 'flying' ? { ...status, mood: 'investigating' } : status} mode={mode} onMode={setMode} growth={growthSummary ? { ...growthSummary, launchLabel: `New market: ${LAUNCH.name}`, onLaunch: whatIfLaunch } : undefined} />
 
       {/* Right column: an explained change as a quiet note, then the issue card or the country sheet. */}
       <div className="pointer-events-none absolute bottom-8 right-8 top-24 z-20 flex flex-col items-end gap-4 overflow-y-auto">
@@ -483,11 +483,22 @@ export default function App() {
         ) : null}
       </div>
 
+      {state && !(state.incidents.some((i) => i.status !== 'resolved') || timeline.some((e) => e.t >= state.clock.t - 72)) && (
+        // Calm: no timeline, just the simulated clock where the timeline's "now" end would be.
+        <div
+          className="pointer-events-auto absolute bottom-6 z-20 cursor-default text-[13px] text-fg-2 transition-[right] duration-300 ease-out"
+          style={{ right: sideOpen ? 480 : 40, bottom: 'calc(1.5rem + 2px)' }}
+          title="Simulated time: the marketplace runs hour by hour"
+        >
+          <span className="num text-fg">{shortClock(state.clock)}</span> <span className="text-fg-2/70">· simulated</span>
+        </div>
+      )}
       {state && (state.incidents.some((i) => i.status !== 'resolved') || timeline.some((e) => e.t >= state.clock.t - 72)) && (
         <div className="pointer-events-none absolute bottom-6 left-48 z-20 transition-[right] duration-300 ease-out" style={{ right: sideOpen ? 480 : 40 }}>
           <TimelineStrip
             events={timeline}
             now={state.clock.t}
+            clock={shortClock(state.clock)}
             countryName={(iso) => state.countries.find((c) => c.iso === iso)?.name ?? iso}
             onOpen={openTimelineEvent}
           />

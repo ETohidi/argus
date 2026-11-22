@@ -5,6 +5,7 @@ import type { TimelineEvent } from '../lib/types'
 type Props = {
   events: TimelineEvent[]
   now: number
+  clock?: string // "Mon 06:00": the simulated time, shown at the strip's "now" end
   hours?: number
   countryName: (iso: string) => string
   onOpen: (e: TimelineEvent) => void
@@ -30,7 +31,7 @@ const KIND_COLOUR: Record<TimelineEvent['kind'], string> = {
 
 // A thin, quiet record of the last 72 hours: what Argus noticed and decided. Hover for the label; click an
 // incident event to open its card.
-export default function TimelineStrip({ events, now, hours = 72, countryName, onOpen }: Props) {
+export default function TimelineStrip({ events, now, hours = 72, clock, countryName, onOpen }: Props) {
   const [active, setActive] = useState<number | null>(null)
   const start = now - hours
   const visible = events.filter((e) => e.t >= start && e.t <= now)
@@ -49,7 +50,15 @@ export default function TimelineStrip({ events, now, hours = 72, countryName, on
       {days.map((t) => (
         <div key={t} className="absolute top-[14px] h-3 w-px bg-line" style={{ left: `${pos(t)}%` }} />
       ))}
-      <div className="absolute right-0 top-7 text-[13px] text-fg-2">now</div>
+      <div className="pointer-events-auto absolute right-0 top-7 cursor-default whitespace-nowrap text-[13px] text-fg-2" title="Simulated time: the marketplace runs hour by hour">
+        {clock ? (
+          <>
+            <span className="num text-fg">{clock}</span> <span className="text-fg-2/70">· simulated</span>
+          </>
+        ) : (
+          'now'
+        )}
+      </div>
       <div className="absolute left-0 top-7 text-[13px] text-fg-2">72 h ago</div>
       {placed.map(({ e, left, offset }, i) => (
         <button

@@ -11,7 +11,7 @@ const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.
 // Back to calm (resolved): mint with one blink. Reduced motion: colour only.
 const ALMOND = 'M2 13 Q22 -3.5 42 13 Q22 29.5 2 13 Z'
 
-export default function ArgusEye({ mood }: { mood: EyeMood }) {
+export default function ArgusEye({ mood, height = 26 }: { mood: EyeMood; height?: number }) {
   const clip = useId()
   const [blink, setBlink] = useState(false)
   const prev = useRef(mood)
@@ -44,8 +44,8 @@ export default function ArgusEye({ mood }: { mood: EyeMood }) {
     <svg
       className={`argus-eye argus-eye--${mood}${blink ? ' argus-eye--blink' : ''}`}
       viewBox="0 0 44 26"
-      width={44}
-      height={26}
+      width={(height * 44) / 26}
+      height={height}
       role="img"
       aria-label={problem ? 'Argus: needs attention' : mood === 'investigating' ? 'Argus: looking closer' : 'Argus: all calm'}
     >
