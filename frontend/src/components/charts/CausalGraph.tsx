@@ -136,6 +136,8 @@ type Props = {
   dims?: Partial<Dims>
   // 'story': propagation from the cause in pink. 'types': formula = solid line, possible cause = dashed line with arrow.
   edgeMode?: 'story' | 'types'
+  pending?: string[] // not checked yet (replay): drawn faint, no verdict word
+  pulse?: string // node that pulses (the cause, once found)
 }
 
 // Only the root is "the cause"; other off-pattern steps (broken mechanisms, symptoms) read as "affected".
@@ -143,7 +145,7 @@ export function defaultRole(n: GraphNode): NodeRole {
   return n.state === 'root' ? 'broke' : n.state === 'broken' || n.state === 'symptom' ? 'symptom' : 'normal'
 }
 
-export default function CausalGraph({ nodes, edges, roles = {}, showWords = true, dims: dimsIn, edgeMode = 'story' }: Props) {
+export default function CausalGraph({ nodes, edges, roles = {}, showWords = true, dims: dimsIn, edgeMode = 'story', pending = [], pulse }: Props) {
   const dims = { ...DEFAULT_DIMS, ...dimsIn }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const { byId, chains, height } = useMemo(() => layout(nodes, edges, dims), [nodes, edges, dims.W, dims.nodeW, dims.nodeH, dims.row])
@@ -207,16 +209,18 @@ export default function CausalGraph({ nodes, edges, roles = {}, showWords = true
           const role = roleOf(n.id)
           const st = ROLE_STYLE[role]
           const lines = wrap(n.label.replace(/\s*\(.*\)$/, ''))
-          const textTop = showWords ? (lines.length === 2 ? 17 : 22) : lines.length === 2 ? 22 : 31
+          const waiting = pending.includes(n.id)
+          const textTop = showWords && !waiting ? (lines.length === 2 ? 17 : 22) : lines.length === 2 ? 22 : 31
           return (
-            <g key={p.id} transform={`translate(${p.x - nodeW / 2},${p.y - nodeH / 2})`} className="fade-in" style={{ animationDelay: `${i * 40}ms` }}>
-              <rect width={nodeW} height={nodeH} rx={10} fill={st.fill} stroke={st.stroke} strokeWidth={role === 'normal' ? 1 : 1.6} strokeDasharray={st.dash} />
+            <g key={p.id} transform={`translate(${p.x - nodeW / 2},${p.y - nodeH / 2})`} className="fade-in" style={{ animationDelay: `${i * 40}ms`, opacity: waiting ? 0.28 : 1, transition: 'opacity 0.4s ease' }}>
+              {pulse === n.id && <rect width={nodeW} height={nodeH} rx={10} fill="none" stroke={PINK} strokeWidth={2} className="cg-pulse" />}
+              <rect width={nodeW} height={nodeH} rx={10} fill={waiting ? 'transparent' : st.fill} stroke={waiting ? '#3A3F6B' : st.stroke} strokeWidth={role === 'normal' || waiting ? 1 : 1.6} strokeDasharray={waiting ? undefined : st.dash} style={{ transition: 'fill 0.35s ease, stroke 0.35s ease' }} />
               {lines.map((line, k) => (
                 <text key={k} x={nodeW / 2} y={textTop + k * 15} fontSize={13} fontWeight={role === 'broke' ? 600 : 500} fill={st.text} textAnchor="middle">
                   {line}
                 </text>
               ))}
-              {showWords && (
+              {showWords && !waiting && (
                 <text x={nodeW / 2} y={nodeH - 8} fontSize={12} fill={st.word} textAnchor="middle" fontWeight={role === 'broke' ? 600 : 400}>
                   {ROLE_WORD[role]}
                 </text>

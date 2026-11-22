@@ -277,3 +277,37 @@ svg text {
     opacity: 1;
   }
 }
+
+/* Replay: the cause node pulses once found. */
+.cg-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: cg-pulse 1.6s ease-out infinite;
+}
+@keyframes cg-pulse {
+  from {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(1.12, 1.35);
+    opacity: 0;
+  }
+}
+.replay-glow {
+  animation: replay-glow 1.4s ease-in-out infinite alternate;
+}
+@keyframes replay-glow {
+  from {
+    box-shadow: 0 0 0 0 rgba(255, 77, 141, 0.2);
+  }
+  to {
+    box-shadow: 0 0 18px 4px rgba(255, 77, 141, 0.55);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cg-pulse,
+  .replay-glow {
+    animation: none;
+  }
+}

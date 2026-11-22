@@ -11,13 +11,14 @@ type Props = {
   height?: number
   fontSize?: number
   showStart?: boolean // label the first hour on the axis
+  markers?: { t: number; label: string }[] // known events (e.g. a planned promo), drawn as quiet grey ticks
 }
 
 const ease = (x: number) => 1 - Math.pow(1 - x, 3)
 
 // Grey band = what the twin expected for each hour (lo..hi); line = what happened,
 // white inside the band and orange outside it (exact, via an SVG mask of the band).
-export default function NormalZoneChart({ series, leftAt, values, width: W = 356, height: H = 120, fontSize = 13, showStart = true }: Props) {
+export default function NormalZoneChart({ series, leftAt, values, width: W = 356, height: H = 120, fontSize = 13, showStart = true, markers = [] }: Props) {
   const id = useId().replace(/:/g, '')
   const target = values ?? series.map((p) => p.actual)
   const [shown, setShown] = useState(target)
@@ -39,7 +40,7 @@ export default function NormalZoneChart({ series, leftAt, values, width: W = 356
   }, [target.join(',')])
 
   if (series.length < 2) return null
-  const M = { l: 2, r: 2, t: leftAt ? fontSize + 10 : 6, b: fontSize + 10 }
+  const M = { l: 2, r: 2, t: leftAt || markers.length ? fontSize + 10 : 6, b: fontSize + 10 }
   const all = [...series.flatMap((p) => [p.lo, p.hi, p.actual]), ...target]
   let lo = Math.min(...all)
   let hi = Math.max(...all)
@@ -75,6 +76,19 @@ export default function NormalZoneChart({ series, leftAt, values, width: W = 356
           </text>
         </g>
       )}
+      {markers.map((m) => {
+        const i = Math.max(0, series.findIndex((p) => p.t >= m.t))
+        const right = x(i) > W * 0.6
+        return (
+          <g key={`${m.t}-${m.label}`}>
+            <line x1={x(i)} x2={x(i)} y1={fontSize + 4} y2={H - M.b} stroke="#9A9CC4" strokeOpacity={0.55} strokeDasharray="1.5 3" />
+            <circle cx={x(i)} cy={fontSize + 4} r={2.5} fill="#7B7FA8" />
+            <text x={x(i) + (right ? -6 : 6)} y={fontSize} fontSize={fontSize} fill="#9A9CC4" textAnchor={right ? 'end' : 'start'}>
+              {m.label}
+            </text>
+          </g>
+        )
+      })}
       {showStart && (
         <text x={x(0)} y={H - 3} fontSize={fontSize} fill="#9A9CC4">
           {series[0].label}

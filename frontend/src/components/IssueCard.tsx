@@ -11,6 +11,7 @@ type Props = {
   approving: boolean
   onApprove: (fixId: string) => void
   onEvidence: () => void
+  onReplay?: () => void // "How did Argus find this?" replay
   onClose: () => void
 }
 
@@ -21,7 +22,7 @@ function amountOf(s: string): string {
 }
 
 // L2 / manager: one decision, in plain words. No charts here; the evidence is one click away.
-export default function IssueCard({ summary, detail, countryName, foundLine, approving, onApprove, onEvidence, onClose }: Props) {
+export default function IssueCard({ summary, detail, countryName, foundLine, approving, onApprove, onEvidence, onReplay, onClose }: Props) {
   const card = summary.card ?? detail?.card
   const status = summary.status
   const decided = status !== 'open' && status !== 'persisting'
@@ -42,6 +43,11 @@ export default function IssueCard({ summary, detail, countryName, foundLine, app
           <h2 className="mt-2 text-[24px] font-semibold leading-tight text-fg">{summary.short_title ?? detail?.short_title ?? shortTitle(card?.title ?? summary.title)}</h2>
           {(summary.title_detail ?? detail?.title_detail) && <p className="mt-1.5 text-[13px] leading-snug text-fg-2">{summary.title_detail ?? detail?.title_detail}</p>}
           {foundLine && <p className="mt-1 text-[13px] leading-snug text-fg-2">{foundLine}</p>}
+          {onReplay && detail && (
+            <button onClick={onReplay} className="mt-2.5 inline-flex items-center gap-2 rounded-full bg-accent/15 px-3 py-1 text-[13px] text-accent ring-1 ring-accent/30 hover:bg-accent/25">
+              How did Argus find this? <span aria-hidden>▶</span>
+            </button>
+          )}
         </div>
         <button onClick={onClose} aria-label="Close" className="-mr-2 -mt-1 rounded-full px-2 text-[16px] text-fg-2 hover:text-fg">
           ×

@@ -138,6 +138,7 @@ export interface IncidentDetail {
   found_line?: string
   short_title?: string
   title_detail?: string | null
+  replay?: ReplayBlock
   status: IncidentStatus
   severity?: Severity
   impact_usd_h?: number
@@ -180,7 +181,7 @@ export interface CountryDetail {
     status: CountryStatus
     verdict: string
     numbers: { label: string; value: number; usual: number; unit: string; line: string }[]
-    series: { metric: string; unit: string; points: { t: number; label: string; value: number; usual: number; lo: number; hi: number }[] }
+    series: { metric: string; unit: string; points: { t: number; label: string; value: number; usual: number; lo: number; hi: number }[]; events?: { t: number; label: string }[] }
     moving: { line: string; platform: string; category: string | null; kpi: string; ratio: number }[]
   }
 }
@@ -276,4 +277,13 @@ export interface LaunchForecast {
   total_line?: string
   learned_line: string
   backtest_line: string
+}
+
+// "Watch Argus think": how Argus found the issue, step by step (incident detail `replay`, docs/API.md).
+export interface ReplayBlock {
+  l1?: { sentence: string; metric?: string; series?: SeriesPoint[]; left_at?: { t: number; label: string } | null }
+  l2?: { sentence: string; cells?: { platform: string; category: string; z: number; driving: boolean }[] }
+  walk?: { sentence: string; steps: { node: string; verdict: 'fine' | 'affected' | 'cause' }[] }
+  l3?: { sentence: string } | null
+  proof?: { sentence: string } | null
 }

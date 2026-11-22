@@ -8,6 +8,7 @@ import ScenarioMenu, { SCENE_LABEL } from './components/ScenarioMenu'
 import TimelineStrip from './components/TimelineStrip'
 import TopBar from './components/TopBar'
 import WhatIfCard from './components/WhatIfCard'
+import ReplayView from './components/ReplayView'
 import { growthLevel, potentialColor, usd } from './lib/theme'
 import { api, onBackendChange, type Backend } from './lib/api'
 import { explainedLine, foundLine, growthLine, needsDecision, shortTitle, statusSentence } from './lib/incident'
@@ -53,6 +54,8 @@ export default function App() {
   // What-if launch: 'flying' (dark country, eye investigating) → 'shown' (colour, arcs, card). Read-only.
   const [launch, setLaunch] = useState<{ phase: 'flying' | 'shown'; forecast: LaunchForecast | null } | null>(null)
   const launchRun = useRef(0)
+  // "Watch Argus think" replay; plays by itself the first time an issue opens in this browser session.
+  const [replayId, setReplayId] = useState<string | null>(null)
   // Fading breadcrumb whenever the camera flies into a country; for an issue it waits (≤ 6.5 s) for the account check.
   const [crumb, setCrumb] = useState<{ iso: string; key: number; out: boolean } | null>(null)
 
@@ -316,6 +319,19 @@ export default function App() {
     return () => window.clearTimeout(t)
   }, [crumb?.out, crumb?.key])
 
+  useEffect(() => {
+    if (!cardId || detail?.id !== cardId || evidence || launch) return
+    let seen = false
+    try {
+      seen = sessionStorage.getItem('argus-replay-seen') === '1'
+      sessionStorage.setItem('argus-replay-seen', '1')
+    } catch {
+      /* storage unavailable: play once per page load */
+    }
+    if (!seen) setReplayId(cardId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardId, detail?.id])
+
   const keys = useRef({ demo, closeTop: () => {}, openEvidence: () => {} })
   keys.current = {
     demo,
@@ -417,6 +433,7 @@ export default function App() {
             incident={state?.incidents.find((i) => i.country === country.iso && i.status !== 'resolved')}
             potential={potential}
             growth={mode === 'potential'}
+            explainedAt={state?.explained.find((e) => e.country === country.iso)?.t}
             onOpenIncident={openIncident}
             onEvidence={(id) => {
               openIncident(id)
@@ -434,6 +451,7 @@ export default function App() {
             approving={approving}
             onApprove={approve}
             onEvidence={() => setEvidence({ tab: 'graph' })}
+            onReplay={() => setReplayId(card.id)}
             onClose={closeCard}
           />
         ) : null}
@@ -484,6 +502,9 @@ export default function App() {
         </div>
       )}
 
+      {replayId && detail?.id === replayId && (
+        <ReplayView detail={detail} countryName={nameOf(detail.country)} onClose={() => setReplayId(null)} />
+      )}
       {evidence && card && (
         <EvidenceView
           detail={detail?.id === card.id ? detail : null}

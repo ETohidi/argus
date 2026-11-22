@@ -25,6 +25,7 @@ type Props = {
   detail: CountryDetail | null
   incident: IncidentSummary | undefined
   potential: PotentialResponse | null
+  explainedAt?: number // when the planned event was first seen (fallback for the chart marker)
   growth?: boolean // Growth mode: add what users like vs see, and what showing more of it is worth
   onOpenIncident: (id: string) => void
   onEvidence: (id: string) => void
@@ -33,13 +34,15 @@ type Props = {
 
 // Country click: the main point first (name, one verdict, three numbers vs usual, a sparkline with the usual band),
 // what is moving only when something is unusual, and the full platform × offer grid on request.
-export default function CountrySheet({ country, detail, incident, potential, growth, onOpenIncident, onEvidence, onClose }: Props) {
+export default function CountrySheet({ country, detail, incident, potential, explainedAt, growth, onOpenIncident, onEvidence, onClose }: Props) {
   const [kpi, setKpi] = useState('worst')
   const [grid, setGrid] = useState(false)
   const sum = detail?.summary
   const status = sum?.status ?? country.status
   const color = STATUS_COLOR[status]
   const series: SeriesPoint[] = (sum?.series.points ?? []).map((p) => ({ t: p.t, label: p.label, actual: p.value, expected: p.usual, lo: p.lo, hi: p.hi }))
+  // Known events on the chart (e.g. a planned promo), so "no alarm" is visibly justified.
+  const markers = sum?.series.events ?? (status === 'explained' && explainedAt != null ? [{ t: explainedAt, label: 'Planned promo' }] : [])
   const pot = growth ? potential?.countries.find((c) => c.iso === country.iso) : undefined
   return (
     <section className="fade-up pointer-events-auto w-[380px] rounded-3xl bg-panel/90 p-7 ring-1 ring-line/50 backdrop-blur">
@@ -78,7 +81,7 @@ export default function CountrySheet({ country, detail, incident, potential, gro
       {series.length > 1 && (
         <figure className="mt-5">
           <div className="mb-1 text-[13px] text-fg-2">{sum?.series.metric ?? 'Margin per hour'}, last 24 h</div>
-          <NormalZoneChart series={series} width={324} height={72} showStart={false} />
+          <NormalZoneChart series={series} width={324} height={84} showStart={false} markers={markers} />
           <figcaption className="mt-1 text-[13px] text-fg-2">Grey = usual for this time of day</figcaption>
         </figure>
       )}
