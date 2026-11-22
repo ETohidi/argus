@@ -44,8 +44,9 @@ export default function IssueCard({ summary, detail, countryName, foundLine, che
           <span className={`inline-block rounded-full px-2.5 py-0.5 text-[14px] ${chip}`}>{label}</span>
           <h2 className="mt-2 text-[24px] font-semibold leading-tight text-fg">{summary.short_title ?? detail?.short_title ?? shortTitle(card?.title ?? summary.title ?? '')}</h2>
           {!presenter && (summary.title_detail ?? detail?.title_detail) && <p className="mt-1.5 text-[14px] leading-snug text-fg-2">{summary.title_detail ?? detail?.title_detail}</p>}
-          {!presenter && foundLine && <p className="mt-1 text-[14px] leading-snug text-fg-2">{foundLine}</p>}
-          {!presenter && checkedLine && <p className="mt-1 text-[14px] leading-snug text-fg-2">{checkedLine}</p>}
+          {/* In the demo these two lines stay (the key points), trimmed to their first part. */}
+          {foundLine && <p className="mt-1 text-[14px] leading-snug text-fg-2">{presenter ? foundLine.split(' · ')[0] : foundLine}</p>}
+          {checkedLine && <p className="mt-1 text-[14px] leading-snug text-fg-2">{presenter ? checkedLine.replace(/ to find this\.$/, '') : checkedLine}</p>}
           {!presenter && onReplay && detail && (
             <button onClick={onReplay} className="mt-2 inline-flex items-center gap-2 rounded-full bg-accent/15 px-3 py-1 text-[14px] text-accent ring-1 ring-accent/30 hover:bg-accent/25">
               How did Argus find this? <span aria-hidden>▶</span>
