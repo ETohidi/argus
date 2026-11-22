@@ -616,7 +616,8 @@ export default function App() {
               const a = state?.attention
               if (a?.segments_total == null) return undefined
               const n = (x: number | undefined) => (x ?? 0).toLocaleString('en-US')
-              return `Argus checked ${n(a.segments_opened)} of ${n(a.segments_total)} segments${a.users_total != null ? ` and ${n(a.users_checked)} of ${n(a.users_total)} users` : ''} to find this.`
+              const big = (x: number) => (x >= 1e6 ? `${(x / 1e6).toFixed(1).replace(/\.0$/, '')}M` : x >= 1e4 ? `${Math.round(x / 1e3)}k` : n(x))
+              return `Argus checked ${n(a.segments_opened)} of ${n(a.segments_total)} segments${a.users_total != null ? ` and ${n(a.users_checked)} of ${big(a.users_total)} users` : ''} to find this.`
             })()}
             onClose={closeCard}
           />

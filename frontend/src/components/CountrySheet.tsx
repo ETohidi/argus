@@ -57,7 +57,7 @@ function RiskView({ country, detail, incident, explainedAt, segments, onSegments
       <Header name={country.name} color={color} onClose={onClose} />
       {sum ? (
         <p className="mt-1.5 text-[16px] leading-snug" style={{ color: status === 'incident' ? '#FF8FB7' : status === 'ok' ? '#9A9CC4' : '#F1F0FF' }}>
-          {sum.verdict}
+          {status === 'incident' && incident?.short_title ? incident.short_title : sum.verdict}
         </p>
       ) : (
         <div className="mt-2 h-5 w-48 animate-pulse rounded bg-line/50" />
