@@ -33,6 +33,7 @@ type Props = {
   notes?: Record<string, string> // per-country tooltip line, e.g. "Germany +31% · planned promo, no alarm"
   attention?: Record<string, number> // 0..1 per country: money at stake × confidence
   growthNotes?: Record<string, string> // Growth mode tooltip: what users like vs see, and what it's worth
+  lookAt?: string | null // fly the camera to this country without selecting it (demo: the planned promo)
   paused?: boolean // something covers the globe (replay, evidence, metric view): no idle spin
   onSelect: (iso: string | null) => void
 }
@@ -135,7 +136,7 @@ function shimmer(head: number, fade: number): any {
 
 const MARKER_STATUSES: CountryStatus[] = ['incident', 'watch']
 
-export default function Globe({ countries, mode, selectedIso, insetRight = 0, utcHour, launch = null, notes = {}, growthNotes = {}, attention = {}, paused = false, onSelect }: Props) {
+export default function Globe({ countries, mode, selectedIso, insetRight = 0, utcHour, launch = null, notes = {}, growthNotes = {}, attention = {}, lookAt = null, paused = false, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const loadedRef = useRef(false)
@@ -148,6 +149,8 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
   const earthRef = useRef<EarthImagery | null>(null)
   const launchRef = useRef(launch)
   const pausedRef = useRef(paused)
+  const lookAtRef = useRef(lookAt)
+  lookAtRef.current = lookAt
   pausedRef.current = paused
   const centersRef = useRef(new Map<string, [number, number]>()) // visual centre by ISO-2 code and by name
   // Polar caps: MapLibre fills both with the background colour. Use the colour of the pole facing the camera, blended
@@ -207,7 +210,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
     const spin = (now: number) => {
       const dt = Math.min(now - prev, 100)
       prev = now
-      const idle = !reducedMotion() && !selectedRef.current && !launchRef.current && !pausedRef.current && now - lastInteraction > 4000 && !map.isMoving()
+      const idle = !reducedMotion() && !selectedRef.current && !lookAtRef.current && !launchRef.current && !pausedRef.current && now - lastInteraction > 4000 && !map.isMoving()
       if (!idle) rampStart = null
       else {
         rampStart ??= now
@@ -492,7 +495,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
       map.setFilter('selected-outline', ['==', ['get', 'iso'], selectedIso ?? '__none__'])
       if (launchRef.current) return
       const padding = { top: 0, bottom: 0, left: 0, right: insetRight }
-      const c = countriesRef.current.find((x) => x.iso === selectedIso)
+      const c = countriesRef.current.find((x) => x.iso === (selectedIso ?? lookAt))
       if (c)
         map.flyTo({
           center: centersRef.current.get(c.iso) ?? [c.lng, c.lat],
@@ -509,7 +512,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
     }
     if (loadedRef.current) run()
     else map.once('load', run)
-  }, [selectedIso, insetRight])
+  }, [selectedIso, lookAt, insetRight])
 
   // What-if launch: fly to the country (dark), then reveal its colour with the learning arcs; closing flies home.
   const launchKey = launch ? `${launch.name}|${launch.revealed}` : ''

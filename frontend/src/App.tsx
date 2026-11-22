@@ -62,6 +62,8 @@ export default function App() {
   const [storyAt, setStoryAt] = useState(-1)
   // "Watch Argus think" replay; plays by itself the first time an issue opens in this browser session.
   const [replayId, setReplayId] = useState<string | null>(null)
+  // Camera-only focus (no country sheet): the demo's planned-promo step looks at Germany.
+  const [lookIso, setLookIso] = useState<string | null>(null)
   // Fading breadcrumb whenever the camera flies into a country; for an issue it waits (≤ 6.5 s) for the account check.
   const [crumb, setCrumb] = useState<{ iso: string; key: number; out: boolean } | null>(null)
 
@@ -213,6 +215,7 @@ export default function App() {
     run(async () => {
       launchRun.current++
       setLaunch(null)
+      setLookIso(null)
       if (scene === 'start') expectReset.current = true
       const r = await api.demo(scene)
       const storyIndex = SCENE_STORY[scene]
@@ -230,6 +233,8 @@ export default function App() {
           break
         case 'promo':
           setCardId(null)
+          // Same fly-in as a country click, so the grey country and the status line are on screen together.
+          setLookIso(r.state.explained[0]?.country ?? r.state.countries.find((c) => c.status === 'explained')?.iso ?? 'DE')
           break
         case 'investigate':
           if (r.incident_id) setCardId(r.incident_id)
@@ -267,6 +272,7 @@ export default function App() {
   }
 
   const selectCountry = (iso: string | null) => {
+    setLookIso(null)
     setEvidence(null)
     setGraphView(null)
     setCountryIso(iso)
@@ -290,6 +296,7 @@ export default function App() {
   async function whatIfLaunch() {
     const run = ++launchRun.current
     setStoryAt(5)
+    setLookIso(null)
     setCountryIso(null)
     setCardId(null)
     setEvidence(null)
@@ -441,7 +448,7 @@ export default function App() {
 
   return (
     <div className="relative h-full overflow-hidden bg-bg">
-      {state && <Globe countries={state.countries} mode={mode} selectedIso={launch ? null : focusIso} launch={launchView} notes={notes} growthNotes={growthNotes} paused={!!(replayId || evidence || graphView)} attention={attention} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
+      {state && <Globe countries={state.countries} mode={mode} selectedIso={launch ? null : focusIso} launch={launchView} lookAt={lookIso} notes={notes} growthNotes={growthNotes} paused={!!(replayId || evidence || graphView)} attention={attention} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
 
       <TopBar status={launch?.phase === 'flying' ? { ...status, mood: 'investigating' } : status} mode={mode} onMode={setMode} growth={growthSummary ? { ...growthSummary, launchLabel: `New market: ${LAUNCH.name}`, onLaunch: whatIfLaunch } : undefined} />
 
