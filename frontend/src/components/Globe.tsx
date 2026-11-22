@@ -32,6 +32,7 @@ type Props = {
   launch?: LaunchView | null
   notes?: Record<string, string> // per-country tooltip line, e.g. "Germany +31% · planned promo, no alarm"
   attention?: Record<string, number> // 0..1 per country: money at stake × confidence
+  growthNotes?: Record<string, string> // Growth mode tooltip: what users like vs see, and what it's worth
   onSelect: (iso: string | null) => void
 }
 
@@ -130,7 +131,7 @@ function shimmer(head: number, fade: number): any {
 
 const MARKER_STATUSES: CountryStatus[] = ['incident', 'watch']
 
-export default function Globe({ countries, mode, selectedIso, insetRight = 0, utcHour, launch = null, notes = {}, attention = {}, onSelect }: Props) {
+export default function Globe({ countries, mode, selectedIso, insetRight = 0, utcHour, launch = null, notes = {}, growthNotes = {}, attention = {}, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const loadedRef = useRef(false)
@@ -161,6 +162,8 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
   launchRef.current = launch
   const notesRef = useRef(notes)
   notesRef.current = notes
+  const growthRef = useRef(growthNotes)
+  growthRef.current = growthNotes
   const attentionRef = useRef(attention)
   attentionRef.current = attention
   countriesRef.current = countries
@@ -380,7 +383,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
           ? notesRef.current[c.iso]
             ? `<span style="color:${AURORA.fg2}">● ${notesRef.current[c.iso].startsWith(c.name) ? notesRef.current[c.iso].slice(c.name.length).trim() : notesRef.current[c.iso]}</span>`
             : `<span style="color:${STATUS_COLOR[c.status]}">● ${STATUS_LABEL[c.status]}</span>`
-          : `<b>+${usd(c.potential_usd_day)}</b> a day if offers matched local tastes`
+          : `<div style="max-width:260px;white-space:normal">${(growthRef.current[c.iso] ?? `Showing more of what users like: about +${usd(c.potential_usd_day)} a day.`).replace(/^[^:]{1,40}:\s*/, '')}</div>`
       popup.setLngLat(e.lngLat).setHTML(`<div class="font-semibold">${c.name}</div>${line ? `<div>${line}</div>` : ''}`).addTo(map)
     })
     // The globe moves under a still pointer (auto-rotation, fly-to), so a stale hover is cleared on movement too.

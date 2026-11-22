@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { PINK, PINK_SOFT, PLATFORM_LABEL, STATUS_COLOR, usd } from '../lib/theme'
 import type { CountryDetail, CountryState, IncidentSummary, PotentialResponse, SeriesPoint } from '../lib/types'
 import NormalZoneChart from './charts/NormalZoneChart'
+import { growthLine } from '../lib/incident'
 
 const KPI_OPTIONS = [
   { id: 'worst', label: 'Most unusual' },
@@ -24,7 +25,7 @@ type Props = {
   detail: CountryDetail | null
   incident: IncidentSummary | undefined
   potential: PotentialResponse | null
-  growth?: boolean // Growth mode: add the better-matched-offers line
+  growth?: boolean // Growth mode: add what users like vs see, and what showing more of it is worth
   onOpenIncident: (id: string) => void
   onEvidence: (id: string) => void
   onClose: () => void
@@ -99,7 +100,7 @@ export default function CountrySheet({ country, detail, incident, potential, gro
 
       {pot && (
         <p className="mt-5 text-[13px] leading-relaxed text-fg-2">
-          <span className="text-ok">+{usd(pot.potential_usd_day)} a day</span> if offers matched local tastes: more {pot.top_categories.join(' and ').toLowerCase()}.
+          {growthLine(pot, country.name).replace(/^[^:]{1,40}:\s*/, '').replace(/^./, (ch) => ch.toUpperCase())}
         </p>
       )}
 

@@ -143,7 +143,7 @@ export function buildIncidentDetail(a: Args): IncidentDetail {
       },
       {
         id: 'block_cluster',
-        name: 'Block cluster',
+        name: 'Block the fake accounts',
         description: 'Suspend the 88 flagged accounts and their device fingerprints; claw back pending rewards.',
         ...fan(12, daily, [-300, -150, -120, -100, -100, -100, -100], 0.025),
         advertiser_risk: 'Low: 30% chance the farm returns at half size within 48 h',
@@ -188,7 +188,7 @@ export function buildIncidentDetail(a: Args): IncidentDetail {
         { t: d + 1, level: 'L2', action: 'Walk the causal graph upstream', finding: 'Root = new accounts (z = 9.3 given parents); revenue and margin are symptoms' },
         { t: d + 1, level: 'L3', action: 'Sample 600 users, score taste coherence', finding: '88 new accounts, coherence 0.28 vs 0.73, emulator-x86 devices' },
         { t: d + 1, level: 'L3', action: 'Counterfactual in the twin: remove the cluster', finding: 'Explains 94% of Δmargin → hypothesis supported' },
-        { t: d + 2, level: 'L2', action: 'Fast-forward 4 fixes × 40 runs × 7 days', finding: `Block cluster: +$${(fixes[1].delta_p50_usd / 1000).toFixed(1)}k p50 vs do nothing` },
+        { t: d + 2, level: 'L2', action: 'Fast-forward 4 fixes × 40 runs × 7 days', finding: `Block the fake accounts: +$${(fixes[1].delta_p50_usd / 1000).toFixed(1)}k p50 vs do nothing` },
         ...(a.applied ? [{ t: d + 2, level: 'L1' as const, action: 'Human approved fix', finding: `${appliedFix.name} applied to reality` }] : []),
         ...(actual != null ? [{ t: d + 26, level: 'L1' as const, action: 'Verify prediction after 24 h', finding: 'Actual margin inside the p10–p90 band → verified' }] : []),
       ],
@@ -240,7 +240,7 @@ export function buildIncidentDetail(a: Args): IncidentDetail {
         actual,
       },
       reports: {
-        ceo: `A bot farm is farming rewards in ${a.countryName}. Revenue looks up, but it is fake: we pay out about $${Math.round(a.impact)}/h in rewards for users advertisers will charge back. Blocking the 88 accounts protects about $${(fixes[1].delta_p50_usd / 1000).toFixed(0)}k of margin this week and avoids an advertiser budget cut. Recommendation: approve "Block cluster".`,
+        ceo: `A bot farm is farming rewards in ${a.countryName}. Revenue looks up, but it is fake: we pay out about $${Math.round(a.impact)}/h in rewards for users advertisers will charge back. Blocking the 88 accounts protects about $${(fixes[1].delta_p50_usd / 1000).toFixed(0)}k of margin this week and avoids an advertiser budget cut. Recommendation: approve "Block the fake accounts".`,
         manager: `${a.countryName} · ${plat} · fintech and strategy-game offers carry 91% of the deviation. 88 new accounts on emulator devices complete payout-heavy offers with near-zero quality. The fintech advertiser will see a >20% fraud share within 24 h. Block the cluster now; if it returns, switch on phone verification for new ${plat} accounts.`,
         engineer: `Alert: quality_per_completion z=−8.2, rewards z=+6.5 (3 h window, 2 consecutive hours). L2: ${a.country}/${a.platform}/{fintech,strategy} = 91% of |Δ|. Given-parents z: new_accounts 9.3 (root), quality 8.6 (broken mechanism), others < 2. Shapley over 8 mechanisms sums to Δmargin = −$452/h. L3: TasteModel coherence 0.28 vs 0.73, fingerprint expansion over shared device IDs, 88 flagged. Counterfactual v(all) − v(all∖cluster) = 94% of Δ. Fast-forward n=40, 168 h.`,
       },

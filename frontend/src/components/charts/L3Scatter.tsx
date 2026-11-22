@@ -17,7 +17,7 @@ export default function L3Scatter({ l3 }: { l3: L3Result }) {
       <div className="mb-2 grid grid-cols-3 gap-2 text-center">
         <Stat label="Accounts sampled" value={String(s.n_users)} />
         <Stat label="Flagged" value={String(s.n_flagged)} tone="text-problem" />
-        <Stat label="Taste coherence" value={`${s.coherence_flagged.toFixed(2)} vs ${s.coherence_others.toFixed(2)}`} />
+        <Stat label="Interests fit" value={`${s.coherence_flagged.toFixed(2)} vs ${s.coherence_others.toFixed(2)}`} />
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
         {[0, 0.25, 0.5, 0.75, 1].map((v) => (
@@ -33,7 +33,7 @@ export default function L3Scatter({ l3 }: { l3: L3Result }) {
           </g>
         ))}
         <text x={(W + M.l) / 2} y={H - 2} fontSize={10} fill="#7B7FA8" textAnchor="middle">
-          Taste coherence →
+          Interests fit what they do →
         </text>
         <text transform={`translate(10,${(H - M.b) / 2}) rotate(-90)`} fontSize={10} fill="#7B7FA8" textAnchor="middle">
           Payout focus →
@@ -48,7 +48,7 @@ export default function L3Scatter({ l3 }: { l3: L3Result }) {
           <g>
             <ellipse cx={x(cx)} cy={y(cy)} rx={46} ry={22} fill="none" stroke="#FF6FA3" strokeDasharray="4 3" />
             <text x={x(cx) + 52} y={y(cy) - 4} fontSize={10.5} fill="#FF8FB7" fontWeight={600}>
-              Fake-account cluster
+              Fake accounts
             </text>
             <text x={x(cx) + 52} y={y(cy) + 9} fontSize={9.5} fill="#7B7FA8">
               {s.top_devices[0]}
@@ -57,7 +57,7 @@ export default function L3Scatter({ l3 }: { l3: L3Result }) {
         )}
       </svg>
       <p className="mt-3 text-[13px] leading-relaxed text-fg-2">
-        Real people have coherent tastes (life signals predict what they complete). Bots chase payouts regardless of taste.
+        Real people's interests fit what they do (life signals predict what they complete). Bots chase payouts regardless.
       </p>
     </div>
   )

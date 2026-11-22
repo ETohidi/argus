@@ -1,6 +1,6 @@
 // Plain-language summaries derived from an incident detail (shared by the issue card and evidence view).
 import { PLATFORM_LABEL, usd } from './theme'
-import type { ExplainedChange, Fix, IncidentDetail, IncidentSummary, WorldState } from './types'
+import type { ExplainedChange, Fix, IncidentDetail, IncidentSummary, PotentialResponse, WorldState } from './types'
 
 export const isBaseline = (f: Fix) => f.id === 'none' || f.id === 'do_nothing' || /do nothing/i.test(f.name)
 
@@ -139,4 +139,18 @@ export function explainedLine(e: ExplainedChange, name: string) {
   const pct = e.change_pct != null ? ` ${e.change_pct > 0 ? '+' : '−'}${Math.abs(Math.round(e.change_pct))}%` : ''
   const noun = /promo|boost|sale|campaign/i.test(e.event) ? 'planned promo' : `planned ${eventName(e.event).toLowerCase()}`
   return `${name}${pct} · ${noun}, no alarm`
+}
+
+// Growth wording, plain: what users like vs what they mostly see, and what showing more of it is worth.
+// The backend's line when present; otherwise composed from the same fields.
+const listOf = (xs: string[]) => {
+  const w = xs.map((x) => x.toLowerCase())
+  return w.length > 1 ? `${w.slice(0, -1).join(', ')} and ${w[w.length - 1]}` : (w[0] ?? '')
+}
+const offersOf = (c: string) => (/ apps$/i.test(c) ? `${c.replace(/ apps$/i, '').toLowerCase()} offers` : c.toLowerCase())
+export function growthLine(p: PotentialResponse['countries'][number], name: string) {
+  if (p.line) return p.line
+  const seen = p.mostly_seen?.filter((c) => !p.top_categories.includes(c)) ?? []
+  const like = p.top_categories.length ? `users like ${listOf(p.top_categories)}` : 'users would welcome a different mix'
+  return `${name}: ${like}${seen.length ? `, but mostly see ${seen.map(offersOf).join(' and ')}` : ''}. Showing more of what they like: about +${usd(p.potential_usd_day)} a day.`
 }

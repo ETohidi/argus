@@ -10,7 +10,7 @@ import TopBar from './components/TopBar'
 import WhatIfCard from './components/WhatIfCard'
 import { potentialColor, usd } from './lib/theme'
 import { api, onBackendChange, type Backend } from './lib/api'
-import { explainedLine, foundLine, needsDecision, shortTitle, statusSentence } from './lib/incident'
+import { explainedLine, foundLine, growthLine, needsDecision, shortTitle, statusSentence } from './lib/incident'
 import { PLATFORM_LABEL } from './lib/theme'
 import { toOutcome, type MetricOutcome } from './lib/metrics'
 import { DEMO_SCENES } from './lib/types'
@@ -348,8 +348,9 @@ export default function App() {
   // Growth mode: one line from GET /api/potential.
   const pots = potential?.countries ?? []
   const biggest = pots.length ? pots.reduce((a, b) => (b.potential_usd_day > a.potential_usd_day ? b : a)) : null
-  const growthLine = biggest
-    ? `Better-matched offers: about +${usd(pots.reduce((s, c) => s + c.potential_usd_day, 0))} a day across ${pots.length} markets · biggest in ${state?.countries.find((c) => c.iso === biggest.iso)?.name ?? biggest.iso}`
+  const growthSummary = biggest
+    ? (potential?.summary_line ??
+      `Showing each country more of what its users like: about +${usd(pots.reduce((s, c) => s + c.potential_usd_day, 0))} a day in total · biggest in ${state?.countries.find((c) => c.iso === biggest.iso)?.name ?? biggest.iso}`)
     : ''
   // Need for attention per market (0..1): the backend's score, else the open issue's money at stake (cap $250k/week).
   const attention: Record<string, number> = Object.fromEntries(
@@ -360,12 +361,13 @@ export default function App() {
     }),
   )
   const nameOf = (iso: string) => state?.countries.find((c) => c.iso === iso)?.name ?? iso
+  const growthNotes = Object.fromEntries(pots.map((p) => [p.iso, growthLine(p, nameOf(p.iso))]))
   // Planned events: one neutral line per country, for the globe tooltip (and the status sentence).
   const notes = Object.fromEntries((state?.explained ?? []).map((e) => [e.country, explainedLine(e, nameOf(e.country))]))
   // Breadcrumb while the camera flies in: Earth → Canada → Android → 600 users checked.
   const crumbDetail = crumb && card?.country === crumb.iso && detail?.id === card.id ? detail : null
   const crumbIssue = crumb && card?.country === crumb.iso ? card : undefined
-  const crumbPlatform = crumbDetail?.platform ?? crumbIssue?.title.match(/\((iOS|Android)\b/i)?.[1]
+  const crumbPlatform = crumbDetail?.platform ?? crumbIssue?.title.match(/\b(iOS|Android)\b/i)?.[1]
   const crumbParts = crumb
     ? [
         'Earth',
@@ -394,9 +396,9 @@ export default function App() {
 
   return (
     <div className="relative h-full overflow-hidden bg-bg">
-      {state && <Globe countries={state.countries} mode={mode} selectedIso={launch ? null : focusIso} launch={launchView} notes={notes} attention={attention} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
+      {state && <Globe countries={state.countries} mode={mode} selectedIso={launch ? null : focusIso} launch={launchView} notes={notes} growthNotes={growthNotes} attention={attention} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
 
-      <TopBar clock={state ? shortClock(state.clock) : 'Connecting…'} status={launch?.phase === 'flying' ? { ...status, mood: 'investigating' } : status} mode={mode} onMode={setMode} growth={growthLine ? { text: growthLine, launchLabel: `New market: ${LAUNCH.name}`, onLaunch: whatIfLaunch } : undefined} />
+      <TopBar clock={state ? shortClock(state.clock) : 'Connecting…'} status={launch?.phase === 'flying' ? { ...status, mood: 'investigating' } : status} mode={mode} onMode={setMode} growth={growthSummary ? { text: growthSummary, launchLabel: `New market: ${LAUNCH.name}`, onLaunch: whatIfLaunch } : undefined} />
 
       {/* Right column: an explained change as a quiet note, then the issue card or the country sheet. */}
       <div className="pointer-events-none absolute bottom-8 right-8 top-24 z-20 flex flex-col items-end gap-4 overflow-y-auto">

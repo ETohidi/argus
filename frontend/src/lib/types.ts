@@ -187,9 +187,12 @@ export interface PotentialResponse {
     potential_usd_day: number
     potential_pct?: number
     current_margin_usd_day?: number
-    top_categories: string[]
+    top_categories: string[] // what users there like (under-served and locally distinctive)
     explain: string[]
+    mostly_seen?: string[] // what they mostly see today
+    line?: string // "Brazil: users like casual games and surveys, but mostly see fintech offers. Showing more …"
   }[]
+  summary_line?: string // "Showing each country more of what its users like: about +$X a day in total · biggest in …"
 }
 
 export interface MetricResponse {

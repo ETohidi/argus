@@ -56,7 +56,7 @@ function usersCaption(d: IncidentDetail) {
   const devices = d.l3.groups?.filter((g) => g.count >= 2).length ?? 0
   if (devices > 0) return `${s.n_flagged} new accounts on ${devices} shared ${devices === 1 ? 'phone' : 'phones'}; their interests don't match what they do.`
   const emu = s.top_devices.some((x) => /emu|emulator|sdk|generic/i.test(x))
-  return `${s.n_flagged} new accounts whose tastes make no sense, ${emu ? 'on shared emulators' : `sharing devices like ${s.top_devices[0]}`}.`
+  return `${s.n_flagged} new accounts whose interests make no sense, ${emu ? 'on shared emulators' : `sharing devices like ${s.top_devices[0]}`}.`
 }
 
 function proofCaption(d: IncidentDetail) {
@@ -404,7 +404,7 @@ function Details({ d }: { d: IncidentDetail }) {
         </div>
         {d.l3 && (
           <div>
-            <h3 className="mb-4 text-[16px] font-semibold text-fg">Taste coherence vs payout focus</h3>
+            <h3 className="mb-4 text-[16px] font-semibold text-fg">Do interests fit what they do? vs payout focus</h3>
             <L3Scatter l3={d.l3} />
           </div>
         )}
