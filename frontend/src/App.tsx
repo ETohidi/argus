@@ -272,6 +272,8 @@ export default function App() {
       setLookIso(null)
       if (scene === 'start') expectReset.current = true
       const r = await api.demo(scene, !!opts.lapseMs)
+      // The issue's fresh detail is fetched while the time-lapse plays, so the card is up to date when it reappears.
+      const freshP = (scene === 'approve' || scene === 'verify') && r.incident_id ? api.incident(r.incident_id).catch(() => null) : null
       if (opts.lapseMs) {
         setCardId(null)
         setEvidence(null)
@@ -310,6 +312,11 @@ export default function App() {
           if (r.incident_id) {
             dismissed.current.delete(r.incident_id)
             setCardId(r.incident_id)
+            // After approve / verify the card must show the new outcome right away, not a stale one.
+            if (freshP) {
+              const fresh = await freshP
+              if (fresh) setDetail(fresh)
+            }
           }
       }
       flash(SCENE_STORY[scene] != null ? STORY[SCENE_STORY[scene]!] : SCENE_LABEL[scene])
@@ -547,7 +554,7 @@ export default function App() {
   const pathDetail = card && detail?.id === card.id ? detail : null
   const pathPlatform = pathDetail?.platform ?? (card?.title ?? card?.short_title ?? '').match(/\b(iOS|Android)\b/i)?.[1]
   const pathParts: { label: string; to: Level }[] =
-    level === 'earth' || !pathIso
+    level === 'earth' || !pathIso || evidence || graphView || replayId || launch
       ? []
       : [
           { label: 'Earth', to: 'earth' },

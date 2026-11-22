@@ -97,7 +97,7 @@ export default function TwinFutures({ lines, xLabels, gap, events = [], width: W
         })}
       </g>
       {strong && (
-        <text x={x(1)} y={y(strong.p90[1]) - 8} fontSize={FS} fill="#9A9CC4">
+        <text x={x(Math.round(n * 0.6))} y={Math.min(H - M.b - 4, y(strong.p10[Math.round(n * 0.6)]) + FS + 6)} fontSize={FS} fill="#9A9CC4" textAnchor="middle">
           likely range
         </text>
       )}

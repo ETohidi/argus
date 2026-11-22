@@ -56,9 +56,11 @@ export default function FakeAccountPicture({ l3, width: W = 896, height: H = 400
     const rightW = W - right0 - 20
     const centres = groups.map((_, gi) => {
       const k = groups.length
-      const cols2 = k <= 2 ? k : 2
+      const cols2 = k <= 3 ? 1 : 2 // up to three groups stack vertically, so their labels never collide
       const rows2 = Math.ceil(k / cols2)
-      return [right0 + ((gi % cols2) + 0.5) * (rightW / cols2), 30 + (Math.floor(gi / cols2) + 0.5) * ((H - 60) / rows2)] as [number, number]
+      // one column: clusters in the left third of the field, labels to their right
+      const colX = cols2 === 1 ? right0 + rightW * 0.28 : right0 + ((gi % cols2) + 0.5) * (rightW / cols2)
+      return [colX, 30 + (Math.floor(gi / cols2) + 0.5) * ((H - 60) / rows2)] as [number, number]
     })
     const pulledPos = new Map<number, [number, number]>()
     groups.forEach(([, members], gi) => {
@@ -111,8 +113,11 @@ export default function FakeAccountPicture({ l3, width: W = 896, height: H = 400
         return (
           <g key={device} style={{ opacity: pulled ? 1 : 0, transition: 'opacity 400ms ease-out 900ms' }}>
             <circle cx={cx} cy={cy} r={rad} fill="none" stroke={PINK} strokeOpacity={0.35} strokeDasharray="3 4" />
-            <text x={cx} y={cy + rad + 16} fontSize={px(14)} fill={AURORA.fg} textAnchor="middle">
-              {deviceName(device)} · {members.length} {members.length === 1 ? 'account' : 'accounts'}
+            <text x={cx + rad + 12} y={cy - 2} fontSize={px(14)} fill={AURORA.fg}>
+              {deviceName(device)}
+            </text>
+            <text x={cx + rad + 12} y={cy + px(14) + 2} fontSize={px(14)} fill="#FF8FB7">
+              {members.length} {members.length === 1 ? 'account' : 'accounts'}
             </text>
           </g>
         )

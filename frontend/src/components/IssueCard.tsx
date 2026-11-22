@@ -37,7 +37,7 @@ export default function IssueCard({ summary, detail, countryName, foundLine, che
   const chip = !decided ? 'bg-problem/15 text-problem' : status === 'verified' || status === 'resolved' ? 'bg-ok/15 text-ok' : 'bg-neutral/15 text-fg-2'
 
   return (
-    <section className="fade-up pointer-events-auto max-h-[calc(100vh-7.5rem)] w-[420px] overflow-y-auto rounded-3xl bg-panel/95 p-6 ring-1 ring-line backdrop-blur">
+    <section className="fade-up pointer-events-auto max-h-[calc(100vh-7.5rem)] w-[420px] overflow-y-auto rounded-3xl bg-panel/95 px-6 py-5 ring-1 ring-line backdrop-blur">
       <div className="flex items-start justify-between gap-4">
         <div>
           <span className={`inline-block rounded-full px-2.5 py-0.5 text-[14px] ${chip}`}>{label}</span>
@@ -46,7 +46,7 @@ export default function IssueCard({ summary, detail, countryName, foundLine, che
           {foundLine && <p className="mt-1 text-[14px] leading-snug text-fg-2">{foundLine}</p>}
           {checkedLine && <p className="mt-1 text-[14px] leading-snug text-fg-2">{checkedLine}</p>}
           {onReplay && detail && (
-            <button onClick={onReplay} className="mt-2.5 inline-flex items-center gap-2 rounded-full bg-accent/15 px-3 py-1 text-[14px] text-accent ring-1 ring-accent/30 hover:bg-accent/25">
+            <button onClick={onReplay} className="mt-2 inline-flex items-center gap-2 rounded-full bg-accent/15 px-3 py-1 text-[14px] text-accent ring-1 ring-accent/30 hover:bg-accent/25">
               How did Argus find this? <span aria-hidden>▶</span>
             </button>
           )}
@@ -63,24 +63,24 @@ export default function IssueCard({ summary, detail, countryName, foundLine, che
             <Big label="Doing nothing costs" value={usd(atStake)} note="this week" tone="text-[#FF8FB7]" />
           </div>
           {detail?.series && detail.series.length > 1 && (
-            <figure className="mt-4">
+            <figure className="mt-3">
               <div className="mb-1 text-[14px] text-fg-2">{metricLabel(detail.series_meta)}</div>
-              <NormalZoneChart series={detail.series.slice(-24)} leftAt={detail.left_zone_at} width={372} height={92} showStart={false} />
+              <NormalZoneChart series={detail.series.slice(-24)} leftAt={detail.left_zone_at} width={372} height={76} showStart={false} />
             </figure>
           )}
-          <div className="mt-4 space-y-1.5 text-[16px] leading-snug">
+          <div className="mt-3 space-y-1 text-[16px] leading-snug">
             <p className="text-fg">{line1}</p>
             <p className="text-fg-2">{line2}</p>
           </div>
         </>
       ) : (
-        <Outcome detail={detail} countryName={countryName} statusLine={card?.status_line} recovered={recovered} />
+        <Outcome detail={detail && (detail.status === status || !['verified', 'resolved'].includes(status) || detail.verification.status !== 'pending') ? detail : null} stale={!!detail && ['verified', 'resolved'].includes(status) && detail.status !== status && detail.verification.status === 'pending'} countryName={countryName} statusLine={card?.status_line} recovered={recovered} />
       )}
 
       {/* The decision first (the futures in the twin, with Approve); the causal graph and the users as secondary views. */}
       <button
         onClick={() => onEvidence('whatif')}
-        className={`mt-6 w-full rounded-xl py-3 text-[16px] font-semibold transition ${decided ? 'bg-line/80 text-fg hover:bg-line' : 'bg-ok text-bg hover:brightness-110'} ${pressing ? 'press-hint' : ''}`}
+        className={`mt-4 w-full rounded-xl py-3 text-[16px] font-semibold transition ${decided ? 'bg-line/80 text-fg hover:bg-line' : 'bg-ok text-bg hover:brightness-110'} ${pressing ? 'press-hint' : ''}`}
       >
         {decided ? 'See the fixes ›' : 'See fixes & approve ›'}
       </button>
@@ -91,7 +91,7 @@ export default function IssueCard({ summary, detail, countryName, foundLine, che
             ['who', 'Who?'],
           ] as const
         ).map(([tab, label]) => (
-          <button key={tab} onClick={() => onEvidence(tab)} className="rounded-xl py-2.5 text-[16px] text-fg ring-1 ring-line transition hover:bg-line/60">
+          <button key={tab} onClick={() => onEvidence(tab)} className="rounded-xl py-2 text-[16px] text-fg ring-1 ring-line transition hover:bg-line/60">
             {label}
           </button>
         ))}
@@ -112,7 +112,8 @@ function Big({ label, value, note, tone = 'text-fg' }: { label: string; value: s
 
 
 // After approval: the verification state replaces the decision.
-function Outcome({ detail, countryName, statusLine, recovered }: { detail: IncidentDetail | null; countryName: string; statusLine?: string; recovered?: boolean }) {
+function Outcome({ detail, stale, countryName, statusLine, recovered }: { detail: IncidentDetail | null; stale?: boolean; countryName: string; statusLine?: string; recovered?: boolean }) {
+  if (stale) return <div className="mt-6 animate-pulse text-[16px] text-fg-2">Checking the result…</div>
   if (recovered)
     return (
       <div className="mt-6">
