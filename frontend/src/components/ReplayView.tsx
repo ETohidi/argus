@@ -231,7 +231,7 @@ export function Walk({ d, walk, at }: { d: IncidentDetail; walk: { node: string;
   const cause = done.find((w) => w.verdict === 'cause')?.node
   return (
     <div className="w-full max-w-[600px]">
-      <CausalGraph nodes={nodes} edges={edges} roles={roles} pending={walk.slice(at).map((w) => w.node)} pulse={cause} dims={{ W: 600, nodeW: 170, nodeH: 44, row: 62 }} />
+      <CausalGraph nodes={nodes} edges={edges} roles={roles} pending={walk.slice(at).map((w) => w.node)} pulse={cause} dims={{ W: 460, nodeW: 156, nodeH: 54, row: 66 }} />
     </div>
   )
 }

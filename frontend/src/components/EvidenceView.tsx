@@ -136,8 +136,11 @@ export default function EvidenceView({ detail: d, title, initialTab = 'why', tim
             <div className="h-[420px] animate-pulse rounded-2xl bg-panel/60" />
           ) : tab === 'why' ? (
             <div className="space-y-6">
-              <WhyWalk d={d} />
-              <Proof d={d} />
+              <div className="grid grid-cols-[1fr_1.1fr] items-start gap-6">
+                <WhyWalk d={d} />
+                <Proof d={d} part="chart" />
+              </div>
+              <Proof d={d} part="list" />
             </div>
           ) : tab === 'who' ? (
             d.l3 ? (
@@ -170,16 +173,14 @@ function WhyWalk({ d }: { d: IncidentDetail }) {
     return () => window.clearInterval(id)
   }, [walk])
   return (
-    <Frame narrow>
-      {all ? <StoryGraph d={d} /> : <div className="mx-auto max-w-[600px]"><Walk d={d} walk={walk} at={at} /></div>}
-      <div className="mt-6 flex items-center justify-between text-[14px] text-fg-2">
-        <span className="flex gap-5">
-          <span className="flex items-center gap-2"><span className="h-3 w-5 rounded bg-problem" /> cause</span>
-          <span className="flex items-center gap-2"><span className="h-3 w-5 rounded border border-dashed border-problem" /> affected</span>
-          <span className="flex items-center gap-2"><span className="h-3 w-5 rounded border border-line" /> fine</span>
-        </span>
-        <button onClick={() => setAll((a) => !a)} className="hover:text-fg">{all ? 'Back to the walk' : 'Show all metrics'}</button>
+    <Frame>
+      {all ? <StoryGraph d={d} /> : <div className="mx-auto max-w-[460px]"><Walk d={d} walk={walk} at={at} /></div>}
+      <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-[14px] text-fg-2">
+        <span className="flex items-center gap-2"><span className="h-3 w-5 rounded bg-problem" /> cause</span>
+        <span className="flex items-center gap-2"><span className="h-3 w-5 rounded border border-dashed border-problem" /> affected</span>
+        <span className="flex items-center gap-2"><span className="h-3 w-5 rounded border border-line" /> fine</span>
       </div>
+      <button onClick={() => setAll((a) => !a)} className="mt-2 text-[14px] text-fg-2 hover:text-fg">{all ? 'Back to the walk' : 'Show all metrics'}</button>
     </Frame>
   )
 }
@@ -270,7 +271,7 @@ function Empty({ text }: { text: string }) {
 
 // Proof: replay the twin without the cause. The big toggle slides the observed line onto the counterfactual,
 // back into the normal band; the other explanations tested are listed below.
-function Proof({ d }: { d: IncidentDetail }) {
+function Proof({ d, part }: { d: IncidentDetail; part?: 'chart' | 'list' }) {
   const [without, setWithout] = useState(false)
   const cf = d.counterfactual
   const series = (d.series ?? []).slice(-24) // last day: the excursion stays readable
@@ -282,7 +283,7 @@ function Proof({ d }: { d: IncidentDetail }) {
   const hyps = [...d.hypotheses].sort((a, b) => b.explained - a.explained)
   return (
     <div className="space-y-6">
-      {series.length > 1 && (
+      {part !== 'list' && series.length > 1 && (
         <Frame>
           {question && (
             <button
@@ -297,17 +298,17 @@ function Proof({ d }: { d: IncidentDetail }) {
             </button>
           )}
           <div className="mt-6">
-            <NormalZoneChart series={series} leftAt={d.left_zone_at} values={without ? cfValues : undefined} width={896} height={300} fontSize={13} showStart={false} />
+            <NormalZoneChart series={series} leftAt={d.left_zone_at} values={without ? cfValues : undefined} width={520} height={300} fontSize={14} showStart={false} />
           </div>
           <div className="mt-3 flex items-baseline justify-between gap-6 text-[14px] text-fg-2">
-            <span>{metricLabel(d.series_meta)} · grey = usual for this time of day</span>
+            <span>{metricLabel(d.series_meta)}</span>
             <span className={`text-[16px] transition-opacity duration-300 ${without ? 'text-ok opacity-100' : 'opacity-0'}`}>
               {Math.round(share * 100)}% of the change disappears{share >= 0.8 ? ' — cause proven' : ''}
             </span>
           </div>
         </Frame>
       )}
-      <Frame>
+      {part !== 'chart' && <Frame>
         <h3 className="mb-4 text-[16px] text-fg">Every explanation Argus tested</h3>
         <div className="space-y-4">
           {hyps.map((h) => (
@@ -324,7 +325,7 @@ function Proof({ d }: { d: IncidentDetail }) {
           ))}
         </div>
         <p className="mt-5 text-[14px] text-fg-2">How much of the change disappears when the week is replayed without that explanation. Counted as proven at 80% or more.</p>
-      </Frame>
+      </Frame>}
     </div>
   )
 }

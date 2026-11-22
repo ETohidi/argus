@@ -212,19 +212,24 @@ export default function CausalGraph({ nodes, edges, roles = {}, showWords = true
           const st = ROLE_STYLE[role]
           const lines = wrap(n.label.replace(/\s*\(.*\)$/, ''))
           const waiting = pending.includes(n.id)
-          const textTop = showWords && !waiting ? (lines.length === 2 ? 17 : 22) : lines.length === 2 ? 22 : 31
+          // Text positions follow the on-screen font size (never below 14 px), so name and verdict never overlap.
+          const fsz = px(14)
+          const lh = fsz * 1.1
+          const withWord = showWords && !waiting
+          const block = lines.length * lh + (withWord ? fsz * 1.1 : 0)
+          const textTop = (nodeH - block) / 2 + fsz * 0.85
           return (
             <g key={p.id} transform={`translate(${p.x - nodeW / 2},${p.y - nodeH / 2})`} style={{ opacity: waiting ? 0.28 : 1, transition: 'opacity 0.4s ease' }}>
               <g className={role === 'new' ? 'cg-new' : 'fade-in'} style={{ animationDelay: role === 'new' ? '0ms' : `${i * 40}ms` }}>
               {pulse === n.id && <rect width={nodeW} height={nodeH} rx={10} fill="none" stroke={PINK} strokeWidth={2} className="cg-pulse" />}
               <rect width={nodeW} height={nodeH} rx={10} fill={waiting ? 'transparent' : st.fill} stroke={waiting ? '#3A3F6B' : st.stroke} strokeWidth={role === 'normal' || waiting ? 1 : 1.6} strokeDasharray={waiting ? undefined : st.dash} style={{ transition: 'fill 0.35s ease, stroke 0.35s ease' }} />
               {lines.map((line, k) => (
-                <text key={k} x={nodeW / 2} y={textTop + k * 15} fontSize={px(14)} fontWeight={role === 'broke' ? 600 : 500} fill={st.text} textAnchor="middle">
+                <text key={k} x={nodeW / 2} y={textTop + k * lh} fontSize={fsz} fontWeight={role === 'broke' ? 600 : 500} fill={st.text} textAnchor="middle">
                   {line}
                 </text>
               ))}
               {showWords && !waiting && (
-                <text x={nodeW / 2} y={nodeH - 8} fontSize={px(14)} fill={st.word} textAnchor="middle" fontWeight={role === 'broke' ? 600 : 400}>
+                <text x={nodeW / 2} y={textTop + lines.length * lh + fsz * 0.05} fontSize={fsz} fill={st.word} textAnchor="middle" fontWeight={role === 'broke' ? 600 : 400}>
                   {ROLE_WORD[role]}
                 </text>
               )}

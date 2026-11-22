@@ -84,6 +84,8 @@ export default function App() {
   // "Play the demo": the story step last run (0–5), or -1 before the first; its subtitle; whether a step is running.
   const [storyAt, setStoryAt] = useState(-1)
   const [subtitleAt, setSubtitleAt] = useState<number | null>(null)
+  const [subtitleShown, setSubtitleShown] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const [storyRunning, setStoryRunning] = useState(false)
   const storyBusy = useRef(false)
   const [pressing, setPressing] = useState(false)
@@ -409,6 +411,7 @@ export default function App() {
     storyBusy.current = true
     setStoryRunning(true)
     setSubtitleAt(i)
+    setSubtitleShown(true)
     try {
       if (i === 0) await demo('start')
       else if (i === 1) {
@@ -451,6 +454,19 @@ export default function App() {
     const t = window.setTimeout(() => setLaunchCardReady(true), reducedMotion() ? 0 : 1700)
     return () => window.clearTimeout(t)
   }, [launch?.phase])
+
+  // Subtitles fade ~6 s after a step starts.
+  useEffect(() => {
+    if (!subtitleShown) return
+    const t = window.setTimeout(() => setSubtitleShown(false), 6000)
+    return () => window.clearTimeout(t)
+  }, [subtitleShown, subtitleAt])
+  // Switching Risks ↔ Growth closes any open issue card or evidence.
+  const changeMode = (m: GlobeMode) => {
+    if (cardId) closeCard()
+    setEvidence(null)
+    setMode(m)
+  }
 
   const keys = useRef({ demo, closeTop: () => {}, openEvidence: () => {} })
   keys.current = {
@@ -503,7 +519,7 @@ export default function App() {
     }),
   )
   // Zoom level for the rail and the eye: Earth › Country › Segment › Users.
-  const level: Level = replayId ? 'users' : evidence?.tab === 'who' ? 'users' : evidence || (segmentsOpen && countryIso) ? 'segment' : countryIso || cardId || launch ? 'country' : 'earth'
+  const level: Level = replayId || evidence?.tab === 'who' ? 'users' : evidence || cardId || (segmentsOpen && countryIso) ? 'segment' : countryIso || launch ? 'country' : 'earth'
   const zoomOut = (to: Level) => {
     if (to === 'earth') {
       setEvidence(null)
@@ -513,8 +529,13 @@ export default function App() {
       if (cardId) closeCard()
       if (launch) closeLaunch()
     } else if (to === 'country') {
+      const iso = countryIso ?? state?.incidents.find((i) => i.id === cardId)?.country ?? null
       setEvidence(null)
       setSegmentsOpen(false)
+      if (cardId && !countryIso) {
+        closeCard()
+        if (iso) setCountryIso(iso)
+      }
     } else if (to === 'segment') {
       if (evidence) setEvidence({ tab: 'why' })
       else setSegmentsOpen(true)
@@ -569,7 +590,7 @@ export default function App() {
     <div className="relative h-full overflow-hidden bg-bg">
       {state && <Globe countries={state.countries} mode={mode} selectedIso={launch ? null : focusIso} launch={launchView} lookAt={lookIso} notes={notes} growthNotes={growthNotes} paused={!!(replayId || evidence || graphView)} attention={attention} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
 
-      <TopBar status={launch?.phase === 'flying' ? { ...status, mood: 'investigating' } : status} mode={mode} onMode={setMode} level={level} onMetrics={openMetricGraph} growth={growthSummary ? { ...growthSummary, launchLabel: `New market: ${LAUNCH.name}`, onLaunch: whatIfLaunch } : undefined} />
+      <TopBar status={launch?.phase === 'flying' ? { ...status, mood: 'investigating' } : status} mode={mode} onMode={changeMode} level={level} onMetrics={openMetricGraph} growth={growthSummary ? { ...growthSummary, launchLabel: `New market: ${LAUNCH.name}`, onLaunch: whatIfLaunch } : undefined} />
 
       {/* Right column: an explained change as a quiet note, then the issue card or the country sheet. */}
       <div className="pointer-events-none absolute bottom-8 right-8 top-24 z-20 flex flex-col items-end gap-4 overflow-y-auto">
@@ -628,9 +649,9 @@ export default function App() {
         </div>
       )}
 
-      <LevelRail level={level} counts={state?.attention} onLevel={zoomOut} />
+      {!menuOpen && <LevelRail level={level} counts={state?.attention} onLevel={zoomOut} />}
 
-      {subtitleAt != null && storyAt >= 0 && (
+      {subtitleAt != null && storyAt >= 0 && subtitleShown && !sideOpen && !evidence && !graphView && !replayId && (
         <div className="pointer-events-none absolute inset-x-0 bottom-[68px] z-[44] flex justify-center px-8">
           <div key={subtitleAt} className="frost fade-up whitespace-nowrap rounded-full px-6 py-2.5 text-[24px] text-fg ring-1 ring-line/40">
             {SUBTITLES[subtitleAt]}
@@ -653,6 +674,7 @@ export default function App() {
         launchName={LAUNCH.name}
         onLaunch={whatIfLaunch}
         storyAt={storyAt}
+        onOpenChange={setMenuOpen}
         onStory={runStory}
       />
 

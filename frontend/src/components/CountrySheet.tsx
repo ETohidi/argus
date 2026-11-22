@@ -199,7 +199,7 @@ function GrowthCard({ country, potential, onClose }: Props) {
   const [run, setRun] = useState<OfferMixWhatIf | null>(null)
   const [busy, setBusy] = useState(false)
   const [plays, setPlays] = useState(0)
-  const mix = [...(pot?.mix ?? [])].sort((a, b) => Math.abs(b.liked - b.seen) - Math.abs(a.liked - a.seen)).slice(0, 4)
+  const mix = [...(pot?.mix ?? [])].sort((a, b) => Math.abs(b.liked - b.seen) - Math.abs(a.liked - a.seen)).slice(0, run ? 2 : 4) // room for the twin chart
   const maxShare = Math.max(0.01, ...mix.flatMap((m) => [m.liked, m.seen]))
   const play = async () => {
     setPlays((n) => n + 1)

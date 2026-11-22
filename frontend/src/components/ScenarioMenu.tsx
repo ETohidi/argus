@@ -35,6 +35,7 @@ type Props = {
   launchName: string
   onLaunch: () => void
   storyAt: number // story step last run (0–5), -1 before the first
+  onOpenChange?: (open: boolean) => void // the level rail hides while the panel is expanded
   onStory: (i: number) => void
 }
 
@@ -52,6 +53,7 @@ export const STORY = [
 // Shortcuts work with the menu closed: 1–8 run the demo scenes, Space plays / pauses.
 export default function ScenarioMenu(p: Props) {
   const [open, setOpen] = useState(false)
+  useEffect(() => p.onOpenChange?.(open), [open]) // eslint-disable-line react-hooks/exhaustive-deps
   const [more, setMore] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
