@@ -39,8 +39,9 @@ export default function IssueCard({ summary, detail, countryName, foundLine, app
       <div className="flex items-start justify-between gap-4">
         <div>
           <span className={`inline-block rounded-full px-2.5 py-0.5 text-[13px] ${chip}`}>{label}</span>
-          <h2 className="mt-2 text-[24px] font-semibold leading-tight text-fg">{shortTitle(card?.title ?? summary.title)}</h2>
-          {foundLine && <p className="mt-1.5 text-[13px] leading-snug text-fg-2">{foundLine}</p>}
+          <h2 className="mt-2 text-[24px] font-semibold leading-tight text-fg">{summary.short_title ?? detail?.short_title ?? shortTitle(card?.title ?? summary.title)}</h2>
+          {(summary.title_detail ?? detail?.title_detail) && <p className="mt-1.5 text-[13px] leading-snug text-fg-2">{summary.title_detail ?? detail?.title_detail}</p>}
+          {foundLine && <p className="mt-1 text-[13px] leading-snug text-fg-2">{foundLine}</p>}
         </div>
         <button onClick={onClose} aria-label="Close" className="-mr-2 -mt-1 rounded-full px-2 text-[16px] text-fg-2 hover:text-fg">
           ×

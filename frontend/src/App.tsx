@@ -487,7 +487,7 @@ export default function App() {
       {evidence && card && (
         <EvidenceView
           detail={detail?.id === card.id ? detail : null}
-          title={shortTitle(card.card?.title ?? card.title)}
+          title={card.short_title ?? shortTitle(card.card?.title ?? card.title)}
           initialTab={evidence.tab}
           approving={approving}
           onApprove={approve}
