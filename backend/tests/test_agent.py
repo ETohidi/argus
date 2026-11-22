@@ -225,3 +225,18 @@ def test_attention_for_globe():
     assert all(c["attention"] == 0 for c in by.values() if c["status"] == "ok")
     w.demo("approve")
     assert {c["iso"]: c for c in w.agent.state()["countries"]}["CA"]["attention"] == 0  # fix being verified
+
+
+def test_growth_lines_plain_words():
+    from argus.agent import Agent
+    from argus.world import World
+
+    w = World(seed=42)
+    lines = [p["line"] for p in w.agent.potential] + [w.agent.growth_summary_line()]
+    for p in w.agent.potential:
+        assert 1 <= len(p["mostly_seen"]) <= 2 and set(p["mostly_seen_shares"]) == set(p["mostly_seen"])
+    br = next(p for p in w.agent.potential if p["iso"] == "BR")
+    assert br["line"].startswith("Brazil: users like casual games and surveys, but mostly see fintech apps.")
+    assert Agent._growth_line("Japan", [1], [1, 2], 500).startswith("Japan: users like strategy games and already see some")
+    for line in lines:
+        assert not any(bad in line.lower() for bad in ("match", "taste", "feed", "potential"))

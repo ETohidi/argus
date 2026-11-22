@@ -62,7 +62,7 @@ Globe state.
       "max_z": { "country": "US", "z": 1.3 }, "note": "Added because you asked for 'margin_per_signup'. ..." }
   ],
   "explained": [
-    { "t": 350, "country": "DE", "event": "Weekend Boost (Casual games, Strategy games): rewards +36% vs a naive baseline, expected by the twin",
+    { "t": 350, "country": "DE", "event": "Weekend Boost (Casual games, Strategy games): rewards +36% vs a normal week, as expected for this event",
       "naive_z": 5.1, "twin_z": 0.7,
       "change_pct": 36,                // signed % move of the KPI vs the normal (naive) baseline that the event explains
       "kpi": "rewards",                // which KPI moved (KPI label)
@@ -238,8 +238,20 @@ How `moving` is built:
 { "countries": [ { "iso": "DE", "potential_usd_day": 1432.0, "potential_pct": 3.0, "current_margin_usd_day": 48441.0,
                    "top_categories": ["Streaming apps", "Shopping cashback"],      // under-served AND locally distinctive
                    "explain": ["watches series weekly", "night owl", "parent"],    // life signals behind the top category
-                   "demand_index": { "Casual games": 1.02, "Strategy games": 0.92, "...": 1.0 } } ] }  // local / global demand
+                   "demand_index": { "Casual games": 1.02, "Strategy games": 0.92, "...": 1.0 },  // local / global demand
+                   "mostly_seen": ["Fintech apps"],                     // 1–2 categories with the most offers shown today
+                                                                        // (2nd only if ≥ 75% of the 1st's share)
+                   "mostly_seen_shares": { "Fintech apps": 0.489 },     // share of impressions, last 24 h
+                   "line": "Germany: users like streaming apps and shopping cashback, but mostly see fintech apps. Showing more of what they like: about +$3,601 a day." } ],
+  "summary_line": "Showing each country more of what its users like: about +$35,572 a day in total · biggest in the United States" }
 ```
+`line` variants:
+- **Normal:** "users like X, but mostly see Y. Showing more of what they like: about +$N a day."
+- **What they like is already among what they mostly see:** "users like X and already see some, but more would add
+  about +$N a day."
+- **Nothing to gain:** "users already mostly see what they like."
+
+Here "like" = `top_categories`. Screen wording avoids "match", "taste", "feed" and "potential".
 
 ### `GET /api/timeline`
 What Argus knows, in time order. Built only from the public calendar, observed data and Argus's own decisions; never

@@ -85,6 +85,7 @@ class RealityView:
         self._reality.apply(intervention)
 
 
+GROWTH_NOUN = ["casual games", "strategy games", "fintech apps", "streaming apps", "shopping cashback", "surveys"]
 OFFER_NOUN = ["casual-game", "strategy-game", "fintech", "streaming", "shopping-cashback", "survey"]
 
 
@@ -1176,12 +1177,38 @@ class Agent:
             top = sorted(under, key=lambda k: -index[k])[:2]
             explain = self.taste.explain_signals(top[0]) if top else []
             self.potential_alloc[c] = a_best
+            seen = [int(k) for k in np.argsort(a_cur)[::-1][:2]]
+            if a_cur[seen[1]] < 0.75 * a_cur[seen[0]]:
+                seen = seen[:1]
             out.append({"iso": country.iso, "potential_usd_day": round(max(best - cur, 0.0), 0),
                         "potential_pct": round(max(best / cur - 1, 0.0) * 100, 1) if cur > 0 else 0.0,
                         "current_margin_usd_day": round(cur, 0),
                         "demand_index": {cfg.CATEGORIES[k]: round(float(index[k]), 2) for k in range(cfg.K)},
-                        "top_categories": [cfg.CATEGORIES[k] for k in top], "explain": explain})
+                        "top_categories": [cfg.CATEGORIES[k] for k in top], "explain": explain,
+                        "mostly_seen": [cfg.CATEGORIES[k] for k in seen],
+                        "mostly_seen_shares": {cfg.CATEGORIES[k]: round(float(a_cur[k]), 3) for k in seen},
+                        "line": self._growth_line(country.name, top, seen, max(best - cur, 0.0))})
         return out
+
+    @staticmethod
+    def _growth_line(name: str, like: list[int], seen: list[int], usd_day: float) -> str:
+        """Growth-mode sentence (screen rule: no 'match', 'taste', 'feed', 'potential')."""
+        words = lambda ks: " and ".join(GROWTH_NOUN[k] for k in ks)  # noqa: E731
+        who = _country_phrase(name)
+        who = who[0].upper() + who[1:]
+        if not like or usd_day < 1:
+            return f"{who}: users already mostly see what they like."
+        if set(like) & set(seen):
+            return (f"{who}: users like {words(like)} and already see some, but more would add about "
+                    f"+${usd_day:,.0f} a day.")
+        return (f"{who}: users like {words(like)}, but mostly see {words(seen)}. Showing more of what they like: "
+                f"about +${usd_day:,.0f} a day.")
+
+    def growth_summary_line(self) -> str:
+        tot = sum(p["potential_usd_day"] for p in self.potential)
+        top = max(self.potential, key=lambda p: p["potential_usd_day"])
+        name = _country_phrase(cfg.COUNTRIES[cfg.ISO_INDEX[top["iso"]]].name)
+        return f"Showing each country more of what its users like: about +${tot:,.0f} a day in total · biggest in {name}"
 
     # ================================================================== views
     def get_incident(self, inc_id: str) -> dict | None:

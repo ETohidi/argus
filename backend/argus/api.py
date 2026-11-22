@@ -225,7 +225,7 @@ def get_country(iso: str, x_session: str | None = Header(default=None)) -> dict:
 def get_potential(x_session: str | None = Header(default=None)) -> dict:
     s = _world(x_session)
     with s.lock:
-        return {"countries": list(s.world.agent.potential)}
+        return {"countries": list(s.world.agent.potential), "summary_line": s.world.agent.growth_summary_line()}
 
 
 @app.post("/api/demo/{scene}")
