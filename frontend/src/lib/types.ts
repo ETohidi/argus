@@ -54,6 +54,7 @@ export interface IncidentSummary {
   card?: IssueCardText
   detected_at?: number
   resolved_at?: number | string | null // the backend sends a label, e.g. "Tue 08:00"
+  resolved_t?: number | null // the same hour as a number (null while open)
   found_line?: string // "Found by Argus at 06:00, nobody asked · advertisers would react in ~22 h"
   short_title?: string // ≤ ~6 plain words, the card title
   title_detail?: string | null // the rest of the full title, e.g. "Casual-game and strategy-game offers on iOS"

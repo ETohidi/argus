@@ -70,7 +70,7 @@ export function statusSentence(state: WorldState): StatusSentence {
   if (waiting.length) return { text: `Data still arriving from ${waiting.map((c) => c.name).join(', ')}`, tone: 'neutral', mood: 'investigating' }
   const verified = state.incidents.find((i) => i.status === 'verified')
   if (verified) return { text: `Fix verified in ${name(verified.country)}`, tone: 'neutral', mood: 'calm' }
-  const resolved = state.incidents.find((i) => i.status === 'resolved' && hoursAgo(i.resolved_at ?? i.detected_at, state.clock) <= 24)
+  const resolved = state.incidents.find((i) => i.status === 'resolved' && hoursAgo(i.resolved_t ?? i.resolved_at ?? i.detected_at, state.clock) <= 24)
   const explained = state.countries.filter((c) => c.status === 'explained')
   if (resolved) return { text: `${name(resolved.country)} back to normal`, tone: 'neutral', mood: 'calm' }
   if (explained.length === 1) {
