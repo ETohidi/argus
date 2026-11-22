@@ -68,6 +68,7 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
   const cause = walk.find((w) => w.verdict === 'cause')
   const causeWord = cause ? plain(cause.node).toLowerCase() : 'the cause'
   const fraud = /fake/i.test(d.short_title ?? d.title)
+  const tracking = /confirm/i.test(d.short_title ?? d.title) // advertisers stopped confirming offers
   const steps: Step[] = [
     { key: 'l1', level: 'Level 1 · the whole business', sentence: fit(r.l1?.sentence, `${metricWord} left the usual range${leftAt ? ` at ${timeOf(leftAt.label)}` : ''}.`), ms: 2800 },
     { key: 'l2', level: `Level 2 · inside ${countryName}`, sentence: fit(r.l2?.sentence, `It's ${/^(United|Netherlands|Philippines)/.test(countryName) ? 'the ' : ''}${countryName}, ${platform}.`), ms: 2300 },
@@ -76,7 +77,7 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
       ? [{ key: 'l3', level: 'Level 3 · the users', sentence: fit(r.l3?.sentence, `${s.n_flagged} of ${s.n_users} users look fake, on ${shared || s.top_devices.length} shared devices.`), ms: 3000 }]
       : []),
     ...(d.counterfactual && share != null
-      ? [{ key: 'proof', level: 'Proof', sentence: fit(r.proof?.sentence, `Without ${fraud ? 'the fake accounts' : 'the cause'}, ${Math.round(share * 100)}% of the change disappears.`), ms: 3000 }]
+      ? [{ key: 'proof', level: 'Proof', sentence: fit(r.proof?.sentence, `${fraud ? 'Without the fake accounts' : tracking ? 'With normal confirmations' : 'Without the cause'}, ${Math.round(share * 100)}% of the change disappears.`), ms: 3000 }]
       : []),
   ]
   const cur = steps[Math.min(step, steps.length - 1)]
