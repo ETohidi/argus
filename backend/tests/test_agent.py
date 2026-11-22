@@ -203,7 +203,7 @@ def test_country_summary_block():
     w = World(seed=42)
     w.demo("bot_farm")
     ca = w.agent.country_detail(cfg.ISO_INDEX["CA"])["summary"]
-    assert ca["status"] == "incident" and "Fake-account" in ca["verdict"] and "Canada" not in ca["verdict"]
+    assert ca["status"] == "incident" and ca["verdict"] == "Fake accounts on Android" and "Canada" not in ca["verdict"]
     assert 2 <= len(ca["numbers"]) <= 3 and all({"label", "value", "usual", "unit", "line"} <= set(n) for n in ca["numbers"])
     assert len(ca["series"]["points"]) == 24 and all(p["lo"] <= p["usual"] <= p["hi"] for p in ca["series"]["points"])
     assert 1 <= len(ca["moving"]) <= 2 and ca["moving"][0]["platform"] == "Android" and ca["moving"][0]["kpi"] == "new_accounts"

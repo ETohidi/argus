@@ -50,7 +50,7 @@ def test_bot_farm_detected_and_explained(demo):
     assert inc["root"] == "new_accounts"
     assert inc["l3"] is not None and inc["l3"]["summary"]["n_flagged"] >= 5
     top = inc["hypotheses"][0]
-    assert top["verdict"] == "supported" and top["explained"] >= 0.8 and "Fake-account" in top["name"]
+    assert top["verdict"] == "supported" and top["explained"] >= 0.8 and top["name"].startswith("Fake accounts on Android")
     assert all(h["verdict"] == "rejected" for h in inc["hypotheses"][1:])
     assert inc["recommended"] != "none"
     assert inc["severity"] == "high" and inc["risk_7d_usd"] >= 25_000 and inc["reaction_h"] <= 48
@@ -92,7 +92,7 @@ def test_new_metric_and_tracking_break(demo):
     start = w.reality.t
     inc = w._step_until_incident("GB", 8)
     assert inc is not None and inc["root"] == "revenue" and inc["l3"] is None
-    assert inc["hypotheses"][0]["name"].startswith("Tracking") and inc["hypotheses"][0]["verdict"] == "supported"
+    assert inc["hypotheses"][0]["name"].startswith("Advertisers' tracking broke") and inc["hypotheses"][0]["verdict"] == "supported"
     assert inc["severity"] == "high"
     NUMBERS["tracking_break"] = {"detection_delay_h": inc["detected_at"] - start + 1,
                                  "explained_share": inc["hypotheses"][0]["explained"],

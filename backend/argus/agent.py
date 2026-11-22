@@ -44,7 +44,7 @@ MECH_LABEL = {"new_accounts": "New accounts", "active_users": "Active users", "i
               "rewards": "User rewards", "quality": "Valuable users"}
 FIX_INFO = {
     "none": ("Do nothing", "Keep monitoring; no change to the marketplace."),
-    "block_cluster": ("Block cluster", "Suspend the flagged accounts and their device fingerprints in {country} "
+    "block_cluster": ("Block the fake accounts", "Suspend the flagged accounts and their device fingerprints in {country} "
                                        "({platform}); withhold their pending rewards."),
     "verify_new_accounts": ("Verify new accounts", "Require phone and device verification for new {platform} "
                                                    "accounts in {country}."),
@@ -235,8 +235,8 @@ class Agent:
                 self.explaining[c] = True
                 key = (ev.id, c)
                 entry = {"t": t, "country": ev.country, "event": f"{ev.name} ({', '.join(ev.to_dict()['categories'])})"
-                         f": {KPI_LABEL[KPIS[i]]} {naive['rel'][c, i]:+.0%} vs a naive "
-                         f"baseline, expected by the twin",
+                         f": {KPI_LABEL[KPIS[i]]} {naive['rel'][c, i]:+.0%} vs a normal week, "
+                         f"as expected for this event",
                          "naive_z": round(float(zn[c, i]), 1), "twin_z": round(float(z[c, i]), 1),
                          **self._explained_line(c, float(naive["rel"][c, i]),
                                                 "planned promo" if ev.reward_share > cfg.REWARD_SHARE else ev.name,
@@ -324,7 +324,7 @@ class Agent:
         elif inc["status"] == "verified":
             inc["status"] = "persisting"
             inc["trail"].append({"t": t, "level": "L1", "action": "Watch after verification",
-                                 "finding": "The KPI deviates again; issue re-opened"})
+                                 "finding": "The numbers moved away again; issue re-opened"})
 
     def _downstream_of(self, active: list[dict], p: int, k: int, root: str, t: int) -> dict | None:
         """Is this root the advertiser reaction an open fraud issue predicted (same categories, mechanism, timing)?
@@ -351,7 +351,7 @@ class Agent:
                              "t": t, "label": hour_label(t), "after_h": after, "predicted_after_h": expected,
                              "text": f"{what}: {cfg.CATEGORIES[k].lower()} on {cfg.PLATFORMS[p]}, caused by the "
                                      f"farm, as predicted (~{expected} h, seen after {after} h)"})
-                inc["trail"].append({"t": t, "level": "L2", "action": "Check a new deviation against open issues",
+                inc["trail"].append({"t": t, "level": "L2", "action": "Check a new change against open issues",
                                      "finding": seen[-1]["text"] + "; attached to this issue, not reported again"})
             return inc
         return None
@@ -516,21 +516,21 @@ class Agent:
 
         plat = cfg.PLATFORMS[p]
         if l3 and cluster:
-            user_name, kind = (f"Fake-account cluster on {plat} ("
+            user_name, kind = (f"Fake accounts on {plat} ("
                                f"{fake_count_phrase(l3['summary']['n_flagged'], l3['summary']['n_users'], est_total)}; "
                                f"devices {', '.join(l3['summary']['top_devices'][:2])})"), "fraud"
         elif l3:
             user_name, kind = f"Organic growth: new real users on {plat}", "organic"
         else:
-            user_name, kind = f"User-side shift on {plat} (more users or different behaviour)", "user"
+            user_name, kind = f"More users or different user behaviour on {plat}", "user"
         hyps = [
             {"name": user_name, "explained": e_user,
              "verdict": verdict(e_user, None if kind in ("fraud", "organic") else "partial")},
-            {"name": "Tracking / postback break (advertisers confirm fewer completions)", "explained": e_track,
+            {"name": "Advertisers' tracking broke (they confirm fewer completed offers)", "explained": e_track,
              "verdict": verdict(e_track)},
             {"name": "Reward pricing change", "explained": e_rew, "verdict": verdict(e_rew)},
             {"name": "Planned marketing event (calendar)", "explained": e_cal, "verdict": verdict(e_cal)},
-            {"name": "Data gap (late or missing rows)", "explained": e_gap, "verdict": verdict(e_gap)},
+            {"name": "Late or missing data", "explained": e_gap, "verdict": verdict(e_gap)},
         ]
         # Which mechanisms each hypothesis switches off in a counterfactual replay (None: not a chain mechanism).
         cause_specs = {user_name: {p: list(USER_SIDE)},
@@ -805,13 +805,13 @@ class Agent:
 
     # ================================================================== reports
     def _title(self, inc: dict) -> str:
-        name = cfg.COUNTRIES[inc["c"]].name
+        name = _country_phrase(cfg.COUNTRIES[inc["c"]].name)
         return {
-            "fraud": f"Fake-account cluster in {name} ({inc['platform']})",
-            "tracking": f"Tracking break in {name} ({inc['platform']}, "
-                        f"{', '.join(cfg.CATEGORIES[k] for k in inc['fix_categories'])})",
-            "organic": f"User surge in {name} ({inc['platform']})",
-        }.get(inc["kind"], f"{KPI_LABEL[inc['kpi']].capitalize()} anomaly in {name}")
+            "fraud": f"Fake accounts on {inc['platform']} in {name}",
+            "tracking": f"Advertisers stopped confirming {' and '.join(OFFER_NOUN[k] for k in inc['fix_categories'][:2])} "
+                        f"offers on {inc['platform']} in {name}",
+            "organic": f"Many new real users on {inc['platform']} in {name}",
+        }.get(inc["kind"], f"Unusual {KPI_LABEL[inc['kpi']]} in {name}")
 
     def _reports(self, inc: dict) -> dict:
         name = cfg.COUNTRIES[inc["c"]].name
@@ -826,22 +826,22 @@ class Agent:
             "tracking": f"advertisers confirm only a fraction of {cats} completions on {inc['platform']}, while we "
                         f"keep paying users",
             "organic": "a wave of genuine new users",
-        }.get(inc["kind"], f"{KPI_LABEL[inc['kpi']]} deviates from the twin forecast")
+        }.get(inc["kind"], f"{KPI_LABEL[inc['kpi']]} moved away from what we expected")
         ceo = (f"{name}: {headline}. Impact about {_fmt_usd(inc['impact_usd_h'])}/h. Cause: {top['name']} "
                f"({top['explained']:.0%} of the change explained in the twin)"
                + (f"; ruled out: {', '.join(rejected)}" if rejected else "") + ". "
                + (f"Recommendation: {rec['name'].lower()}, worth {_signed_usd(rec['delta_p50_usd'])} margin over 7 "
                   f"days vs doing nothing. Risk of doing nothing: {none['advertiser_risk'].split(': ', 1)[-1]}."
                   if rec["id"] != "none" else "Recommendation: no action, keep monitoring."))
-        mech = ", ".join(f"{MECH_LABEL[m].lower()} {inc['mechanism_z'][m]:+.1f}σ"
+        mech = ", ".join(f"{MECH_LABEL[m].lower()} ({inc['mechanism_z'][m]:+.1f} times the usual swing)"
                          for m in ([inc["root"]] if inc["root"] else []) + inc["broken"])
         follow = {
             "fraud": f"Tell the {cats} advertisers before their fraud checks do; review {inc['platform']} onboarding "
                      f"in {name}.",
             "tracking": f"Open a ticket with the {cats} advertisers' tracking team with the postback gap.",
-        }.get(inc["kind"], "Keep watching the segment.")
-        manager = (f"Segment: {name} · {inc['platform']} · {', '.join(inc['categories'])}. Broken mechanisms: "
-                   f"{mech or 'none'}. Symptoms: {', '.join(inc['symptoms']) or 'none'}. Action: {rec['name']}. "
+        }.get(inc["kind"], "Keep watching this market.")
+        manager = (f"Where: {name} · {inc['platform']} · {', '.join(inc['categories'])}. What broke: "
+                   f"{mech or 'nothing specific'}. Knock-on effects: {', '.join(inc['symptoms']) or 'none'}. Action: {rec['name']}. "
                    f"{rec['description']} Expected 7-day margin {_signed_usd(rec['delta_p50_usd'])} vs doing nothing "
                    f"(p10 {_fmt_usd(rec['p10'][-1])}, p90 {_fmt_usd(rec['p90'][-1])}). Then: {follow}")
         shap = ", ".join(f"{x['mechanism']} {_signed_usd(x['value_usd'])}/h" for x in
@@ -1603,7 +1603,7 @@ class Agent:
         if status == "incident":
             inc = [i for i in self.incidents if i["c"] == c and i["status"] in ("open", "persisting")][-1]
             verdict = inc["card"]["title"] if "card" in inc else self._title(inc)
-            verdict = verdict.replace(f" in {name}", "")
+            verdict = verdict.replace(f" in {_country_phrase(name)}", "").replace(f" in {name}", "")
         elif status == "explained":
             ex = [e for e in self.explained if e["country"] == cfg.COUNTRIES[c].iso]
             verdict = ex[-1]["line"].replace(f"{name} ", "", 1) if ex and "line" in ex[-1] else "Planned event, no alarm"

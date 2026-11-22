@@ -85,7 +85,7 @@ Plain short sentences for the issue card; no z-scores or model terms (those stay
 Recomputed on every read, so `status_line` follows the incident.
 ```jsonc
 {
-  "title": "Fake-account cluster in Canada (Android)",
+  "title": "Fake accounts on Android in Canada",
   "looks_like": "+$85/h of 'growth'",              // how it looks on a naive dashboard
   "at_stake_7d_usd": 156194,                        // = risk_7d_usd
   "what_happened": "About 103 fake accounts appeared on Android in Canada and are completing high-paying strategy-game and fintech offers.",
@@ -119,7 +119,7 @@ After approval `what_to_do` becomes "Done: <fix> applied."
   },
   "fixes": [
     {
-      "id": "block_cluster", "name": "Block cluster", "description": "...",
+      "id": "block_cluster", "name": "Block the fake accounts", "description": "...",
       "days": [1,2,3,4,5,6,7], "p10": [], "p50": [], "p90": [],                           // cumulative margin USD
       "delta_p50_usd": 15000.0,                                                            // day-7 p50 vs do nothing
       "delta_daily": { "p10": [], "p50": [], "p90": [] },   // cumulative margin vs do nothing, days 1..7 (paired per simulated future)
@@ -211,7 +211,7 @@ L2 heatmap.
 ```jsonc
 "summary": {
   "status": "ok" | "watch" | "incident" | "explained" | "waiting",   // same as the globe
-  "verdict": "Fake-account cluster (Android)",     // ONE sentence: incident title without the country; explained:
+  "verdict": "Fake accounts on Android",           // ONE sentence: incident title without the country; explained:
                                                    // "+22% · planned promo, no alarm"; waiting: "Data arriving late: ...";
                                                    // watch: "Something unusual: watching ..."; ok: "All fine"
   "numbers": [                                     // always 3, averages of the last 3 h vs the twin's usual
@@ -248,7 +248,7 @@ from simulator ground truth (e.g. the true start of a bot farm).
 { "events": [
   { "t": 342, "time_label": "Mon 06:00", "kind": "planned",   "country": "DE", "label": "Planned: Weekend Boost (Casual games, Strategy games)" },
   { "t": 348, "time_label": "Mon 12:00", "kind": "anomaly",   "country": "CA", "label": "First unusual hour: new accounts on Android left the normal zone" },
-  { "t": 350, "time_label": "Mon 14:00", "kind": "detected",  "country": "CA", "label": "Detected: Fake-account cluster in Canada (Android)" },
+  { "t": 350, "time_label": "Mon 14:00", "kind": "detected",  "country": "CA", "label": "Detected: Fake accounts on Android in Canada" },
   { "t": 352, "time_label": "Mon 16:00", "kind": "approved",  "country": "CA", "label": "Approved: Verify new accounts" },
   { "t": 376, "time_label": "Tue 16:00", "kind": "verified",  "country": "CA", "label": "Prediction verified" }
 ] }
