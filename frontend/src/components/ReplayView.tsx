@@ -16,7 +16,6 @@ type Step = { key: string; level: string; sentence: string; ms: number }
 const VERDICT_ROLE: Record<string, NodeRole> = { fine: 'normal', affected: 'symptom', cause: 'broke' }
 const WALK_MS = 380
 const STEP_MS = 3500 // minimum time a step is meant to be on screen
-const IDLE_MS = 12000 // presenter-paced: advance by itself only after this long without input
 const STORY = ['new_accounts', 'active_users', 'starts', 'completions', 'revenue', 'rewards', 'margin']
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 const plain = (id: string) => METRIC_PLAIN[id] ?? id
@@ -48,7 +47,6 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
   const [walkAt, setWalkAt] = useState(0)
   const [without, setWithout] = useState(false)
   const [paused] = useState(false) // kept for the walk interval; the replay is presenter-paced now
-  const [lastInput, setLastInput] = useState(0)
   const still = reducedMotion()
   const pausedRef = useRef(false)
   pausedRef.current = paused
@@ -89,9 +87,8 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
   const cur = steps[Math.min(step, steps.length - 1)]
 
   // Presenter-paced: click, → or Space for the next level, ← for the previous one, Esc to close.
-  // Only after 12 s without any input does it move on by itself.
+  // Nothing advances by itself: only the presenter changes the level.
   const go = (d: number) => {
-    setLastInput(Date.now())
     if (step + d >= steps.length) onClose()
     else setStep(Math.max(0, step + d))
   }
@@ -115,12 +112,7 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
     window.addEventListener('keydown', keys, true)
     return () => window.removeEventListener('keydown', keys, true)
   }, [onClose])
-  useEffect(() => {
-    if (still || paused) return
-    const t = window.setTimeout(() => goRef.current(1), Math.max(IDLE_MS, cur.ms))
-    return () => window.clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, still, paused, steps.length, lastInput])
+
   // Graph walk: one node every 450 ms. Proof: the "without them" line switches on after a beat.
   useEffect(() => {
     setWalkAt(0)
@@ -192,8 +184,7 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
           <button
             key={st.key}
             onClick={() => {
-              setLastInput(Date.now())
-              setStep(i)
+                        setStep(i)
             }}
             aria-label={`Step ${i + 1}`}
             className={`h-2 rounded-full transition-all ${i === step ? 'w-8 bg-fg' : i < step ? 'w-2 bg-fg-2' : 'w-2 bg-line'}`}
