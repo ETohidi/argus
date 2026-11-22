@@ -270,3 +270,21 @@ def test_demo_frames_time_lapse():
     client.post("/api/demo/approve", headers=h)
     v = client.post("/api/demo/verify?frames=1", headers=h).json()["frames"]
     assert len(v) >= 20 and v[-1]["incidents"][0]["status"] in ("verified", "resolved", "fix_applied")
+
+
+def test_offer_mix_rollout_and_mix_columns():
+    h = {"X-Session": "mix-test"}
+    client.post("/api/demo/start", headers=h)
+    pot = client.get("/api/potential", headers=h).json()["countries"]
+    for p in pot:
+        assert len(p["mix"]) == 6
+        assert abs(sum(m["liked"] for m in p["mix"]) - 1) < 0.01 and abs(sum(m["seen"] for m in p["mix"]) - 1) < 0.01
+    before = client.get("/api/state", headers=h).json()
+    r = client.post("/api/what_if/offer_mix", json={"country": "US"}, headers=h).json()
+    assert r["days"] == list(range(1, 8)) and len(r["current"]["p50"]) == 7 and len(r["better"]["p90"]) == 7
+    g = r["gain_week_usd"]
+    assert g["p10"] <= g["p50"] <= g["p90"] and g["p50"] > 0 and r["line"] == f"+${g['p50']:,} over the week"
+    us = next(p for p in pot if p["iso"] == "US")["potential_usd_day"]
+    assert abs(r["gain_day_usd"] - us) / us < 0.25                     # same model as the Growth number
+    assert client.get("/api/state", headers=h).json() == before        # read-only
+    assert client.post("/api/what_if/offer_mix", json={"country": "ZZ"}, headers=h).status_code == 400

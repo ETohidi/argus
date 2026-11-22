@@ -283,12 +283,32 @@ How `moving` is built:
                    "top_categories": ["Streaming apps", "Shopping cashback"],      // under-served AND locally distinctive
                    "explain": ["watches series weekly", "night owl", "parent"],    // life signals behind the top category
                    "demand_index": { "Casual games": 1.02, "Strategy games": 0.92, "...": 1.0 },  // local / global demand
+                   "mix": [ { "category": "Fintech apps", "liked": 0.164, "seen": 0.554 }, ... ],   // all 6 categories;
+                                       // liked = share users would choose (taste-model demand, local), seen = share of
+                                       // impressions shown, last 24 h; each column sums to 1 (± rounding)
                    "mostly_seen": ["Fintech apps"],                     // 1–2 categories with the most offers shown today
                                                                         // (2nd only if ≥ 75% of the 1st's share)
                    "mostly_seen_shares": { "Fintech apps": 0.489 },     // share of impressions, last 24 h
                    "line": "Germany: users like streaming apps and shopping cashback, but mostly see fintech apps. Showing more of what they like: about +$3,601 a day." } ],
   "summary_line": "Showing each country more of what its users like: about +$35,572 a day in total · biggest in the United States" }
 ```
+### `POST /api/what_if/offer_mix` — `{ "country": "US" }`
+Read-only 7-day rollout in the twin: today's offer mix against the better-fit mix behind the Growth number. Nothing in
+the session world changes. An unknown country returns `400`.
+```jsonc
+{ "country": "US", "days": [1, 2, 3, 4, 5, 6, 7],
+  "current": { "p10": [...7], "p50": [...7], "p90": [...7] },      // cumulative margin USD, end of each day
+  "better":  { "p10": [...7], "p50": [...7], "p90": [...7] },
+  "gain_week_usd": { "p10": 81602, "p50": 138835, "p90": 216423 },  // better − current after 7 days (same paths)
+  "gain_day_usd": 19834,                                            // p50 / 7, close to potential_usd_day
+  "line": "+$138,835 over the week", "applied": false }
+```
+How the rollout works:
+- **Both options** use the twin's hourly forecast for the country and the same 40 random paths: a level shift from the
+  twin's backtest error, plus hourly noise.
+- **The better mix** scales each category's margin by the Growth model's per-category gain.
+- **Uncertainty:** the size of that gain is uncertain (lognormal, σ 0.35, an assumption), which widens the p10–p90.
+
 `line` variants:
 - **Normal:** "users like X, but mostly see Y. Showing more of what they like: about +$N a day."
 - **What they like is already among what they mostly see:** "users like X and already see some, but more would add

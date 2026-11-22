@@ -238,6 +238,21 @@ def post_demo(scene: str, frames: bool = False, x_session: str | None = Header(d
         return s.world.demo_frames(scene) if frames else s.world.demo(scene)
 
 
+class OfferMixIn(BaseModel):
+    country: str
+
+
+@app.post("/api/what_if/offer_mix")
+def post_offer_mix(body: OfferMixIn, x_session: str | None = Header(default=None)) -> dict:
+    iso = body.country.upper()
+    iso = "GB" if iso == "UK" else iso
+    if iso not in cfg.ISO_INDEX:
+        raise HTTPException(400, f"unknown country '{body.country}'")
+    s = _world(x_session)
+    with s.lock:
+        return s.world.agent.offer_mix_rollout(cfg.ISO_INDEX[iso])
+
+
 @app.post("/api/what_if/launch")
 def post_launch(body: LaunchIn = Body(default=LaunchIn()), x_session: str | None = Header(default=None)) -> dict:
     s = _world(x_session)

@@ -1290,6 +1290,10 @@ class Agent:
             top = sorted(under, key=lambda k: -index[k])[:2]
             explain = self.taste.explain_signals(top[0]) if top else []
             self.potential_alloc[c] = a_best
+            mk_cur, mk_best = margin_k(a_cur), margin_k(a_best)
+            self.potential_ratio = getattr(self, "potential_ratio", {})
+            self.potential_ratio[c] = np.where(np.abs(mk_cur) > 1e-9, mk_best / np.where(mk_cur == 0, 1, mk_cur), 1.0)
+            liked = demand / demand.sum()
             seen = [int(k) for k in np.argsort(a_cur)[::-1][:2]]
             if a_cur[seen[1]] < 0.75 * a_cur[seen[0]]:
                 seen = seen[:1]
@@ -1298,6 +1302,8 @@ class Agent:
                         "current_margin_usd_day": round(cur, 0),
                         "demand_index": {cfg.CATEGORIES[k]: round(float(index[k]), 2) for k in range(cfg.K)},
                         "top_categories": [cfg.CATEGORIES[k] for k in top], "explain": explain,
+                        "mix": [{"category": cfg.CATEGORIES[k], "liked": round(float(liked[k]), 3),
+                                 "seen": round(float(a_cur[k]), 3)} for k in range(cfg.K)],
                         "mostly_seen": [cfg.CATEGORIES[k] for k in seen],
                         "mostly_seen_shares": {cfg.CATEGORIES[k]: round(float(a_cur[k]), 3) for k in seen},
                         "line": self._growth_line(country.name, top, seen, max(best - cur, 0.0))})
@@ -1316,6 +1322,36 @@ class Agent:
                     f"+${usd_day:,.0f} a day.")
         return (f"{who}: users like {words(like)}, but mostly see {words(seen)}. Showing more of what they like: "
                 f"about +${usd_day:,.0f} a day.")
+
+    MIX_GAIN_SIGMA = 0.35    # assumed: uncertainty of the gain itself (how strongly starts follow what users like)
+
+    def offer_mix_rollout(self, c: int, n: int = 40, hours: int = 168) -> dict:
+        """Read-only 7-day twin rollout: today's offer mix vs the better-fit mix (from Growth mode), cumulative margin.
+
+        Both options use the twin's hourly forecast for the country and the same random paths (common random numbers):
+        a level shift (backtest error), hourly noise, and for the better mix an uncertain size of the per-category gain.
+        """
+        tw, now = self.twin, self.t
+        ratio = self.potential_ratio.get(c, np.ones(cfg.K))
+        mg = np.stack([(tw.forecast(now + 1 + h)["revenue"][c] - tw.forecast(now + 1 + h)["rewards"][c]).sum(0)
+                       for h in range(hours)])                                          # (H,K) margin by category
+        sig = float(tw.l1_sigma[c, :, 4].mean())
+        rng = np.random.default_rng([self.seed, c, 4242, now])
+        cur, bet = np.zeros((n, hours)), np.zeros((n, hours))
+        for i in range(n):
+            level = np.exp(rng.normal(0, sig)) * np.exp(rng.normal(0, sig, hours))
+            g = np.exp(rng.normal(0, self.MIX_GAIN_SIGMA))
+            cur[i] = np.cumsum(mg.sum(1) * level)
+            bet[i] = np.cumsum((mg * (1 + (ratio - 1) * g)).sum(1) * level)
+        day_idx = [24 * d - 1 for d in range(1, hours // 24 + 1)]
+        q = lambda x: {k: [round(float(v)) for v in np.percentile(x[:, day_idx], p, axis=0)]  # noqa: E731
+                       for k, p in (("p10", 10), ("p50", 50), ("p90", 90))}
+        gain = bet[:, -1] - cur[:, -1]
+        gw = {k: round(float(np.percentile(gain, p))) for k, p in (("p10", 10), ("p50", 50), ("p90", 90))}
+        return {"country": cfg.COUNTRIES[c].iso, "days": list(range(1, hours // 24 + 1)), "current": q(cur),
+                "better": q(bet), "gain_week_usd": gw, "gain_day_usd": round(gw["p50"] / (hours / 24)),
+                "line": f"{'+' if gw['p50'] >= 0 else '−'}${abs(gw['p50']):,.0f} over the week",
+                "applied": False}
 
     def growth_summary_line(self) -> str:
         tot = sum(p["potential_usd_day"] for p in self.potential)
