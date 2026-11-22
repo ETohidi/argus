@@ -82,7 +82,7 @@ export default function FakeAccountPicture({ l3, width: W = 896, height: H = 400
       </text>
       {layout.groups.length > 0 && (
         <text x={layout.split + 60} y={14} fontSize={px(14)} fill="#FF8FB7">
-          Fake accounts, grouped by the phone they share
+          Fake accounts, by shared device
         </text>
       )}
       {/* device links */}

@@ -15,6 +15,7 @@ import type {
   TimelineEvent,
   WorldState,
   LaunchForecast,
+  OfferMixWhatIf,
 } from './types'
 
 export type Backend = 'live' | 'mock' | 'unknown'
@@ -112,6 +113,7 @@ export const api = {
   country: (iso: string) => request<CountryDetail>('GET', `/country/${iso}`),
   potential: () => request<PotentialResponse>('GET', '/potential'),
   graph: () => request<MetricGraph>('GET', '/graph'),
+  offerMix: (country: string) => liveRequest<OfferMixWhatIf>('POST', '/what_if/offer_mix', { country }),
   whatIfLaunch: (country = 'AR') => liveRequest<LaunchForecast>('POST', '/what_if/launch', { country }),
   graphTree: () => request<{ roots: string[]; rows: GraphTreeRow[] }>('GET', '/graph/tree'),
   timeline: () => request<{ events: TimelineEvent[] }>('GET', '/timeline'),

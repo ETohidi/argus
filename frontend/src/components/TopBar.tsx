@@ -6,11 +6,13 @@ type Props = {
   status: StatusSentence
   mode: GlobeMode
   onMode: (m: GlobeMode) => void
+  level?: 'earth' | 'country' | 'segment' | 'users' // zoom level, mirrored by the eye's rings
+  onMetrics?: () => void // the metrics page (the causal graph, with "Add a metric")
   growth?: { value: string; caption: string; tooltip: string; launchLabel: string; onLaunch: () => void } // Growth mode: big number, short caption, new-market link
 }
 
 // Home bar (L1): logo, clock, one status sentence and the mode toggle. Nothing else.
-export default function TopBar({ status, mode, onMode, growth }: Props) {
+export default function TopBar({ status, mode, onMode, growth, level, onMetrics }: Props) {
   return (
     <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center gap-8 px-8 py-6">
       {/* Soft scrim behind the top-left header so text stays readable over bright city lights; no hard edge. */}
@@ -20,7 +22,7 @@ export default function TopBar({ status, mode, onMode, growth }: Props) {
         style={{ background: 'radial-gradient(ellipse 100% 100% at 0% 0%, rgba(5,6,13,0.78) 0%, rgba(5,6,13,0.6) 55%, rgba(5,6,13,0.3) 72%, rgba(5,6,13,0) 92%)' }}
       />
       <div className="pointer-events-auto flex items-center gap-3">
-        <ArgusEye mood={status.mood} height={40} />
+        <ArgusEye mood={status.mood} height={40} level={level} />
         <span className="text-[16px] font-semibold tracking-[0.3em] text-fg">ARGUS</span>
       </div>
 
@@ -59,6 +61,11 @@ export default function TopBar({ status, mode, onMode, growth }: Props) {
               {m === 'health' ? 'Risks' : 'Growth'}
             </button>
           ))}
+          {onMetrics && (
+            <button onClick={onMetrics} className="rounded-full px-4 py-1.5 text-[14px] text-fg-2 transition hover:text-fg">
+              Metrics
+            </button>
+          )}
         </div>
       </div>
     </header>

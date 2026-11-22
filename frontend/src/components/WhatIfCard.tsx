@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import TwinFutures, { TwinButton } from './charts/TwinFutures'
 import type { LaunchForecast } from '../lib/types'
 
 const dollars = (v: number) => (v >= 1000 ? `$${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `$${v < 10 ? v.toFixed(1) : Math.round(v)}`)
@@ -11,6 +13,8 @@ const RISK = {
 
 // "What if we launch in …?": one calm card in plain words. Read-only: nothing in the live world changes.
 export default function WhatIfCard({ f, onClose }: { f: LaunchForecast; onClose: () => void }) {
+  const [plays, setPlays] = useState(0)
+  const weeks = f.margin_per_day_weekly_usd ?? []
   // "Launching in Argentina: about $25 margin per 1,000 users a day" → title, big number, unit.
   const [title, rest = ''] = f.headline.includes(': ') ? f.headline.split(/:\s(.+)/) : [f.headline, '']
   const m = rest.match(/^(about\s+)?(\+?\$[\d,.]+)\s+(.*)$/)
@@ -66,6 +70,25 @@ export default function WhatIfCard({ f, onClose }: { f: LaunchForecast; onClose:
           </dd>
         </div>
       </dl>
+
+      {/* Try it in the twin: margin a day over the first 4 weeks as users build up, with its likely range. */}
+      {weeks.length > 1 && (
+        <div className="mt-5">
+          <TwinButton onClick={() => setPlays((n) => n + 1)} done={plays > 0} />
+          {plays > 0 && (
+            <div className="mt-3">
+              <TwinFutures
+                lines={[{ id: 'ar', label: 'Margin a day', color: '#3CF2C4', strong: true, p10: [0, ...weeks.map((w) => w.p10)], p50: [0, ...weeks.map((w) => w.p50)], p90: [0, ...weeks.map((w) => w.p90)] }]}
+                xLabels={['launch', ...weeks.map((_, i) => `week ${i + 1}`)]}
+                width={560}
+                height={260}
+                playKey={plays}
+                compact
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* The money, best offers and fraud risk first; everything else on request. */}
       <details className="mt-5 text-[14px]">

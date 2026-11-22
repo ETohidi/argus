@@ -73,7 +73,7 @@ export interface WorldState {
   countries: CountryState[]
   incidents: IncidentSummary[]
   explained: ExplainedChange[]
-  attention: { watched_series: number; investigations: number; l3_runs: number }
+  attention: { watched_series: number; investigations: number; l3_runs: number; segments_total?: number; segments_opened?: number; users_total?: number; users_checked?: number }
 }
 
 export interface TrailStep {
@@ -195,6 +195,7 @@ export interface PotentialResponse {
     top_categories: string[] // what users there like (under-served and locally distinctive)
     explain: string[]
     mostly_seen?: string[] // what they mostly see today
+    mix?: { category: string; liked: number; seen: number }[] // share users would choose vs share of offers shown
     line?: string // "Brazil: users like casual games and surveys, but mostly see fintech offers. Showing more …"
   }[]
   summary_line?: string // "Showing each country more of what its users like: about +$X a day in total · biggest in …"
@@ -275,6 +276,7 @@ export interface LaunchForecast {
   margin_per_1000_users_day_usd?: Range // the per-user prediction (headline)
   users?: { daily_users: number; assumed: boolean; source: string }
   margin_per_day_usd: Range // total at that user count
+  margin_per_day_weekly_usd?: Range[] // margin a day in weeks 1–4 as users build up
   best_offer_mix: { category: string; margin_share: number; taste: number }[]
   best_reward: { reward_share: number; current_share: number; uplift_per_1000_users_day_usd?: number }
   fraud_risk: { level: 'low' | 'medium' | 'high'; farm_chance_4w: number; expected_loss_usd_4w: number; text: string }
@@ -294,4 +296,15 @@ export interface ReplayBlock {
   walk?: { sentence: string; steps: { node: string; verdict: 'fine' | 'affected' | 'cause' }[] }
   l3?: { sentence: string } | null
   proof?: { sentence: string } | null
+}
+
+// POST /api/what_if/offer_mix: 7 days in the twin, current offers vs a better-fit mix (cumulative margin, USD).
+export interface OfferMixWhatIf {
+  country: string
+  days: number[]
+  current: { p10: number[]; p50: number[]; p90: number[] }
+  better: { p10: number[]; p50: number[]; p90: number[] }
+  gain_week_usd: { p10: number; p50: number; p90: number }
+  gain_day_usd: number
+  line: string
 }

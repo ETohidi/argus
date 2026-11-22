@@ -4,19 +4,20 @@ import FakeAccountPicture from './charts/FakeAccountPicture'
 import L3Scatter from './charts/L3Scatter'
 import NormalZoneChart from './charts/NormalZoneChart'
 import ShapleyBars from './charts/ShapleyBars'
-import WhichFixChart from './charts/WhichFixChart'
-import { bestHypothesis, isBaseline, isFraud, metricLabel, shortHypothesis } from '../lib/incident'
+import TwinFutures, { TwinButton, type TwinLine } from './charts/TwinFutures'
+import { Walk, deriveWalk } from './ReplayView'
+import { bestHypothesis, isBaseline, metricLabel, shortHypothesis } from '../lib/incident'
 import { VERDICT_COLOR, usd } from '../lib/theme'
 import type { GraphEdge, IncidentDetail, Level } from '../lib/types'
 
-export type EvidenceTab = 'graph' | 'users' | 'proof' | 'fixes' | 'details'
+// Three questions, one signature visual each; the trail and reports sit behind "For experts".
+export type EvidenceTab = 'why' | 'who' | 'whatif' | 'details'
 const TABS: { id: EvidenceTab; label: string }[] = [
-  { id: 'graph', label: 'What broke' },
-  { id: 'users', label: 'Who' },
-  { id: 'proof', label: 'Proof' },
-  { id: 'fixes', label: 'Options' },
-  { id: 'details', label: 'Details' },
+  { id: 'why', label: 'Why?' },
+  { id: 'who', label: 'Who?' },
+  { id: 'whatif', label: 'What if?' },
 ]
+export const RECOMMENDER_CAPTION = 'Argus knows what real people like.'
 
 // Plain names for the metric nodes used in captions.
 const PLAIN: Record<string, string> = {
@@ -59,15 +60,6 @@ function usersCaption(d: IncidentDetail) {
   return `${s.n_flagged} new accounts whose interests make no sense, ${emu ? 'on shared emulators' : `sharing devices like ${s.top_devices[0]}`}.`
 }
 
-function proofCaption(d: IncidentDetail) {
-  const best = bestHypothesis(d)
-  if (!best) return 'No explanation tested yet.'
-  const pct = Math.round(best.explained * 100)
-  if (best.verdict !== 'supported') return `No explanation passes the bar yet: the best one accounts for ${pct}% of the change.`
-  const without = isFraud(d) ? 'without them' : d.kind === 'tracking' || d.root === 'revenue' ? 'with tracking repaired' : `without ${shortHypothesis(best.name).toLowerCase()}`
-  return `Replay the week ${without}: ${pct}% of the change disappears.`
-}
-
 function fixesCaption(d: IncidentDetail) {
   const best = d.fixes.find((f) => f.id === d.recommended)
   if (!best) return 'No fixes tested.'
@@ -78,15 +70,22 @@ type Props = {
   detail: IncidentDetail | null
   title: string
   initialTab?: EvidenceTab
+  timeLabel?: (t: number) => string // "Mon 06:00" for a simulated hour
+  onTab?: (tab: EvidenceTab) => void // reports tab changes (the level rail follows Why / Who)
+  play?: boolean // start the twin rollout on the What if? tab by itself (demo)
   approving: boolean
   onApprove: (fixId: string) => void
   onClose: () => void
 }
 
 // L3 / engineer: one large visual per tab with one sentence saying what it proves.
-export default function EvidenceView({ detail: d, title, initialTab = 'graph', approving, onApprove, onClose }: Props) {
-  const [tab, setTab] = useState<EvidenceTab>(initialTab)
-  useEffect(() => setTab(initialTab), [initialTab])
+export default function EvidenceView({ detail: d, title, initialTab = 'why', timeLabel = (t) => `hour ${t}`, onTab, play, approving, onApprove, onClose }: Props) {
+  const [tab, setTabState] = useState<EvidenceTab>(initialTab)
+  const setTab = (t: EvidenceTab) => {
+    setTabState(t)
+    onTab?.(t)
+  }
+  useEffect(() => setTabState(initialTab), [initialTab])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
@@ -95,67 +94,93 @@ export default function EvidenceView({ detail: d, title, initialTab = 'graph', a
 
   const caption = !d
     ? 'Loading the evidence…'
-    : tab === 'graph'
+    : tab === 'why'
       ? graphCaption(d)
-      : tab === 'users'
+      : tab === 'who'
         ? usersCaption(d)
-        : tab === 'proof'
-          ? proofCaption(d)
-          : tab === 'fixes'
-            ? fixesCaption(d)
-            : 'How Argus got here, and what it told each audience.'
+        : tab === 'whatif'
+          ? fixesCaption(d)
+          : 'How Argus got here, and what it told each audience.'
 
   return (
-    <div className="fade-in absolute inset-0 z-40 overflow-y-auto bg-bg/80 backdrop-blur-md">
-      <div className="mx-auto max-w-[1040px] px-10 pb-16 pt-8">
+    <div className="fade-in absolute inset-0 z-40 overflow-y-auto bg-bg/[0.97] backdrop-blur-md">
+      <div className="mx-auto max-w-[1000px] pb-16 pl-[236px] pr-10 pt-8 xl:pl-10">
         <button onClick={onClose} className="text-[14px] text-fg-2 hover:text-fg">
           ← Back to the Earth
         </button>
-        <div className="mt-6 text-[14px] text-fg-2">The evidence</div>
-        <h1 className="text-[24px] font-semibold text-fg">{title}</h1>
+        <h1 className="mt-4 text-[24px] font-semibold text-fg">{title}</h1>
 
-        <nav className="mt-8 flex gap-1 border-b border-line">
-          {TABS.map((t, i) => (
+        <nav className="mt-8 flex items-end gap-2 border-b border-line">
+          {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`-mb-px border-b-2 px-4 pb-3 text-[16px] transition ${
+              className={`-mb-px min-w-[140px] border-b-2 px-5 pb-3 text-[22px] font-semibold transition ${
                 tab === t.id ? 'border-ok text-fg' : 'border-transparent text-fg-2 hover:text-fg'
-              } ${t.id === 'details' ? 'ml-auto !text-[14px] self-end' : ''}`}
+              }`}
             >
-              {t.id !== 'details' && <span className="num mr-2 text-[14px] text-fg-2">{i + 1}</span>}
               {t.label}
             </button>
           ))}
+          <button onClick={() => setTab('details')} className={`ml-auto pb-3 text-[14px] ${tab === 'details' ? 'text-fg' : 'text-fg-2 hover:text-fg'}`}>
+            For experts
+          </button>
         </nav>
 
-        <p key={`${tab}-${caption}`} className="fade-in mt-10 max-w-[760px] text-[24px] font-medium leading-snug text-fg">
+        <p key={`${tab}-${caption}`} className="fade-in mt-6 max-w-[760px] text-[22px] font-medium leading-snug text-fg">
           {caption}
         </p>
 
-        <div key={tab} className="fade-in mt-10">
+        <div key={tab} className="fade-in mt-6">
           {!d ? (
             <div className="h-[420px] animate-pulse rounded-2xl bg-panel/60" />
-          ) : tab === 'graph' ? (
-            <StoryGraph d={d} />
-          ) : tab === 'users' ? (
+          ) : tab === 'why' ? (
+            <div className="space-y-6">
+              <WhyWalk d={d} />
+              <Proof d={d} />
+            </div>
+          ) : tab === 'who' ? (
             d.l3 ? (
               <Frame>
                 <FakeAccountPicture l3={d.l3} />
+                <p className="mt-4 text-[16px] text-fg-2">{RECOMMENDER_CAPTION}</p>
               </Frame>
             ) : (
               <Empty text="This problem was found without looking at individual accounts." />
             )
-          ) : tab === 'proof' ? (
-            <Proof d={d} />
-          ) : tab === 'fixes' ? (
-            <Fixes d={d} approving={approving} onApprove={onApprove} />
+          ) : tab === 'whatif' ? (
+            <Fixes d={d} approving={approving} onApprove={onApprove} play={play} />
           ) : (
-            <Details d={d} />
+            <Details d={d} timeLabel={timeLabel} />
           )}
         </div>
       </div>
     </div>
+  )
+}
+
+// Why?: Argus walks the graph from margin backwards; each number gets its verdict, the cause pulses.
+function WhyWalk({ d }: { d: IncidentDetail }) {
+  const walk = useMemo(() => d.replay?.walk?.steps ?? deriveWalk(d), [d])
+  const [at, setAt] = useState(0)
+  const [all, setAll] = useState(false)
+  useEffect(() => {
+    setAt(0)
+    const id = window.setInterval(() => setAt((n) => (n >= walk.length ? (window.clearInterval(id), n) : n + 1)), 420)
+    return () => window.clearInterval(id)
+  }, [walk])
+  return (
+    <Frame narrow>
+      {all ? <StoryGraph d={d} /> : <div className="mx-auto max-w-[600px]"><Walk d={d} walk={walk} at={at} /></div>}
+      <div className="mt-6 flex items-center justify-between text-[14px] text-fg-2">
+        <span className="flex gap-5">
+          <span className="flex items-center gap-2"><span className="h-3 w-5 rounded bg-problem" /> cause</span>
+          <span className="flex items-center gap-2"><span className="h-3 w-5 rounded border border-dashed border-problem" /> affected</span>
+          <span className="flex items-center gap-2"><span className="h-3 w-5 rounded border border-line" /> fine</span>
+        </span>
+        <button onClick={() => setAll((a) => !a)} className="hover:text-fg">{all ? 'Back to the walk' : 'Show all metrics'}</button>
+      </div>
+    </Frame>
   )
 }
 
@@ -304,8 +329,9 @@ function Proof({ d }: { d: IncidentDetail }) {
   )
 }
 
-function Fixes({ d, approving, onApprove }: { d: IncidentDetail; approving: boolean; onApprove: (id: string) => void }) {
+function Fixes({ d, approving, onApprove, play }: { d: IncidentDetail; approving: boolean; onApprove: (id: string) => void; play?: boolean }) {
   const v = d.verification
+  const [run, setRun] = useState(play ? 1 : 0)
   const best = d.fixes.find((f) => f.id === d.recommended)
   const others = d.fixes.filter((f) => f.id !== d.recommended && !isBaseline(f))
   return (
@@ -320,8 +346,10 @@ function Fixes({ d, approving, onApprove }: { d: IncidentDetail; approving: bool
         </div>
       )}
       <Frame>
-        <WhichFixChart fixes={d.fixes} recommended={d.recommended} applied={d.applied} />
-        <p className="mt-2 text-[14px] text-fg-2">Shaded = likely range</p>
+        <div className="mb-4">
+          <TwinButton onClick={() => setRun((r) => r + 1)} done={run > 0} />
+        </div>
+        {run > 0 && <FixFutures d={d} playKey={run} />}
         {best && !d.applied && (
           <div className="mt-6 flex items-center gap-6">
             <button
@@ -359,9 +387,37 @@ function Fixes({ d, approving, onApprove }: { d: IncidentDetail; approving: bool
   )
 }
 
+// The four futures in the twin: each option's cumulative margin over 7 days against today's pace, likely ranges
+// shaded, the best option strong and the gap to doing nothing labelled.
+function FixFutures({ d, playKey }: { d: IncidentDetail; playKey: number }) {
+  const base = d.fixes.find(isBaseline) ?? d.fixes[0]
+  const pace = base.p50[0]
+  const rel = (arr: number[]) => [0, ...arr.map((v, i) => v - pace * (i + 1))]
+  const highlight = d.applied ?? d.recommended
+  const best = d.fixes.find((f) => f.id === highlight)
+  const lines: TwinLine[] = d.fixes.map((f) => ({
+    id: f.id,
+    label: isBaseline(f) ? 'Doing nothing' : f.name,
+    color: f.id === highlight ? '#3CF2C4' : isBaseline(f) ? '#FF8FB7' : '#9A9CC4',
+    strong: f.id === highlight,
+    p10: rel(f.p10),
+    p50: rel(f.p50),
+    p90: rel(f.p90),
+  }))
+  return (
+    <TwinFutures
+      lines={lines}
+      xLabels={['now', ...base.days.map((n) => `day ${n}`)]}
+      gap={best && !isBaseline(best) ? { from: base.id, to: best.id, label: `+${usd(best.delta_p50_usd)} over the week` } : undefined}
+      events={(base.events ?? []).map((e) => ({ x: e.after_h / 24, label: e.label }))}
+      playKey={playKey}
+    />
+  )
+}
+
 const LEVEL_TEXT: Record<Level, string> = { L1: 'Business', L2: 'Segment', L3: 'Users' }
 
-function Details({ d }: { d: IncidentDetail }) {
+function Details({ d, timeLabel }: { d: IncidentDetail; timeLabel: (t: number) => string }) {
   const [aud, setAud] = useState<'ceo' | 'manager' | 'engineer'>('ceo')
   return (
     <div className="grid grid-cols-[1.1fr_1fr] gap-8">
@@ -375,7 +431,7 @@ function Details({ d }: { d: IncidentDetail }) {
                 <span>
                   {s.level} · {LEVEL_TEXT[s.level]}
                 </span>
-                <span className="num">hour {s.t}</span>
+                <span className="num">{timeLabel(s.t)}</span>
               </div>
               <div className="mt-0.5 text-[14px] font-medium text-fg">{s.action}</div>
               <div className="text-[16px] leading-relaxed text-fg-2">{s.finding}</div>
@@ -400,6 +456,7 @@ function Details({ d }: { d: IncidentDetail }) {
         </div>
         <div>
           <h3 className="mb-4 text-[16px] font-semibold text-fg">What each step added to the margin change</h3>
+          <p className="mb-3 text-[16px] text-fg">The cause starts small; its effects spread downstream.</p>
           <ShapleyBars items={d.contributions} />
         </div>
         {d.l3 && (

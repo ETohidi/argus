@@ -114,7 +114,7 @@ export default function MetricGraphPanel({ graph, highlight, outcome: initial, o
 
   return (
     <div className="fade-in absolute inset-0 z-40 overflow-y-auto bg-bg/85 backdrop-blur-md">
-      <div className="mx-auto max-w-[1100px] px-10 pb-16 pt-8">
+      <div className="mx-auto max-w-[1000px] px-10 pb-16 pt-8">
         <button onClick={onClose} className="text-[14px] text-fg-2 hover:text-fg">
           ← Back to the Earth
         </button>

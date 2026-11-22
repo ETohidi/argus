@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Backend } from '../lib/api'
-import { STATUS_COLOR } from '../lib/theme'
-import { DEMO_SCENES, type DemoScene, type InjectType, type WorldState } from '../lib/types'
+import { type DemoScene, type InjectType, type WorldState } from '../lib/types'
 
 export const SCENE_LABEL: Record<DemoScene, string> = {
   start: 'Fresh world',
@@ -13,14 +12,6 @@ export const SCENE_LABEL: Record<DemoScene, string> = {
   new_metric: 'Add a new metric',
   tracking_break: 'Tracking break in the UK',
 }
-
-// What the globe colours mean (kept off the main screen).
-const LEGEND: [string, string][] = [
-  ['fine', STATUS_COLOR.ok],
-  ['planned', STATUS_COLOR.explained],
-  ['checking', STATUS_COLOR.watch],
-  ['problem', STATUS_COLOR.incident],
-]
 
 const INJECTS: { type: InjectType; label: string }[] = [
   { type: 'promo', label: 'Promo' },
@@ -82,7 +73,6 @@ export default function ScenarioMenu(p: Props) {
     setOpen(false)
     p.onStory(i)
   }
-  const a = p.state?.attention
   const next = p.storyAt + 1 < STORY.length ? p.storyAt + 1 : 0
   return (
     <div ref={ref} className="absolute bottom-6 left-8 z-[45]">
@@ -122,28 +112,12 @@ export default function ScenarioMenu(p: Props) {
             <div className="fade-in mt-3 border-t border-line pt-3">
               <Group title="Time">
                 <div className="flex gap-2">
-                  <Btn onClick={p.onPlay} hint="Space">{p.playing ? 'Pause' : 'Play'}</Btn>
+                  <Btn onClick={p.onPlay} hint="(Space)">{p.playing ? '❚❚ Pause' : '▶ Play'}</Btn>
                   <Btn onClick={() => p.onStep(1)} disabled={p.busy}>+1 h</Btn>
                   <Btn onClick={() => p.onStep(6)} disabled={p.busy}>+6 h</Btn>
                 </div>
               </Group>
-              <Group title="All scenes (keys 1–8)">
-                <ol className="-mx-2">
-                  {DEMO_SCENES.map((sc, i) => (
-                    <li key={sc}>
-                      <button
-                        onClick={act(() => p.onDemo(sc))}
-                        disabled={p.busy}
-                        className={`flex w-full items-center gap-3 rounded-lg px-2 py-1 text-left hover:bg-line/70 disabled:opacity-40 ${p.lastScene === sc ? 'text-ok' : ''}`}
-                      >
-                        <kbd className="num w-4 text-center text-fg-2">{i + 1}</kbd>
-                        {SCENE_LABEL[sc]}
-                      </button>
-                    </li>
-                  ))}
-                </ol>
-              </Group>
-              <Group title={`Inject into ${p.injectTarget}`}>
+              <Group title={`Inject a problem into ${p.injectTarget}`}>
                 <div className="flex flex-wrap gap-2">
                   {INJECTS.map((x) => (
                     <Btn key={x.type} onClick={act(() => p.onInject(x.type))} disabled={p.busy}>
@@ -152,29 +126,7 @@ export default function ScenarioMenu(p: Props) {
                   ))}
                 </div>
               </Group>
-              <Group title="Metrics">
-                <Btn onClick={act(p.onAddMetric)}>How the numbers connect…</Btn>
-              </Group>
-              <Group title="New market" last>
-                <Btn onClick={act(p.onLaunch)} disabled={p.busy}>What if we launch in {p.launchName}?</Btn>
-              </Group>
-              <div className="mt-4 border-t border-line pt-3 text-fg-2">
-                {p.backend === 'live' ? 'Live simulation' : p.backend === 'mock' ? 'Sample data (simulation unreachable)' : 'Connecting…'}
-                {a && (
-                  <div className="mt-1">
-                    Watching {a.watched_series} numbers · {a.investigations} investigation{a.investigations === 1 ? '' : 's'} · {a.l3_runs} account-level check{a.l3_runs === 1 ? '' : 's'}
-                  </div>
-                )}
-                <div className="mt-3 flex items-center gap-3 text-[14px]">
-                  {LEGEND.map(([label, color]) => (
-                    <span key={label} className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full" style={{ background: color }} />
-                      {label}
-                    </span>
-                  ))}
-                </div>
-                <div className="mt-2 text-[14px] text-fg-2">Earth imagery: NASA Visible Earth</div>
-              </div>
+              <div className="mt-1 text-[14px] text-fg-2">Earth imagery: NASA Visible Earth</div>
             </div>
           )}
         </div>
@@ -193,7 +145,7 @@ export default function ScenarioMenu(p: Props) {
           onClick={() => setOpen((o) => !o)}
           className={`frost rounded-full px-4 py-2 text-[16px] ring-1 transition ${open ? 'text-fg ring-fg-2' : 'text-fg ring-line hover:ring-fg-2'}`}
         >
-          Play the demo
+          {open ? 'Close' : 'Play the demo'}
         </button>
       )}
     </div>

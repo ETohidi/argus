@@ -12,6 +12,7 @@ type Props = {
   height?: number
   fontSize?: number
   showStart?: boolean // label the first hour on the axis
+  bandLabel?: string | false // the grey band's label, shown once inside the chart
   markers?: { t: number; label: string }[] // known events (e.g. a planned promo), drawn as quiet grey ticks
 }
 
@@ -19,7 +20,7 @@ const ease = (x: number) => 1 - Math.pow(1 - x, 3)
 
 // Grey band = what the twin expected for each hour (lo..hi); line = what happened,
 // white inside the band and orange outside it (exact, via an SVG mask of the band).
-export default function NormalZoneChart({ series, leftAt, values, width: W = 356, height: H = 120, fontSize = 14, showStart = true, markers = [] }: Props) {
+export default function NormalZoneChart({ series, leftAt, values, width: W = 356, height: H = 120, fontSize = 14, showStart = true, bandLabel = 'Grey = what Argus expected', markers = [] }: Props) {
   const id = useId().replace(/:/g, '')
   const { ref: svgRef, px } = useSvgFont<SVGSVGElement>(W)
   const fs = px(fontSize)
@@ -43,7 +44,7 @@ export default function NormalZoneChart({ series, leftAt, values, width: W = 356
   }, [target.join(',')])
 
   if (series.length < 2) return null
-  const M = { l: 2, r: 2, t: leftAt || markers.length ? fs + 10 : 6, b: fs + 10 }
+  const M = { l: 2, r: 2, t: leftAt || markers.length || bandLabel ? fs + 10 : 6, b: fs + 10 }
   const all = [...series.flatMap((p) => [p.lo, p.hi, p.actual]), ...target]
   let lo = Math.min(...all)
   let hi = Math.max(...all)
@@ -92,6 +93,11 @@ export default function NormalZoneChart({ series, leftAt, values, width: W = 356
           </g>
         )
       })}
+      {bandLabel && (
+        <text x={x(0) + 2} y={fs} fontSize={fs} fill="#9A9CC4">
+          {bandLabel}
+        </text>
+      )}
       {showStart && (
         <text x={x(0)} y={H - 3} fontSize={fs} fill="#9A9CC4">
           {series[0].label}

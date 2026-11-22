@@ -7,6 +7,7 @@ import MetricGraphPanel from './components/MetricGraphPanel'
 import ScenarioMenu, { SCENE_LABEL, STORY } from './components/ScenarioMenu'
 import TimelineStrip from './components/TimelineStrip'
 import TopBar from './components/TopBar'
+import LevelRail, { type Level } from './components/LevelRail'
 import WhatIfCard from './components/WhatIfCard'
 import ReplayView from './components/ReplayView'
 import { growthLevel, potentialColor, usd } from './lib/theme'
@@ -67,7 +68,7 @@ export default function App() {
   const [detail, setDetail] = useState<IncidentDetail | null>(null)
   const [approving, setApproving] = useState(false)
   // L3 overlays.
-  const [evidence, setEvidence] = useState<{ tab: EvidenceTab } | null>(null)
+  const [evidence, setEvidence] = useState<{ tab: EvidenceTab; play?: boolean } | null>(null)
   const [graphView, setGraphView] = useState<{ highlight: string[]; outcome?: MetricOutcome | null; openForm?: boolean; typeIn?: boolean } | null>(null)
   const [metricGraph, setMetricGraph] = useState<MetricGraph | null>(null)
   // Country side sheet.
@@ -88,6 +89,8 @@ export default function App() {
   const cardIdRef = useRef<string | null>(null)
   // "Watch Argus think" replay; plays by itself the first time an issue opens in this browser session.
   const [replayId, setReplayId] = useState<string | null>(null)
+  // Country view: the segment grid is open (the "Segment" level of the rail).
+  const [segmentsOpen, setSegmentsOpen] = useState(false)
   // Camera-only focus (no country sheet): the demo's planned-promo step looks at Germany.
   const [lookIso, setLookIso] = useState<string | null>(null)
   // Fading breadcrumb whenever the camera flies into a country; for an issue it waits (≤ 6.5 s) for the account check.
@@ -287,7 +290,7 @@ export default function App() {
           break
         case 'investigate':
           if (r.incident_id) setCardId(r.incident_id)
-          setEvidence({ tab: 'graph' })
+          setEvidence({ tab: 'why' })
           break
         case 'new_metric': {
           // Play what Argus did by itself with the metric the scene just added.
@@ -323,6 +326,7 @@ export default function App() {
 
   const selectCountry = (iso: string | null) => {
     setLookIso(null)
+    setSegmentsOpen(false)
     setEvidence(null)
     setGraphView(null)
     setCountryIso(iso)
@@ -420,7 +424,7 @@ export default function App() {
         }
       } else if (i === 3) {
         if (cardIdRef.current) {
-          setEvidence({ tab: 'fixes' }) // the four futures, best one glowing
+          setEvidence({ tab: 'whatif', play: true }) // the four futures, best one glowing
           await sleep(3000)
           setEvidence(null)
         }
@@ -448,7 +452,7 @@ export default function App() {
   keys.current = {
     demo,
     closeTop: () => (launch ? closeLaunch() : evidence ? setEvidence(null) : graphView ? setGraphView(null) : countryIso ? setCountryIso(null) : cardId ? closeCard() : undefined),
-    openEvidence: () => cardId && setEvidence({ tab: 'graph' }),
+    openEvidence: () => cardId && setEvidence({ tab: 'why' }),
   }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -494,6 +498,36 @@ export default function App() {
       return [c.iso, inc?.risk_7d_usd != null ? Math.min(1, inc.risk_7d_usd / 250_000) : c.status === 'watch' ? 0.4 : 0]
     }),
   )
+  // Zoom level for the rail and the eye: Earth › Country › Segment › Users.
+  const level: Level = replayId ? 'users' : evidence?.tab === 'who' ? 'users' : evidence || (segmentsOpen && countryIso) ? 'segment' : countryIso || cardId || launch ? 'country' : 'earth'
+  const zoomOut = (to: Level) => {
+    if (to === 'earth') {
+      setEvidence(null)
+      setGraphView(null)
+      setSegmentsOpen(false)
+      setCountryIso(null)
+      if (cardId) closeCard()
+      if (launch) closeLaunch()
+    } else if (to === 'country') {
+      setEvidence(null)
+      setSegmentsOpen(false)
+    } else if (to === 'segment') {
+      if (evidence) setEvidence({ tab: 'why' })
+      else setSegmentsOpen(true)
+    }
+  }
+  // "Mon 06:00" for a simulated hour.
+  const timeLabel = (t: number) => {
+    const c = state?.clock
+    if (!c) return `hour ${t}`
+    const hNow = c.utc_hour ?? c.t % 24
+    const back = c.t - t
+    const h = (((hNow - back) % 24) + 24) % 24
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    const today = Math.max(0, days.indexOf(c.day_of_week ?? 'Mon'))
+    const shift = Math.floor((hNow - back) / 24)
+    return `${days[(((today + shift) % 7) + 7) % 7]} ${String(h).padStart(2, '0')}:00`
+  }
   const nameOf = (iso: string) => state?.countries.find((c) => c.iso === iso)?.name ?? iso
   const growthNotes = Object.fromEntries(pots.map((p) => [p.iso, growthLine(p, nameOf(p.iso))]))
   // Planned events: one neutral line per country, for the globe tooltip (and the status sentence).
@@ -526,24 +560,18 @@ export default function App() {
         revealed: launch.phase === 'shown',
       }
     : null
-  const explained = state?.explained[0]
 
   return (
     <div className="relative h-full overflow-hidden bg-bg">
       {state && <Globe countries={state.countries} mode={mode} selectedIso={launch ? null : focusIso} launch={launchView} lookAt={lookIso} notes={notes} growthNotes={growthNotes} paused={!!(replayId || evidence || graphView)} attention={attention} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
 
-      <TopBar status={launch?.phase === 'flying' ? { ...status, mood: 'investigating' } : status} mode={mode} onMode={setMode} growth={growthSummary ? { ...growthSummary, launchLabel: `New market: ${LAUNCH.name}`, onLaunch: whatIfLaunch } : undefined} />
+      <TopBar status={launch?.phase === 'flying' ? { ...status, mood: 'investigating' } : status} mode={mode} onMode={setMode} level={level} onMetrics={openMetricGraph} growth={growthSummary ? { ...growthSummary, launchLabel: `New market: ${LAUNCH.name}`, onLaunch: whatIfLaunch } : undefined} />
 
       {/* Right column: an explained change as a quiet note, then the issue card or the country sheet. */}
       <div className="pointer-events-none absolute bottom-8 right-8 top-24 z-20 flex flex-col items-end gap-4 overflow-y-auto">
         {launch?.phase === 'shown' && lf && launchCardReady ? (
           <WhatIfCard f={lf} onClose={closeLaunch} />
-        ) : launch ? null : explained && !country && !card && explainedLine(explained, nameOf(explained.country)) !== status.text && (
-          <div className="frost fade-in pointer-events-auto max-w-[420px] rounded-xl px-4 py-2 text-right text-[16px] leading-relaxed text-fg-2">
-            <span className="mr-2 inline-block h-2 w-2 rounded-full bg-fg-2" />
-            {explainedLine(explained, nameOf(explained.country))}
-          </div>
-        )}
+        ) : null}
         {country ? (
           <CountrySheet
             country={country}
@@ -552,12 +580,20 @@ export default function App() {
             potential={potential}
             growth={mode === 'potential'}
             explainedAt={state?.explained.find((e) => e.country === country.iso)?.t}
-            onOpenIncident={openIncident}
-            onEvidence={(id) => {
+            segments={segmentsOpen}
+            onSegments={setSegmentsOpen}
+            onWhy={(id) => {
               openIncident(id)
-              setEvidence({ tab: 'graph' })
+              setEvidence({ tab: 'why' })
             }}
-            onClose={() => setCountryIso(null)}
+            onUsers={(id) => {
+              openIncident(id)
+              setEvidence({ tab: 'who' })
+            }}
+            onClose={() => {
+              setCountryIso(null)
+              setSegmentsOpen(false)
+            }}
           />
         ) : card ? (
           <IssueCard
@@ -568,7 +604,7 @@ export default function App() {
             foundLine={state ? foundLine(card.found_line ?? (detail?.id === card.id ? detail.found_line : undefined), card.detected_at ?? (detail?.id === card.id ? detail.detected_at : undefined), card.reaction_h ?? (detail?.id === card.id ? detail.reaction_h : undefined), state.clock) : undefined}
             approving={approving}
             onApprove={approve}
-            onEvidence={() => setEvidence({ tab: 'graph' })}
+            onEvidence={(tab) => setEvidence({ tab })}
             onReplay={() => setReplayId(card.id)}
             onClose={closeCard}
           />
@@ -586,6 +622,8 @@ export default function App() {
           />
         </div>
       )}
+
+      <LevelRail level={level} counts={state?.attention} onLevel={zoomOut} />
 
       {subtitleAt != null && storyAt >= 0 && (
         <div className="pointer-events-none absolute inset-x-0 bottom-[68px] z-[44] flex justify-center px-8">
@@ -639,6 +677,9 @@ export default function App() {
           detail={detail?.id === card.id ? detail : null}
           title={card.short_title ?? shortTitle(card.card?.title ?? card.title)}
           initialTab={evidence.tab}
+          timeLabel={timeLabel}
+          onTab={(tab) => setEvidence((e) => (e ? { ...e, tab, play: false } : e))}
+          play={evidence.play}
           approving={approving}
           onApprove={approve}
           onClose={() => setEvidence(null)}

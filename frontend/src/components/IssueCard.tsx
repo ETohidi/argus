@@ -8,25 +8,24 @@ type Props = {
   detail: IncidentDetail | null // arrives later (the first fetch can take a few seconds)
   countryName: string
   foundLine?: string // "Found by Argus at 06:00, nobody asked · advertisers would react in ~22 h"
-  approving: boolean
-  onApprove: (fixId: string) => void
-  onEvidence: () => void
+  approving?: boolean
+  onApprove?: (fixId: string) => void
+  onEvidence: (tab: 'why' | 'who' | 'whatif') => void
   onReplay?: () => void // "How did Argus find this?" replay
   onClose: () => void
 }
 
-// "+$85/h of 'growth'" → "+$85" (shown as "Looks like: +$85 an hour")
+// "+$85/h of 'growth'" → "+$85" (shown as "Looks like +$85/h")
 function amountOf(s: string): string {
   const m = s.match(/^\s*([+−-]?\$[\d,.]+[kM]?)/)
   return m ? m[1].replace('-', '−') : s
 }
 
 // L2 / manager: one decision, in plain words. No charts here; the evidence is one click away.
-export default function IssueCard({ summary, detail, countryName, foundLine, approving, onApprove, onEvidence, onReplay, onClose }: Props) {
+export default function IssueCard({ summary, detail, countryName, foundLine, onEvidence, onReplay, onClose }: Props) {
   const card = summary.card ?? detail?.card
   const status = summary.status
   const decided = status !== 'open' && status !== 'persisting'
-  const fix = detail ? recommendedFix(detail) : undefined
   const amount = amountOf(card?.looks_like ?? `${usd(summary.impact_usd_h)}`)
   const atStake = card?.at_stake_7d_usd ?? summary.risk_7d_usd ?? 0
   const [line1, line2] = cardLines(card, detail ? isFraud(detail) : /fake/i.test(card?.title ?? summary.title))
@@ -36,7 +35,7 @@ export default function IssueCard({ summary, detail, countryName, foundLine, app
   const chip = !decided ? 'bg-problem/15 text-problem' : status === 'verified' || status === 'resolved' ? 'bg-ok/15 text-ok' : 'bg-neutral/15 text-fg-2'
 
   return (
-    <section className="fade-up pointer-events-auto w-[420px] rounded-3xl bg-panel/95 p-7 ring-1 ring-line backdrop-blur">
+    <section className="fade-up pointer-events-auto max-h-[calc(100vh-7.5rem)] w-[420px] overflow-y-auto rounded-3xl bg-panel/95 p-6 ring-1 ring-line backdrop-blur">
       <div className="flex items-start justify-between gap-4">
         <div>
           <span className={`inline-block rounded-full px-2.5 py-0.5 text-[14px] ${chip}`}>{label}</span>
@@ -56,36 +55,43 @@ export default function IssueCard({ summary, detail, countryName, foundLine, app
 
       {!decided ? (
         <>
-          <div className="mt-5 grid grid-cols-2 gap-6">
-            <Big label="Looks like:" value={amount} note="an hour" />
+          <div className="mt-4 grid grid-cols-2 gap-6">
+            <Big label="Looks like" value={`${amount}/h`} />
             <Big label="Doing nothing costs" value={usd(atStake)} note="this week" tone="text-[#FF8FB7]" />
           </div>
           {detail?.series && detail.series.length > 1 && (
-            <figure className="mt-6">
+            <figure className="mt-4">
               <div className="mb-1 text-[14px] text-fg-2">{metricLabel(detail.series_meta)}</div>
-              <NormalZoneChart series={detail.series.slice(-24)} leftAt={detail.left_zone_at} width={364} height={100} showStart={false} />
-              <figcaption className="mt-1 text-[14px] text-fg-2">Grey = usual for this time of day</figcaption>
+              <NormalZoneChart series={detail.series.slice(-24)} leftAt={detail.left_zone_at} width={372} height={92} showStart={false} />
             </figure>
           )}
-          <div className="mt-5 space-y-2 text-[16px] leading-snug">
+          <div className="mt-4 space-y-1.5 text-[16px] leading-snug">
             <p className="text-fg">{line1}</p>
             <p className="text-fg-2">{line2}</p>
           </div>
-          <button
-            disabled={!fix || approving}
-            onClick={() => fix && onApprove(fix.id)}
-            className="mt-6 w-full rounded-xl bg-ok py-3 text-[16px] font-semibold text-bg transition hover:brightness-110 disabled:bg-line disabled:text-fg-2"
-          >
-            {approving ? 'Applying…' : fix ? `Approve: ${fix.name.toLowerCase()}` : 'Preparing the options…'}
-          </button>
         </>
       ) : (
         <Outcome detail={detail} countryName={countryName} statusLine={card?.status_line} recovered={recovered} />
       )}
 
-      <button onClick={onEvidence} className="mt-5 text-[14px] text-fg-2 hover:text-fg">
-        See the evidence →
-      </button>
+      {/* Three questions, one view each: the causal graph, the users, the futures in the twin (with Approve). */}
+      <div className="mt-6 grid grid-cols-3 gap-2">
+        {(
+          [
+            ['why', 'Why?'],
+            ['who', 'Who?'],
+            ['whatif', 'What if?'],
+          ] as const
+        ).map(([tab, label]) => (
+          <button
+            key={tab}
+            onClick={() => onEvidence(tab)}
+            className={`rounded-xl py-3 text-[16px] font-semibold transition ${tab === 'whatif' && !decided ? 'bg-ok text-bg hover:brightness-110' : 'bg-line/80 text-fg hover:bg-line'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
     </section>
   )
 }

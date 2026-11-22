@@ -2,17 +2,20 @@ import type { L3Result } from '../../lib/types'
 import { useSvgFont } from '../../lib/useSvgFont'
 
 const W = 440
-const H = 210
-const M = { l: 32, r: 10, t: 10, b: 28 }
+const H = 236
+const M = { l: 50, r: 10, t: 10, b: 44 }
 
 export default function L3Scatter({ l3 }: { l3: L3Result }) {
   const { ref: svgRef, px } = useSvgFont<SVGSVGElement>(W)
   const x = (v: number) => M.l + v * (W - M.l - M.r)
   const y = (v: number) => H - M.b - v * (H - M.t - M.b)
   const flagged = l3.points.filter((p) => p.flagged)
+  // One ring around every flagged account (all shared-device groups), not just the densest one.
+  const fx0 = Math.min(...flagged.map((p) => p.coherence), 1)
+  const fx1 = Math.max(...flagged.map((p) => p.coherence), 0)
+  const fy0 = Math.min(...flagged.map((p) => p.payout_focus), 1)
+  const fy1 = Math.max(...flagged.map((p) => p.payout_focus), 0)
   const others = l3.points.filter((p) => !p.flagged)
-  const cx = flagged.reduce((s, p) => s + p.coherence, 0) / (flagged.length || 1)
-  const cy = flagged.reduce((s, p) => s + p.payout_focus, 0) / (flagged.length || 1)
   const s = l3.summary
   return (
     <div>
@@ -26,7 +29,7 @@ export default function L3Scatter({ l3 }: { l3: L3Result }) {
           <g key={v}>
             <line x1={x(v)} x2={x(v)} y1={M.t} y2={H - M.b} stroke="#1E2140" />
             <line x1={M.l} x2={W - M.r} y1={y(v)} y2={y(v)} stroke="#1E2140" />
-            <text x={x(v)} y={H - M.b + 13} fontSize={px(14)} fill="#9A9CC4" textAnchor="middle" className="num">
+            <text x={x(v)} y={H - M.b + 17} fontSize={px(14)} fill="#9A9CC4" textAnchor="middle" className="num">
               {v}
             </text>
             <text x={M.l - 6} y={y(v) + 3} fontSize={px(14)} fill="#9A9CC4" textAnchor="end" className="num">
@@ -37,7 +40,7 @@ export default function L3Scatter({ l3 }: { l3: L3Result }) {
         <text x={(W + M.l) / 2} y={H - 2} fontSize={px(14)} fill="#9A9CC4" textAnchor="middle">
           Interests fit what they do →
         </text>
-        <text transform={`translate(10,${(H - M.b) / 2}) rotate(-90)`} fontSize={px(14)} fill="#9A9CC4" textAnchor="middle">
+        <text transform={`translate(14,${(H - M.b) / 2}) rotate(-90)`} fontSize={px(14)} fill="#9A9CC4" textAnchor="middle">
           Payout focus →
         </text>
         {others.map((p, i) => (
@@ -48,11 +51,11 @@ export default function L3Scatter({ l3 }: { l3: L3Result }) {
         ))}
         {flagged.length > 0 && (
           <g>
-            <ellipse cx={x(cx)} cy={y(cy)} rx={46} ry={22} fill="none" stroke="#FF6FA3" strokeDasharray="4 3" />
-            <text x={x(cx) + 52} y={y(cy) - 4} fontSize={px(14)} fill="#FF8FB7" fontWeight={600}>
+            <ellipse cx={(x(fx0) + x(fx1)) / 2} cy={(y(fy0) + y(fy1)) / 2} rx={Math.max(26, (x(fx1) - x(fx0)) / 2 + 14)} ry={Math.max(16, (y(fy0) - y(fy1)) / 2 + 12)} fill="none" stroke="#FF6FA3" strokeDasharray="4 3" />
+            <text x={Math.min(W - 120, x(fx1) + 20)} y={y(fy1) - 4} fontSize={px(14)} fill="#FF8FB7" fontWeight={600}>
               Fake accounts
             </text>
-            <text x={x(cx) + 52} y={y(cy) + 9} fontSize={px(14)} fill="#9A9CC4">
+            <text x={Math.min(W - 120, x(fx1) + 20)} y={y(fy1) + 14} fontSize={px(14)} fill="#9A9CC4">
               {s.top_devices[0]}
             </text>
           </g>

@@ -22,7 +22,7 @@ const plain = (id: string) => METRIC_PLAIN[id] ?? id
 const timeOf = (label?: string) => label?.replace(/^[A-Za-z]{3}\s+/, '') ?? ''
 
 // Walk order when the backend has none: from margin backwards (breadth-first over parents), story nodes only.
-function deriveWalk(d: IncidentDetail) {
+export function deriveWalk(d: IncidentDetail) {
   const nodes = new Map(d.graph.nodes.map((n) => [n.id, n]))
   const keep = new Set([...STORY.filter((id) => nodes.has(id)), ...d.graph.nodes.filter((n) => n.state === 'root').map((n) => n.id)])
   const order: string[] = []
@@ -147,7 +147,6 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
           <div className="w-full">
             <div className="mb-2 text-[14px] text-fg-2">{r.l1?.metric ?? d.series_meta?.label}, last 24 h</div>
             <NormalZoneChart series={series} leftAt={leftAt} width={896} height={300} showStart={false} />
-            <div className="mt-2 text-[14px] text-fg-2">Grey = usual for this time of day</div>
           </div>
         )}
         {cur.key === 'l2' && <Grid detail={d} cells={r.l2?.cells} country={country} />}
@@ -223,7 +222,7 @@ function Grid({ detail: d, cells, country }: { detail: IncidentDetail; cells?: {
 }
 
 // The causal graph, walked from margin backwards: each node gets its verdict in turn; the cause pulses.
-function Walk({ d, walk, at }: { d: IncidentDetail; walk: { node: string; verdict: string }[]; at: number }) {
+export function Walk({ d, walk, at }: { d: IncidentDetail; walk: { node: string; verdict: string }[]; at: number }) {
   const ids = new Set(walk.map((w) => w.node))
   const nodes = d.graph.nodes.filter((n) => ids.has(n.id)).map((n) => ({ ...n, label: plain(n.id) }))
   const edges: GraphEdge[] = d.graph.edges.filter((e) => ids.has(e.source) && ids.has(e.target))
