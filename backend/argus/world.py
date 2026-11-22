@@ -83,7 +83,9 @@ class World:
 
     def _copy_from(self, tpl: "World") -> None:
         taste = taste_model() if _TASTE is None else _TASTE
+        frames = getattr(self, "_frames", None)
         self.__dict__.update(copy.deepcopy(tpl, {id(taste): taste}).__dict__)
+        self._frames = frames
 
     def _fresh(self, seed: int) -> None:
         self.seed = seed
@@ -100,6 +102,22 @@ class World:
         for _ in range(int(hours)):
             self.reality.step()
             self.agent.on_hour()
+            if getattr(self, "_frames", None) is not None:
+                self._frames.append(self.agent.frame())
+
+    def demo_frames(self, scene: str) -> dict:
+        """demo(scene) plus compact frames: the hour it starts from, then one per simulated hour it advanced
+        (including scenes run first to get there), oldest first, ending at the returned state."""
+        self._frames = [] if scene == "start" else [self.agent.frame()]   # where playback starts
+        try:
+            out = self.demo(scene)
+            frames = self._frames
+        finally:
+            self._frames = None
+        if not frames or frames[-1]["t"] != self.agent.t:
+            frames.append(self.agent.frame())           # e.g. "start" is a copy: one frame of where it lands
+        out["frames"] = frames
+        return out
 
     def inject(self, kind: str, country: str, platform: str | None = None, ramp_h: int | None = None) -> dict:
         iso = _country(country)

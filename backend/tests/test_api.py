@@ -253,3 +253,20 @@ def test_graph_edge_types_and_tree():
     assert rows[0]["id"] == "margin" and rows[0]["depth"] == 0 and rows[0]["relation"] is None
     assert {"formula", "mechanism"} <= {r["relation"] for r in rows}
     assert any(r["repeat"] for r in rows)                                                  # shared inputs shown once
+
+
+def test_demo_frames_time_lapse():
+    h = {"X-Session": "frames-test"}
+    assert "frames" not in client.post("/api/demo/start", headers=h).json()
+    client.post("/api/demo/promo", headers=h)
+    d = client.post("/api/demo/bot_farm?frames=1", headers=h).json()
+    fr = d["frames"]
+    assert [f["t"] for f in fr] == list(range(fr[0]["t"], fr[0]["t"] + len(fr)))     # one per hour, oldest first
+    assert fr[-1]["t"] == d["state"]["clock"]["t"] and fr[-1]["clock"] == d["state"]["clock"]
+    ca = [next(c for c in f["countries"] if c["iso"] == "CA") for f in fr]
+    assert [f["clock"]["utc_hour"] for f in fr] == [3, 4, 5, 6]
+    assert [c["status"] for c in ca] == ["ok", "ok", "watch", "incident"]
+    assert fr[-1]["incidents"][0]["country"] == "CA" and set(fr[-1]["countries"][0]) >= {"iso", "status", "attention"}
+    client.post("/api/demo/approve", headers=h)
+    v = client.post("/api/demo/verify?frames=1", headers=h).json()["frames"]
+    assert len(v) >= 20 and v[-1]["incidents"][0]["status"] in ("verified", "resolved", "fix_applied")

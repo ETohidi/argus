@@ -1616,6 +1616,24 @@ class Agent:
         usd = self.attention_usd(c, l1)
         return {"attention": round(min(usd / self.ATTENTION_CAP_USD, 1.0), 3), "attention_usd": round(usd)}
 
+    def clock(self) -> dict:
+        t = self.t
+        day, hour = divmod(t + 1, 24)                    # clock = end of the last processed hour
+        dow = DOW[day % 7]
+        return {"t": t, "label": f"Day {day + 1} · {dow} {hour:02d}:00 UTC", "utc_hour": hour,
+                "day_of_week": dow, "day": day + 1}
+
+    def frame(self) -> dict:
+        """Compact per-hour snapshot for time-lapse playback: enough to repaint the globe and the issue list."""
+        l1 = self.twin.l1_z(self.t) if self.last is not None else None
+        return {"t": self.t, "clock": self.clock(),
+                "countries": [{"iso": co.iso, "status": self.country_status(c),
+                               "health_z": round(float(self.health[c]), 2) if self.last is not None else 0.0,
+                               **self._attention_fields(c, l1)} for c, co in enumerate(cfg.COUNTRIES)],
+                "incidents": [{"id": i["id"], "country": i["country"], "status": i["status"],
+                               "status_label": STATUS_LABEL[i["status"]], "severity": i["severity"],
+                               "short_title": self.short_title(i)[0]} for i in self.incidents]}
+
     def state(self) -> dict:
         t = self.t
         l1 = self.twin.l1_z(t) if self.last is not None else None
@@ -1637,8 +1655,7 @@ class Agent:
                 **self._attention_fields(c, l1),
             })
         return {
-            "clock": {"t": t, "label": f"Day {day + 1} · {dow} {hour:02d}:00 UTC", "utc_hour": hour,
-                      "day_of_week": dow, "day": day + 1},
+            "clock": self.clock(),
             "countries": countries,
             "incidents": [self.incident_summary(i) for i in self.incidents],
             "explained": list(self.explained),

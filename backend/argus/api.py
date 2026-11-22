@@ -230,12 +230,12 @@ def get_potential(x_session: str | None = Header(default=None)) -> dict:
 
 
 @app.post("/api/demo/{scene}")
-def post_demo(scene: str, x_session: str | None = Header(default=None)) -> dict:
+def post_demo(scene: str, frames: bool = False, x_session: str | None = Header(default=None)) -> dict:
     if scene not in SCENES:
         raise HTTPException(404, f"scene must be one of {', '.join(SCENES)}")
     s = _world(x_session)
     with s.lock:
-        return s.world.demo(scene)
+        return s.world.demo_frames(scene) if frames else s.world.demo(scene)
 
 
 @app.post("/api/what_if/launch")

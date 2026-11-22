@@ -333,11 +333,28 @@ Public data behind the simulation, for a "Data" panel.
 | `POST /api/incidents/{id}/approve` | `{ "fix_id": "block_cluster" }` | Applies fix to reality; returns the incident detail |
 | `POST /api/metrics` | `{ "name": "margin_per_signup = margin / signups" }` (see below) | Automatic extension: `{ status, message, node, validation, placement?, monitoring?, note?, ambiguity? }` |
 | `POST /api/what_if/launch` | `{ "country": "AR", "users": 250000 }` (both optional; default `AR`, users assumed) | Read-only forecast for entering a new country (see below) |
-| `POST /api/demo/{scene}` | — | Deterministic (fixed seed) jump to a video scene; returns `{ scene, state, incident_id? }` |
+| `POST /api/demo/{scene}` | — (optional query `?frames=1`) | Deterministic (fixed seed) jump to a video scene; returns `{ scene, state, incident_id? }`, plus `frames` with `?frames=1` (see below) |
 
 Demo scenes, in order: `start`, `promo`, `bot_farm`, `investigate`, `approve`, `verify`, `new_metric`, `tracking_break`. Each scene advances the session world from wherever the previous scene left it (calling `start` resets).
 Story clock: `start` Mon 01:00 · promo from 01:00, explained by 03:00 · bot farm from 03:00, leaves the normal zone
 with the 04:00 data, detected at 06:00 · approve at 08:00 · verified Tue 08:00 · tracking break detected Tue 13:00.
+
+Time-lapse frames for "Play the demo" (`POST /api/demo/{scene}?frames=1`):
+- **Order:** oldest first. The first frame is the hour the scene starts from, then there is one frame per simulated
+  hour it advanced, and the last frame is the returned `state`.
+- **Earlier scenes:** if the call had to run earlier scenes first, their hours are included.
+- **`start`:** it's a copy, so it gives one frame.
+- **Without `?frames`** the response is unchanged.
+```jsonc
+"frames": [
+  { "t": 338, "clock": { ...same as state.clock },
+    "countries": [ { "iso": "CA", "status": "ok", "health_z": 1.2, "attention": 0.0, "attention_usd": 0 }, ... ],  // all 20
+    "incidents": [ { "id": "inc-1", "country": "CA", "status": "open", "status_label": "Open", "severity": "high",
+                     "short_title": "Fake accounts on Android in Canada" } ] }, ... ]
+```
+Canada in the frames:
+- **`bot_farm`:** 4 frames, Mon 03:00 → 06:00, with Canada `ok`, `ok`, `watch` (attention 0.08), `incident` (0.92).
+- **`verify`:** ~23 frames covering the day after approval.
 
 Errors: `404 {detail}` for unknown incident / country / scene, `400 {detail}` for invalid input.
 
