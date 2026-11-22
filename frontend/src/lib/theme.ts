@@ -25,8 +25,10 @@ export const PINK_SOFT = '#FF8FB7' // a lesser problem (watch): still pink, ligh
 export const NEUTRAL = AURORA.neutral
 export const MUTED = AURORA.fg2
 
+// Globe encoding, quiet → loud: the more a market needs attention, the brighter and warmer it is.
+export const FINE = '#3E8F86' // dim, low-saturation teal close to the Earth texture
 export const STATUS_COLOR: Record<CountryStatus, string> = {
-  ok: MINT,
+  ok: FINE,
   watch: PINK_SOFT,
   incident: PINK,
   explained: NEUTRAL,
@@ -56,8 +58,8 @@ export const VERDICT_COLOR: Record<Verdict, string> = {
 
 // Potential: one-hue ramp from land blue to mint (upside is "good").
 export const POTENTIAL_STOPS: [number, string][] = [
-  [0, '#23305A'],
-  [0.5, '#2A8C86'],
+  [0, '#0E3530'],
+  [0.5, '#1E8F7D'],
   [1, '#3CF2C4'],
 ]
 

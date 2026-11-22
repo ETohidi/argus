@@ -27,6 +27,7 @@ export interface CountryState {
   kpis: Kpis
   potential_usd_day: number
   potential_pct?: number // potential as % of the country's current daily margin
+  attention?: number // 0..1: money at stake × confidence (globe brightness within pink)
 }
 
 // Plain-language issue card (incident.card): short sentences, no model terms.

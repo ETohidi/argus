@@ -351,6 +351,14 @@ export default function App() {
   const growthLine = biggest
     ? `Better-matched offers: about +${usd(pots.reduce((s, c) => s + c.potential_usd_day, 0))} a day across ${pots.length} markets · biggest in ${state?.countries.find((c) => c.iso === biggest.iso)?.name ?? biggest.iso}`
     : ''
+  // Need for attention per market (0..1): the backend's score, else the open issue's money at stake (cap $250k/week).
+  const attention: Record<string, number> = Object.fromEntries(
+    (state?.countries ?? []).map((c) => {
+      if (c.attention != null) return [c.iso, c.attention]
+      const inc = state?.incidents.find((i) => i.country === c.iso && i.status !== 'resolved' && i.status !== 'verified')
+      return [c.iso, inc?.risk_7d_usd != null ? Math.min(1, inc.risk_7d_usd / 250_000) : c.status === 'watch' ? 0.4 : 0]
+    }),
+  )
   const nameOf = (iso: string) => state?.countries.find((c) => c.iso === iso)?.name ?? iso
   // Planned events: one neutral line per country, for the globe tooltip (and the status sentence).
   const notes = Object.fromEntries((state?.explained ?? []).map((e) => [e.country, explainedLine(e, nameOf(e.country))]))
@@ -376,7 +384,8 @@ export default function App() {
         lng: lf?.country.lng ?? LAUNCH.lng,
         lat: lf?.country.lat ?? LAUNCH.lat,
         // Predicted colour on the Growth scale: where its daily margin would rank among the watched countries.
-        color: potentialColor(lf ? Math.max(0.45, state.countries.filter((c) => c.kpis.margin * 24 < lf.margin_per_day_usd.p50).length / state.countries.length) : 0.5),
+        // Same scale as Growth mode: where its predicted margin a day would rank among the markets' opportunities.
+        color: potentialColor(lf ? state.countries.filter((c) => c.potential_usd_day < lf.margin_per_day_usd.p50).length / Math.max(1, state.countries.length - 1) : 0.5),
         sources: (lf?.learned_from ?? []).map((s) => state.countries.find((c) => c.iso === s.iso)).filter(Boolean).map((c) => [c!.lng, c!.lat] as [number, number]),
         revealed: launch.phase === 'shown',
       }
@@ -385,7 +394,7 @@ export default function App() {
 
   return (
     <div className="relative h-full overflow-hidden bg-bg">
-      {state && <Globe countries={state.countries} mode={mode} selectedIso={launch ? null : focusIso} launch={launchView} notes={notes} change={Object.fromEntries((state?.explained ?? []).filter((e) => e.change_pct != null).map((e) => [e.country, e.change_pct!]))} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
+      {state && <Globe countries={state.countries} mode={mode} selectedIso={launch ? null : focusIso} launch={launchView} notes={notes} attention={attention} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
 
       <TopBar clock={state ? shortClock(state.clock) : 'Connecting…'} status={launch?.phase === 'flying' ? { ...status, mood: 'investigating' } : status} mode={mode} onMode={setMode} growth={growthLine ? { text: growthLine, launchLabel: `New market: ${LAUNCH.name}`, onLaunch: whatIfLaunch } : undefined} />
 

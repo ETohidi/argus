@@ -31,7 +31,7 @@ type Props = {
   utcHour?: number // drives the day/night shading
   launch?: LaunchView | null
   notes?: Record<string, string> // per-country tooltip line, e.g. "Germany +31% · planned promo, no alarm"
-  change?: Record<string, number> // explained change in % per country (sets the grey-violet intensity)
+  attention?: Record<string, number> // 0..1 per country: money at stake × confidence
   onSelect: (iso: string | null) => void
 }
 
@@ -47,8 +47,8 @@ const STYLE: maplibregl.StyleSpecification = {
 
 function fillColors(countries: CountryState[], mode: GlobeMode): Record<string, string> {
   if (mode === 'health') return Object.fromEntries(countries.map((c) => [c.iso, STATUS_COLOR[c.status]]))
-  // Rank-based (on % uplift when available) so one large market does not wash out the rest.
-  const v = (c: CountryState) => c.potential_pct ?? c.potential_usd_day
+  // Growth: one hue, dark → bright mint by opportunity $/day (rank-based so one large market doesn't wash out the rest).
+  const v = (c: CountryState) => c.potential_usd_day
   const ranked = [...countries].sort((a, b) => v(a) - v(b))
   const n = Math.max(1, ranked.length - 1)
   return Object.fromEntries(ranked.map((c, i) => [c.iso, potentialColor(i / n)]))
@@ -62,19 +62,22 @@ function matchExpr(colors: Record<string, string>, fallback: string): any {
 
 // Health-mode fill opacity. Healthy markets: intensity by revenue share (US strongest), kept faint.
 // During an incident every other market dims and the affected one carries `pulse`.
-// Colour carries the state: mint = normal (intensity by revenue), grey-violet = explained change (intensity by the size
-// of the move, never pink), soft pink breathing = unusual / watching, strong steady pink = problem.
-function opacityExpr(countries: CountryState[], breathe: number, change: Record<string, number> = {}): unknown {
+// Risks: one ordered scale, quiet → loud, carried by brightness and motion as well as hue (colour-blind safe).
+// fine = dim teal (a little brighter for big markets), explained = soft grey-violet, still; watching = soft pink with a
+// slow breathe; problem = bright pink with a glow. Within pink, brightness follows attention (money at stake ×
+// confidence), never the raw deviation, so a planned promo can't look louder than a real problem.
+function opacityExpr(countries: CountryState[], breathe: number, attention: Record<string, number> = {}): unknown {
   const maxRev = Math.max(1, ...countries.map((c) => c.kpis.revenue))
   const anyIncident = countries.some((c) => c.status === 'incident')
   const entries = countries.map((c) => {
+    const att = Math.min(1, Math.max(0, attention[c.iso] ?? 0.5))
     let o: number
-    if (c.status === 'incident') o = 0.95
-    else if (c.status === 'watch') o = 0.5 + 0.25 * breathe
-    else if (c.status === 'explained') o = 0.38 + 0.3 * Math.min(1, Math.abs(change[c.iso] ?? 20) / 40)
-    else if (c.status === 'waiting') o = 0.55
-    else o = 0.14 + 0.46 * Math.sqrt(c.kpis.revenue / maxRev)
-    if (anyIncident && c.status !== 'incident') o *= 0.4
+    if (c.status === 'incident') o = 0.8 + 0.2 * att
+    else if (c.status === 'watch') o = 0.32 + 0.2 * att + 0.16 * breathe
+    else if (c.status === 'explained') o = 0.45
+    else if (c.status === 'waiting') o = 0.4
+    else o = 0.18 + 0.2 * Math.sqrt(c.kpis.revenue / maxRev)
+    if (anyIncident && c.status !== 'incident') o *= 0.6
     return [c.iso, Math.round(o * 100) / 100]
   })
   return ['match', ['get', 'iso'], ...entries.flat(), 0.85]
@@ -127,7 +130,7 @@ function shimmer(head: number, fade: number): any {
 
 const MARKER_STATUSES: CountryStatus[] = ['incident', 'watch']
 
-export default function Globe({ countries, mode, selectedIso, insetRight = 0, utcHour, launch = null, notes = {}, change = {}, onSelect }: Props) {
+export default function Globe({ countries, mode, selectedIso, insetRight = 0, utcHour, launch = null, notes = {}, attention = {}, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const loadedRef = useRef(false)
@@ -158,8 +161,8 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
   launchRef.current = launch
   const notesRef = useRef(notes)
   notesRef.current = notes
-  const changeRef = useRef(change)
-  changeRef.current = change
+  const attentionRef = useRef(attention)
+  attentionRef.current = attention
   countriesRef.current = countries
   modeRef.current = mode
   selectedRef.current = selectedIso
@@ -199,7 +202,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
       // Pulse the affected country (≈15 fps is plenty for a slow breathe).
       if (loadedRef.current && now - lastPulse > 66 && countriesRef.current.some((c) => c.status === 'watch') && modeRef.current === 'health' && !launchRef.current) {
         lastPulse = now
-        map.setPaintProperty('watched', 'fill-opacity', opacityExpr(countriesRef.current, 0.5 + 0.5 * Math.sin(now / 520), changeRef.current) as any)
+        map.setPaintProperty('watched', 'fill-opacity', opacityExpr(countriesRef.current, 0.5 + 0.5 * Math.sin(now / 900), attentionRef.current) as any)
       }
       if (now - lastHide > 120) {
         lastHide = now
@@ -253,6 +256,14 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
         source: 'world',
         filter: ['!=', ['get', 'iso'], ''],
         paint: { 'fill-color': BASE_LAND, 'fill-opacity': 0.82, 'fill-color-transition': { duration: 800 } as any },
+      })
+      // Problem glow: a soft pink halo along the border of a market with an open problem (Risks mode only).
+      map.addLayer({
+        id: 'problem-glow',
+        type: 'line',
+        source: 'world',
+        filter: ['==', ['get', 'iso'], '__none__'],
+        paint: { 'line-color': AURORA.problem, 'line-width': 9, 'line-blur': 7, 'line-opacity': 0.6 },
       })
       map.addLayer({
         id: 'borders',
@@ -396,7 +407,11 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
     const map = mapRef.current
     if (!map || !loadedRef.current) return
     map.setPaintProperty('watched', 'fill-color', matchExpr(fillColors(countriesRef.current, modeRef.current), BASE_LAND))
-    map.setPaintProperty('watched', 'fill-opacity', launchRef.current ? 0.15 : ((modeRef.current === 'health' ? opacityExpr(countriesRef.current, 0.5, changeRef.current) : 0.85) as any))
+    map.setPaintProperty('watched', 'fill-opacity', launchRef.current ? 0.15 : ((modeRef.current === 'health' ? opacityExpr(countriesRef.current, 0.5, attentionRef.current) : 0.85) as any))
+    const problems = modeRef.current === 'health' && !launchRef.current ? countriesRef.current.filter((c) => c.status === 'incident') : []
+    map.setFilter('problem-glow', problems.length ? ['in', ['get', 'iso'], ['literal', problems.map((c) => c.iso)]] : ['==', ['get', 'iso'], '__none__'])
+    const att = problems.length ? Math.max(...problems.map((c) => attentionRef.current[c.iso] ?? 0.5)) : 0
+    map.setPaintProperty('problem-glow', 'line-opacity', 0.35 + 0.4 * att)
     syncMarkers()
   }
 
@@ -429,7 +444,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
     }
   }
 
-  useEffect(paint, [countries, mode, JSON.stringify(change)])
+  useEffect(paint, [countries, mode, JSON.stringify(attention)])
 
   // Day/night: recompute the night overlay when the simulated hour changes.
   useEffect(() => {
@@ -499,7 +514,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
       if (!launch) {
         map.setPaintProperty('launch-fill', 'fill-opacity', 0)
         arcs.setData({ type: 'FeatureCollection', features: [] })
-        map.setPaintProperty('watched', 'fill-opacity', (modeRef.current === 'health' ? opacityExpr(countriesRef.current, 0.5, changeRef.current) : 0.85) as any)
+        map.setPaintProperty('watched', 'fill-opacity', (modeRef.current === 'health' ? opacityExpr(countriesRef.current, 0.5, attentionRef.current) : 0.85) as any)
         move({ center: [map.getCenter().lng, HOME_VIEW.center[1]], zoom: HOME_VIEW.zoom, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: 1600, easing: easeOutCubic, essential: true })
         return
       }
