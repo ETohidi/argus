@@ -7,6 +7,7 @@ type Props = {
   summary: IncidentSummary
   detail: IncidentDetail | null // arrives later (the first fetch can take a few seconds)
   countryName: string
+  checkedLine?: string // "Argus checked 1 of 240 segments and 600 of 8,816,000 users to find this."
   foundLine?: string // "Found by Argus at 06:00, nobody asked · advertisers would react in ~22 h"
   approving?: boolean
   onApprove?: (fixId: string) => void
@@ -23,7 +24,7 @@ function amountOf(s: string): string {
 }
 
 // L2 / manager: one decision, in plain words. No charts here; the evidence is one click away.
-export default function IssueCard({ summary, detail, countryName, foundLine, onEvidence, onReplay, pressing, onClose }: Props) {
+export default function IssueCard({ summary, detail, countryName, foundLine, checkedLine, onEvidence, onReplay, pressing, onClose }: Props) {
   const card = summary.card ?? detail?.card
   const status = summary.status
   const decided = status !== 'open' && status !== 'persisting'
@@ -43,6 +44,7 @@ export default function IssueCard({ summary, detail, countryName, foundLine, onE
           <h2 className="mt-2 text-[24px] font-semibold leading-tight text-fg">{summary.short_title ?? detail?.short_title ?? shortTitle(card?.title ?? summary.title)}</h2>
           {(summary.title_detail ?? detail?.title_detail) && <p className="mt-1.5 text-[14px] leading-snug text-fg-2">{summary.title_detail ?? detail?.title_detail}</p>}
           {foundLine && <p className="mt-1 text-[14px] leading-snug text-fg-2">{foundLine}</p>}
+          {checkedLine && <p className="mt-1 text-[14px] leading-snug text-fg-2">{checkedLine}</p>}
           {onReplay && detail && (
             <button onClick={onReplay} className="mt-2.5 inline-flex items-center gap-2 rounded-full bg-accent/15 px-3 py-1 text-[14px] text-accent ring-1 ring-accent/30 hover:bg-accent/25">
               How did Argus find this? <span aria-hidden>▶</span>

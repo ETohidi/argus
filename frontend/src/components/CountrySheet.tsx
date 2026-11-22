@@ -81,32 +81,7 @@ function RiskView({ country, detail, incident, explainedAt, segments, onSegments
         </figure>
       )}
 
-      {sum && sum.moving.length > 0 && (
-        <div className="mt-4">
-          <h3 className="text-[14px] text-fg-2">What's moving</h3>
-          <ul className="mt-1.5 space-y-1 text-[16px] text-fg">
-            {sum.moving.slice(0, 2).map((m) => (
-              <li key={m.line} className="flex gap-2">
-                <span className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: color }} />
-                {m.line}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="mt-5 flex items-center justify-between text-[16px]">
-        <button onClick={() => onSegments(!segments)} className="text-fg hover:text-ok" aria-expanded={segments}>
-          {segments ? 'Hide segments' : 'Segments ›'}
-        </button>
-        {incident && (
-          <button onClick={() => onWhy(incident.id)} className="font-semibold text-[#FF8FB7] hover:text-fg">
-            Why? ›
-          </button>
-        )}
-      </div>
-
-      {segments && detail && <SegmentGrid detail={detail} incident={incident} onUsers={onUsers} />}
+      {detail && <SegmentGrid detail={detail} incident={incident} onUsers={onUsers} onWhy={onWhy} all={segments} onAll={onSegments} />}
     </section>
   )
 }
@@ -125,38 +100,75 @@ function Header({ name, color, onClose }: { name: string; color: string; onClose
   )
 }
 
-// Segment grid: one row per offer type (full names), one column per platform; colour only, plain words on hover.
-// Sign-ups are counted per platform, so they get one row of their own instead of repeating across offer types.
-function SegmentGrid({ detail, incident, onUsers }: { detail: CountryDetail; incident: IncidentSummary | undefined; onUsers: (id: string) => void }) {
+// Segments: a ranked list of only the unusual segments, in words; each row opens the view that explains it.
+// "Show all" reveals the full grid with every value written in the cell (pink intensity by how far off it is).
+function SegmentGrid({ detail, incident, onUsers, onWhy, all, onAll }: { detail: CountryDetail; incident: IncidentSummary | undefined; onUsers: (id: string) => void; onWhy: (id: string) => void; all: boolean; onAll: (open: boolean) => void }) {
+  const sum = detail.summary
+  const fraud = !!incident && /fake/i.test(`${incident.title} ${incident.short_title ?? ''}`)
+  const rows =
+    sum?.unusual ??
+    (sum?.moving ?? []).map((m) => ({ line: m.line, view: (fraud ? 'who' : 'why') as 'who' | 'why' }))
+  const total = sum?.segments_total ?? detail.segments.length
+  const open = (view: 'who' | 'why') => incident && (view === 'who' ? onUsers(incident.id) : onWhy(incident.id))
+  return (
+    <div className="fade-in mt-5">
+      <h3 className="mb-2 text-[14px] text-fg-2">Unusual segments</h3>
+      {rows.length ? (
+        <ul className="space-y-1.5">
+          {rows.map((r) => (
+            <li key={r.line}>
+              <button
+                onClick={() => open(r.view)}
+                disabled={!incident}
+                className="flex w-full items-center justify-between gap-3 rounded-xl bg-problem/10 px-3 py-2 text-left text-[16px] text-fg ring-1 ring-problem/30 hover:bg-problem/20 disabled:cursor-default"
+              >
+                <span>{r.line}</span>
+                {incident && <span className="shrink-0 text-[#FF8FB7]">{r.view === 'who' ? 'Who? ›' : 'Why? ›'}</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-[16px] text-ok">All {total} segments as expected</p>
+      )}
+      <button onClick={() => onAll(!all)} className="mt-3 text-[16px] text-fg-2 hover:text-fg" aria-expanded={all}>
+        {all ? 'Hide the full grid' : 'Show all'}
+      </button>
+      {all && <FullGrid detail={detail} />}
+    </div>
+  )
+}
+
+// Full grid: every cell shows its value as text ("1.6×", "0.9×"), tinted pink by how unusual it is.
+// Sign-ups are counted per platform, so they get one row of their own.
+function FullGrid({ detail }: { detail: CountryDetail }) {
   const [kpi, setKpi] = useState('worst')
   const platforms = [...new Set(detail.segments.map((s) => s.platform))]
   const categories = [...new Set(detail.segments.map((s) => s.category))]
-  const zOf = (s: CountryDetail['segments'][number]) =>
-    kpi !== 'worst'
-      ? (s.kpi_z[kpi] ?? 0)
-      : Object.entries(s.kpi_z)
-          .filter(([k]) => k !== 'new_accounts')
-          .reduce((m, [, v]) => (Math.abs(v) > Math.abs(m) ? v : m), 0)
-  const signupZ = (pl: string) => detail.segments.find((s) => s.platform === pl)?.kpi_z.new_accounts ?? 0
-  const titleOf = (i: IncidentSummary) => `${i.title} ${i.short_title ?? ''}`.toLowerCase()
-  const usersFor = (pl: string) => (incident && titleOf(incident).includes(pl.toLowerCase()) ? incident : undefined)
-  const hotCell = (z: number, pl: string) => (Math.abs(z) >= 4 ? usersFor(pl) : undefined)
-  const cell = (z: number, label: string, pl: string) => {
-    const hot = hotCell(z, pl)
-    return (
-      <button
-        key={pl}
-        onClick={() => hot && onUsers(hot.id)}
-        className={`h-8 rounded-lg transition-colors duration-700 ${hot ? 'cursor-pointer ring-1 ring-[#FF8FB7]/70 hover:ring-2' : 'cursor-default'}`}
-        style={cellStyle(z)}
-        title={`${label} on ${PLATFORM_LABEL[pl] ?? pl}: ${zWords(z)}${hot ? ' · click: Users ›' : ''}`}
-        aria-label={`${label} on ${PLATFORM_LABEL[pl] ?? pl}: ${zWords(z)}`}
-      />
-    )
+  const pick = (s: CountryDetail['segments'][number]) => {
+    if (kpi !== 'worst') return { z: s.kpi_z[kpi] ?? 0, r: s.kpi_ratio?.[kpi] }
+    const [k, z] = Object.entries(s.kpi_z)
+      .filter(([key]) => key !== 'new_accounts')
+      .reduce((m, e) => (Math.abs(e[1]) > Math.abs(m[1]) ? e : m), ['', 0] as [string, number])
+    return { z, r: s.kpi_ratio?.[k] }
   }
-  const anyHot = platforms.some((pl) => hotCell(signupZ(pl), pl) || detail.segments.some((s) => s.platform === pl && hotCell(zOf(s), pl)))
+  const signup = (pl: string) => {
+    const s = detail.segments.find((x) => x.platform === pl)
+    return { z: s?.kpi_z.new_accounts ?? 0, r: s?.kpi_ratio?.new_accounts }
+  }
+  const text = (v: { z: number; r?: number }) => (v.r != null ? `${v.r >= 10 ? Math.round(v.r) : v.r.toFixed(1)}×` : Math.abs(v.z) < 2 ? 'usual' : v.z > 0 ? 'higher' : 'lower')
+  const cell = (v: { z: number; r?: number }, label: string, pl: string) => (
+    <div
+      key={pl}
+      className="flex h-8 items-center justify-center rounded-lg text-[14px] tabular-nums transition-colors duration-700"
+      style={{ ...cellStyle(v.z), color: Math.abs(v.z) >= 4 ? '#FFF0F6' : '#F1F0FF' }}
+      title={`${label} on ${PLATFORM_LABEL[pl] ?? pl}: ${zWords(v.z)}`}
+    >
+      {text(v)}
+    </div>
+  )
   return (
-    <div className="fade-in mt-4">
+    <div className="fade-in mt-3">
       <div className="flex flex-wrap gap-x-3 gap-y-1">
         {KPI_OPTIONS.map((o) => (
           <button key={o.id} onClick={() => setKpi(o.id)} className={`text-[14px] ${kpi === o.id ? 'font-semibold text-fg' : 'text-fg-2 hover:text-fg'}`}>
@@ -165,30 +177,25 @@ function SegmentGrid({ detail, incident, onUsers }: { detail: CountryDetail; inc
         ))}
       </div>
       <div className="mt-3 grid items-center gap-x-2 gap-y-1.5" style={{ gridTemplateColumns: `1fr repeat(${platforms.length}, 72px)` }}>
-        <div />
+        <div className="text-[14px] text-fg-2">Offer type</div>
         {platforms.map((pl) => (
           <div key={pl} className="text-center text-[14px] text-fg-2">
             {PLATFORM_LABEL[pl] ?? pl}
           </div>
         ))}
-        <div className="text-[14px] font-semibold leading-tight text-fg">New sign-ups</div>
-        {platforms.map((pl) => cell(signupZ(pl), 'New sign-ups', pl))}
+        <div className="text-[14px] font-semibold leading-tight text-fg">New sign-ups (all offers)</div>
+        {platforms.map((pl) => cell(signup(pl), 'New sign-ups', pl))}
         {categories.map((c) => (
           <div key={c} className="contents">
-            <div className="text-[14px] leading-tight text-fg-2">{c}</div>
+            <div className="text-[14px] leading-tight text-fg">{c}</div>
             {platforms.map((pl) => {
               const s = detail.segments.find((x) => x.platform === pl && x.category === c)
-              return s ? cell(zOf(s), c, pl) : <div key={pl} />
+              return s ? cell(pick(s), c, pl) : <div key={pl} />
             })}
           </div>
         ))}
       </div>
-      <p className="mt-2 text-[14px] text-fg-2">Pink = clearly off usual; hover for words.</p>
-      {anyHot && incident && (
-        <button onClick={() => onUsers(incident.id)} className="mt-2 text-[16px] font-semibold text-[#FF8FB7] hover:text-fg">
-          Users ›
-        </button>
-      )}
+      <p className="mt-2 text-[14px] text-fg-2">× usual: 1.0× is normal. Pink = clearly off.</p>
     </div>
   )
 }

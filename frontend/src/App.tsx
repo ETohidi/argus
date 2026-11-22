@@ -7,7 +7,6 @@ import MetricGraphPanel from './components/MetricGraphPanel'
 import ScenarioMenu, { SCENE_LABEL, STORY } from './components/ScenarioMenu'
 import TimelineStrip from './components/TimelineStrip'
 import TopBar from './components/TopBar'
-import LevelRail, { type Level } from './components/LevelRail'
 import WhatIfCard from './components/WhatIfCard'
 import ReplayView from './components/ReplayView'
 import { growthLevel, potentialColor, usd } from './lib/theme'
@@ -38,6 +37,8 @@ const SUBTITLES = [
   'A new number: Argus places it, checks it on the data, and watches it.',
   'Before you spend: what if we launch in Argentina?',
 ]
+
+type Level = 'earth' | 'country' | 'segment' | 'users'
 
 // The one market the what-if can launch (POST /api/what_if/launch); its place on the globe before the forecast arrives.
 const LAUNCH = { iso: 'AR', name: 'Argentina', lng: -63.6, lat: -38.4 }
@@ -85,7 +86,6 @@ export default function App() {
   const [storyAt, setStoryAt] = useState(-1)
   const [subtitleAt, setSubtitleAt] = useState<number | null>(null)
   const [subtitleShown, setSubtitleShown] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
   const [storyRunning, setStoryRunning] = useState(false)
   const storyBusy = useRef(false)
   const [pressing, setPressing] = useState(false)
@@ -96,8 +96,6 @@ export default function App() {
   const [segmentsOpen, setSegmentsOpen] = useState(false)
   // Camera-only focus (no country sheet): the demo's planned-promo step looks at Germany.
   const [lookIso, setLookIso] = useState<string | null>(null)
-  // Fading breadcrumb whenever the camera flies into a country; for an issue it waits (≤ 6.5 s) for the account check.
-  const [crumb, setCrumb] = useState<{ iso: string; key: number; out: boolean } | null>(null)
 
   const busyRef = useRef(false)
   const backendRef = useRef<Backend>('unknown')
@@ -373,25 +371,6 @@ export default function App() {
     setLaunch(null)
   }
 
-  const flyIso = launch ? null : (countryIso ?? state?.incidents.find((i) => i.id === cardId)?.country ?? null)
-  const flyCard = !countryIso ? state?.incidents.find((i) => i.id === cardId) : undefined
-  const crumbReady = !flyCard || detail?.id === flyCard.id // the issue's detail (with its account check) has arrived
-  useEffect(() => {
-    if (!flyIso) return setCrumb(null)
-    setCrumb({ iso: flyIso, key: Date.now(), out: false })
-  }, [flyIso])
-  useEffect(() => {
-    if (!crumb || crumb.out) return
-    const fade = () => setCrumb((c) => (c && c.key === crumb.key ? { ...c, out: true } : c))
-    const t = window.setTimeout(fade, crumbReady ? 1800 : 6500)
-    return () => window.clearTimeout(t)
-  }, [crumb?.key, crumb?.out, crumbReady])
-  useEffect(() => {
-    if (!crumb?.out) return
-    const t = window.setTimeout(() => setCrumb((c) => (c?.key === crumb.key ? null : c)), 600)
-    return () => window.clearTimeout(t)
-  }, [crumb?.out, crumb?.key])
-
   useEffect(() => {
     if (!cardId || detail?.id !== cardId || evidence || launch) return
     let seen = false
@@ -557,18 +536,19 @@ export default function App() {
   const growthNotes = Object.fromEntries(pots.map((p) => [p.iso, growthLine(p, nameOf(p.iso))]))
   // Planned events: one neutral line per country, for the globe tooltip (and the status sentence).
   const notes = Object.fromEntries((state?.explained ?? []).map((e) => [e.country, explainedLine(e, nameOf(e.country))]))
-  // Breadcrumb while the camera flies in: Earth → Canada → Android → 600 users checked.
-  const crumbDetail = crumb && card?.country === crumb.iso && detail?.id === card.id ? detail : null
-  const crumbIssue = crumb && card?.country === crumb.iso ? card : undefined
-  const crumbPlatform = crumbDetail?.platform ?? crumbIssue?.title.match(/\b(iOS|Android)\b/i)?.[1]
-  const crumbParts = crumb
-    ? [
-        'Earth',
-        nameOf(crumb.iso),
-        ...(crumbPlatform ? [PLATFORM_LABEL[crumbPlatform] ?? crumbPlatform] : []),
-        ...(crumbDetail?.l3?.summary.n_users ? [`${crumbDetail.l3.summary.n_users.toLocaleString('en-US')} users checked`] : []),
-      ]
-    : []
+  // The path at the top-left (persistent breadcrumb), shown below Earth level; each part zooms back to its level.
+  const pathIso = countryIso ?? card?.country ?? null
+  const pathDetail = card && detail?.id === card.id ? detail : null
+  const pathPlatform = pathDetail?.platform ?? card?.title.match(/\b(iOS|Android)\b/i)?.[1]
+  const pathParts: { label: string; to: Level }[] =
+    level === 'earth' || !pathIso
+      ? []
+      : [
+          { label: 'Earth', to: 'earth' },
+          { label: nameOf(pathIso), to: 'country' },
+          ...((level === 'segment' || level === 'users') && pathPlatform ? [{ label: PLATFORM_LABEL[pathPlatform] ?? pathPlatform, to: 'segment' as Level }] : []),
+          ...(level === 'users' && pathDetail?.l3?.summary.n_users ? [{ label: `${pathDetail.l3.summary.n_users.toLocaleString('en-US')} users`, to: 'users' as Level }] : []),
+        ]
   const sideOpen = !!(country || card || launch?.phase === 'shown')
   const status = state ? statusSentence(state) : { text: 'Connecting…', tone: 'neutral' as const, mood: 'calm' as const }
   const lf = launch?.forecast
@@ -632,6 +612,12 @@ export default function App() {
             onEvidence={(tab) => setEvidence({ tab })}
             onReplay={() => setReplayId(card.id)}
             pressing={pressing}
+            checkedLine={(() => {
+              const a = state?.attention
+              if (a?.segments_total == null) return undefined
+              const n = (x: number | undefined) => (x ?? 0).toLocaleString('en-US')
+              return `Argus checked ${n(a.segments_opened)} of ${n(a.segments_total)} segments${a.users_total != null ? ` and ${n(a.users_checked)} of ${n(a.users_total)} users` : ''} to find this.`
+            })()}
             onClose={closeCard}
           />
         ) : null}
@@ -649,7 +635,6 @@ export default function App() {
         </div>
       )}
 
-      {!menuOpen && <LevelRail level={level} counts={state?.attention} onLevel={zoomOut} />}
 
       {subtitleAt != null && storyAt >= 0 && subtitleShown && !sideOpen && !evidence && !graphView && !replayId && (
         <div className="pointer-events-none absolute inset-x-0 bottom-[68px] z-[44] flex justify-center px-8">
@@ -674,20 +659,28 @@ export default function App() {
         launchName={LAUNCH.name}
         onLaunch={whatIfLaunch}
         storyAt={storyAt}
-        onOpenChange={setMenuOpen}
         onStory={runStory}
       />
 
 
-      {crumb && (
-        <div key={crumb.key} className={`crumb frost pointer-events-none absolute left-8 top-[84px] z-20 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[14px] text-fg-2${crumb.out ? ' crumb--out' : ''}`} aria-hidden>
-          {crumbParts.map((p, i) => (
-            <span key={p} className="crumb-part" style={{ animationDelay: `${i * 220}ms` }}>
-              {i > 0 && <span className="mr-1.5 text-fg-2">→</span>}
-              <span className={i === crumbParts.length - 1 ? 'text-fg' : ''}>{p}</span>
-            </span>
-          ))}
-        </div>
+      {pathParts.length > 0 && (
+        <nav aria-label="Where you are" className={`frost pointer-events-auto absolute left-8 z-[45] flex ${mode === 'potential' ? 'top-[140px]' : 'top-[92px]'} items-center gap-1.5 rounded-full px-4 py-1.5 text-[16px]`}>
+          {pathParts.map((p, i) => {
+            const last = i === pathParts.length - 1
+            return (
+              <span key={`${p.to}-${p.label}`} className="crumb-part flex items-center gap-1.5" style={{ animationDelay: `${i * 120}ms` }}>
+                {i > 0 && <span className="text-fg-2">›</span>}
+                {last ? (
+                  <span className="font-semibold text-fg" aria-current="location">{p.label}</span>
+                ) : (
+                  <button onClick={() => zoomOut(p.to)} className="text-fg-2 hover:text-fg">
+                    {p.label}
+                  </button>
+                )}
+              </span>
+            )
+          })}
+        </nav>
       )}
 
       {toast && (

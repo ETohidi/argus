@@ -174,6 +174,7 @@ export interface CountryDetail {
     platform: string
     category: string
     kpi_z: Record<string, number>
+    kpi_ratio?: Record<string, number> // observed / usual
     deviation_usd_h: number
   }[]
   // Simplified country view (docs/API.md "summary").
@@ -183,6 +184,8 @@ export interface CountryDetail {
     numbers: { label: string; value: number; usual: number; unit: string; line: string }[]
     series: { metric: string; unit: string; points: { t: number; label: string; value: number; usual: number; lo: number; hi: number }[]; events?: { t: number; label: string }[] }
     moving: { line: string; platform: string; category: string | null; kpi: string; ratio: number }[]
+    unusual?: { line: string; platform: string; categories: string[] | null; kpi: string; ratio: number; z: number; view: 'who' | 'why' }[] // all unusual segments, ranked
+    segments_total?: number
   }
 }
 
