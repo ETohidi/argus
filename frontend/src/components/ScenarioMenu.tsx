@@ -43,12 +43,25 @@ type Props = {
   onAddMetric: () => void
   launchName: string
   onLaunch: () => void
+  storyAt: number // story step last run (0–5), -1 before the first
+  onStory: (i: number) => void
 }
+
+// The demo as six story steps, one short line each.
+const STORY = [
+  'A calm night',
+  'A planned promo: no alarm',
+  'Fake accounts in Canada',
+  'Approve the fix, check next day',
+  'Add a new metric',
+  'Launch in Argentina?',
+]
 
 // Every operator control lives behind one quiet button, so the recorded screen stays clean.
 // Shortcuts work with the menu closed: 1–8 run the demo scenes, Space plays / pauses.
 export default function ScenarioMenu(p: Props) {
   const [open, setOpen] = useState(false)
+  const [more, setMore] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const close = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false)
@@ -65,72 +78,107 @@ export default function ScenarioMenu(p: Props) {
     setOpen(false)
   }
   const a = p.state?.attention
+  const next = p.storyAt + 1 < STORY.length ? p.storyAt + 1 : 0
   return (
     <div ref={ref} className="absolute bottom-6 left-8 z-30">
       {open && (
-        <div className="fade-up absolute bottom-12 left-0 max-h-[calc(100vh-9rem)] w-[340px] overflow-y-auto rounded-2xl bg-panel/95 p-5 text-[13px] text-fg shadow-2xl ring-1 ring-line/50">
-          <Group title="Time">
-            <div className="flex gap-2">
-              <Btn onClick={p.onPlay} hint="Space">{p.playing ? 'Pause' : 'Play'}</Btn>
-              <Btn onClick={() => p.onStep(1)} disabled={p.busy}>+1 h</Btn>
-              <Btn onClick={() => p.onStep(6)} disabled={p.busy}>+6 h</Btn>
-            </div>
-          </Group>
-          <Group title="Demo scenes">
-            <ol className="-mx-2">
-              {DEMO_SCENES.map((s, i) => (
-                <li key={s}>
+        <div className="fade-up absolute bottom-12 left-0 max-h-[calc(100vh-9rem)] w-[320px] overflow-y-auto rounded-2xl bg-panel/95 p-5 text-[13px] text-fg shadow-2xl ring-1 ring-line/50">
+          <div className="mb-3 text-fg-2">Play the demo</div>
+          <ol className="-mx-2">
+            {STORY.map((line, i) => {
+              const current = i === p.storyAt
+              return (
+                <li key={line}>
                   <button
-                    onClick={act(() => p.onDemo(s))}
+                    onClick={() => p.onStory(i)}
                     disabled={p.busy}
-                    className={`flex w-full items-center gap-3 rounded-lg px-2 py-1 text-left hover:bg-line/70 disabled:opacity-40 ${p.lastScene === s ? 'text-ok' : ''}`}
+                    className={`flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left disabled:opacity-40 ${current ? 'bg-line/70 text-fg' : i < p.storyAt ? 'text-fg-2 hover:bg-line/50' : 'text-fg hover:bg-line/50'}`}
+                    aria-current={current ? 'step' : undefined}
                   >
-                    <kbd className="num w-4 text-center text-fg-2">{i + 1}</kbd>
-                    {SCENE_LABEL[s]}
+                    <span className={`num flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[12px] ${current ? 'bg-ok text-bg' : 'text-fg-2 ring-1 ring-line'}`}>{i + 1}</span>
+                    {line}
                   </button>
                 </li>
-              ))}
-            </ol>
-          </Group>
-          <Group title={`Inject into ${p.injectTarget}`}>
-            <div className="flex flex-wrap gap-2">
-              {INJECTS.map((x) => (
-                <Btn key={x.type} onClick={act(() => p.onInject(x.type))} disabled={p.busy}>
-                  {x.label}
-                </Btn>
-              ))}
-            </div>
-          </Group>
-          <Group title="Metrics">
-            <Btn onClick={act(p.onAddMetric)}>How the numbers connect…</Btn>
-          </Group>
-          <Group title="New market" last>
-            <Btn onClick={act(p.onLaunch)} disabled={p.busy}>What if we launch in {p.launchName}?</Btn>
-          </Group>
-          <div className="mt-4 border-t border-line pt-3 text-fg-2">
-            {p.backend === 'live' ? 'Live simulation' : p.backend === 'mock' ? 'Sample data (simulation unreachable)' : 'Connecting…'}
-            {a && (
-              <div className="mt-1">
-                Watching {a.watched_series} numbers · {a.investigations} investigation{a.investigations === 1 ? '' : 's'} · {a.l3_runs} account-level check{a.l3_runs === 1 ? '' : 's'}
+              )
+            })}
+          </ol>
+          <button
+            onClick={() => p.onStory(next)}
+            disabled={p.busy}
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-ok py-3 text-[16px] font-semibold text-bg hover:brightness-110 disabled:opacity-50"
+          >
+            {p.busy ? 'Running…' : next === 0 && p.storyAt >= 0 ? 'Start over' : p.storyAt < 0 ? 'Start ▶' : 'Next ▶'}
+          </button>
+
+          <button onClick={() => setMore((m) => !m)} className="mt-4 text-fg-2 hover:text-fg" aria-expanded={more}>
+            More {more ? '▾' : '▸'}
+          </button>
+          {more && (
+            <div className="fade-in mt-3 border-t border-line pt-3">
+              <Group title="Time">
+                <div className="flex gap-2">
+                  <Btn onClick={p.onPlay} hint="Space">{p.playing ? 'Pause' : 'Play'}</Btn>
+                  <Btn onClick={() => p.onStep(1)} disabled={p.busy}>+1 h</Btn>
+                  <Btn onClick={() => p.onStep(6)} disabled={p.busy}>+6 h</Btn>
+                </div>
+              </Group>
+              <Group title="All scenes (keys 1–8)">
+                <ol className="-mx-2">
+                  {DEMO_SCENES.map((sc, i) => (
+                    <li key={sc}>
+                      <button
+                        onClick={act(() => p.onDemo(sc))}
+                        disabled={p.busy}
+                        className={`flex w-full items-center gap-3 rounded-lg px-2 py-1 text-left hover:bg-line/70 disabled:opacity-40 ${p.lastScene === sc ? 'text-ok' : ''}`}
+                      >
+                        <kbd className="num w-4 text-center text-fg-2">{i + 1}</kbd>
+                        {SCENE_LABEL[sc]}
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              </Group>
+              <Group title={`Inject into ${p.injectTarget}`}>
+                <div className="flex flex-wrap gap-2">
+                  {INJECTS.map((x) => (
+                    <Btn key={x.type} onClick={act(() => p.onInject(x.type))} disabled={p.busy}>
+                      {x.label}
+                    </Btn>
+                  ))}
+                </div>
+              </Group>
+              <Group title="Metrics">
+                <Btn onClick={act(p.onAddMetric)}>How the numbers connect…</Btn>
+              </Group>
+              <Group title="New market" last>
+                <Btn onClick={act(p.onLaunch)} disabled={p.busy}>What if we launch in {p.launchName}?</Btn>
+              </Group>
+              <div className="mt-4 border-t border-line pt-3 text-fg-2">
+                {p.backend === 'live' ? 'Live simulation' : p.backend === 'mock' ? 'Sample data (simulation unreachable)' : 'Connecting…'}
+                {a && (
+                  <div className="mt-1">
+                    Watching {a.watched_series} numbers · {a.investigations} investigation{a.investigations === 1 ? '' : 's'} · {a.l3_runs} account-level check{a.l3_runs === 1 ? '' : 's'}
+                  </div>
+                )}
+                <div className="mt-3 flex items-center gap-3 text-[12px]">
+                  {LEGEND.map(([label, color]) => (
+                    <span key={label} className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+                      {label}
+                    </span>
+                  ))}
+                </div>
+                <div className="mt-2 text-[12px] text-fg-2/70">Earth imagery: NASA Visible Earth</div>
               </div>
-            )}
-            <div className="mt-3 flex items-center gap-3 text-[12px]">
-              {LEGEND.map(([label, color]) => (
-                <span key={label} className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full" style={{ background: color }} />
-                  {label}
-                </span>
-              ))}
             </div>
-            <div className="mt-2 text-[12px] text-fg-2/70">Earth imagery: NASA Visible Earth</div>
-          </div>
+          )}
         </div>
       )}
       <button
         onClick={() => setOpen((o) => !o)}
         className={`rounded-full px-4 py-2 text-[13px] ring-1 transition ${open ? 'text-fg ring-fg-2' : 'text-fg-2 ring-line hover:text-fg'}`}
       >
-        Try a scenario
+        Play the demo
       </button>
     </div>
   )

@@ -7,7 +7,7 @@ type Props = {
   status: StatusSentence
   mode: GlobeMode
   onMode: (m: GlobeMode) => void
-  growth?: { text: string; launchLabel: string; onLaunch: () => void } // Growth mode: one summary line and the new-market link
+  growth?: { value: string; caption: string; tooltip: string; launchLabel: string; onLaunch: () => void } // Growth mode: big number, short caption, new-market link
 }
 
 // Home bar (L1): logo, clock, one status sentence and the mode toggle. Nothing else.
@@ -26,10 +26,18 @@ export default function TopBar({ clock, status, mode, onMode, growth }: Props) {
       {/* Calm needs no words: the blinking eye says it. The sentence appears only when something is happening. */}
       {mode === 'potential' && growth ? (
         <div key="growth" className="fade-in pointer-events-auto relative">
-          <div className="text-[16px] text-fg">{growth.text}</div>
-          <button onClick={growth.onLaunch} className="absolute left-0 top-full mt-1 whitespace-nowrap text-[13px] text-fg-2 hover:text-fg">
-            {growth.launchLabel} →
-          </button>
+          <div className="flex cursor-default items-baseline gap-2" title={growth.tooltip}>
+            <span className="num text-[24px] font-semibold leading-none text-ok">{growth.value}</span>
+            <span className="text-[16px] text-fg">a day untapped</span>
+          </div>
+          <div className="absolute left-0 top-full mt-1.5 flex items-center gap-4 whitespace-nowrap text-[13px]">
+            <span className="cursor-default text-fg-2" title={growth.tooltip}>
+              {growth.caption}
+            </span>
+            <button onClick={growth.onLaunch} className="-my-1 rounded-full px-2.5 py-1 text-accent ring-1 ring-accent/40 hover:bg-accent/15">
+              {growth.launchLabel} →
+            </button>
+          </div>
         </div>
       ) : (
         status.tone !== 'ok' && (

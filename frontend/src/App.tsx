@@ -21,6 +21,10 @@ import type { LaunchForecast, CountryDetail, DemoScene, IncidentDetail, InjectTy
 // The one market the what-if can launch (POST /api/what_if/launch); its place on the globe before the forecast arrives.
 const LAUNCH = { iso: 'AR', name: 'Argentina', lng: -63.6, lat: -38.4 }
 
+// Story step of each demo scene ("Play the demo"): 0 calm night · 1 promo · 2 fake accounts · 3 approve + next day ·
+// 4 new metric · 5 Argentina launch (not a scene).
+const SCENE_STORY: Partial<Record<DemoScene, number>> = { start: 0, promo: 1, bot_farm: 2, investigate: 2, approve: 3, verify: 3, new_metric: 4 }
+
 const INJECT_DEFAULT: Record<InjectType, { country: string; platform?: string }> = {
   promo: { country: 'DE' },
   bot_farm: { country: 'CA', platform: 'android' },
@@ -54,6 +58,8 @@ export default function App() {
   // What-if launch: 'flying' (dark country, eye investigating) → 'shown' (colour, arcs, card). Read-only.
   const [launch, setLaunch] = useState<{ phase: 'flying' | 'shown'; forecast: LaunchForecast | null } | null>(null)
   const launchRun = useRef(0)
+  // "Play the demo": the story step last run (0–5), or -1 before the first.
+  const [storyAt, setStoryAt] = useState(-1)
   // "Watch Argus think" replay; plays by itself the first time an issue opens in this browser session.
   const [replayId, setReplayId] = useState<string | null>(null)
   // Fading breadcrumb whenever the camera flies into a country; for an issue it waits (≤ 6.5 s) for the account check.
@@ -209,6 +215,8 @@ export default function App() {
       setLaunch(null)
       if (scene === 'start') expectReset.current = true
       const r = await api.demo(scene)
+      const storyIndex = SCENE_STORY[scene]
+      if (storyIndex != null) setStoryAt(storyIndex)
       applyState(r.state)
       setLastScene(scene)
       setEvidence(null)
@@ -281,6 +289,7 @@ export default function App() {
   // Keyboard: 1–8 demo scenes, Space play / pause, E evidence, Esc closes the top layer.
   async function whatIfLaunch() {
     const run = ++launchRun.current
+    setStoryAt(5)
     setCountryIso(null)
     setCardId(null)
     setEvidence(null)
@@ -332,6 +341,18 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardId, detail?.id])
 
+  async function runStory(i: number) {
+    if (i === 0) await demo('start')
+    else if (i === 1) await demo('promo')
+    else if (i === 2) await demo('bot_farm')
+    else if (i === 3) {
+      await demo('approve')
+      await new Promise((r) => window.setTimeout(r, 2500))
+      await demo('verify')
+    } else if (i === 4) await demo('new_metric')
+    else if (i === 5) await whatIfLaunch()
+  }
+
   const keys = useRef({ demo, closeTop: () => {}, openEvidence: () => {} })
   keys.current = {
     demo,
@@ -364,10 +385,15 @@ export default function App() {
   // Growth mode: one line from GET /api/potential.
   const pots = potential?.countries ?? []
   const biggest = pots.length ? pots.reduce((a, b) => (b.potential_usd_day > a.potential_usd_day ? b : a)) : null
+  const growthTotal = pots.reduce((s, c) => s + c.potential_usd_day, 0)
+  const biggestName = biggest ? (state?.countries.find((c) => c.iso === biggest.iso)?.name ?? biggest.iso) : ''
   const growthSummary = biggest
-    ? (potential?.summary_line ??
-      `Showing each country more of what its users like: about +${usd(pots.reduce((s, c) => s + c.potential_usd_day, 0))} a day in total · biggest in ${state?.countries.find((c) => c.iso === biggest.iso)?.name ?? biggest.iso}`)
-    : ''
+    ? {
+        value: `+$${(growthTotal / 1000).toFixed(1)}k`,
+        caption: `if users saw more offers they like · biggest: ${biggestName}`,
+        tooltip: potential?.summary_line ?? `Showing each country more of what its users like: about +${usd(growthTotal)} a day in total · biggest in ${biggestName}`,
+      }
+    : null
   // Need for attention per market (0..1): the backend's score, else the open issue's money at stake (cap $250k/week).
   const attention: Record<string, number> = Object.fromEntries(
     (state?.countries ?? []).map((c) => {
@@ -414,7 +440,7 @@ export default function App() {
     <div className="relative h-full overflow-hidden bg-bg">
       {state && <Globe countries={state.countries} mode={mode} selectedIso={launch ? null : focusIso} launch={launchView} notes={notes} growthNotes={growthNotes} attention={attention} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
 
-      <TopBar clock={state ? shortClock(state.clock) : 'Connecting…'} status={launch?.phase === 'flying' ? { ...status, mood: 'investigating' } : status} mode={mode} onMode={setMode} growth={growthSummary ? { text: growthSummary, launchLabel: `New market: ${LAUNCH.name}`, onLaunch: whatIfLaunch } : undefined} />
+      <TopBar clock={state ? shortClock(state.clock) : 'Connecting…'} status={launch?.phase === 'flying' ? { ...status, mood: 'investigating' } : status} mode={mode} onMode={setMode} growth={growthSummary ? { ...growthSummary, launchLabel: `New market: ${LAUNCH.name}`, onLaunch: whatIfLaunch } : undefined} />
 
       {/* Right column: an explained change as a quiet note, then the issue card or the country sheet. */}
       <div className="pointer-events-none absolute bottom-8 right-8 top-24 z-20 flex flex-col items-end gap-4 overflow-y-auto">
@@ -482,6 +508,8 @@ export default function App() {
         onAddMetric={openMetricGraph}
         launchName={LAUNCH.name}
         onLaunch={whatIfLaunch}
+        storyAt={storyAt}
+        onStory={runStory}
       />
 
 
