@@ -22,9 +22,12 @@ export default function TopBar({ clock, status, mode, onMode }: Props) {
         </span>
       </div>
 
-      <div key={status.text} className="fade-in pointer-events-auto flex items-center gap-2.5 text-[16px] text-fg">
-        {status.text}
-      </div>
+      {/* Calm needs no words: the blinking eye says it. The sentence appears only when something is happening. */}
+      {status.tone !== 'ok' && (
+        <div key={status.text} className="fade-in pointer-events-auto flex items-center gap-2.5 text-[16px] text-fg">
+          {status.text}
+        </div>
+      )}
 
       <div className="pointer-events-auto ml-auto flex items-center gap-3">
         <div className="flex rounded-full bg-panel/70 p-1 ring-1 ring-line/50">

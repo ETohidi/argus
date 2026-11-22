@@ -379,7 +379,7 @@ export default function App() {
 
   return (
     <div className="relative h-full overflow-hidden bg-bg">
-      {state && <Globe countries={state.countries} mode={mode} selectedIso={launch ? null : focusIso} launch={launchView} notes={notes} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
+      {state && <Globe countries={state.countries} mode={mode} selectedIso={launch ? null : focusIso} launch={launchView} notes={notes} change={Object.fromEntries((state?.explained ?? []).filter((e) => e.change_pct != null).map((e) => [e.country, e.change_pct!]))} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
 
       <TopBar clock={state ? shortClock(state.clock) : 'Connecting…'} status={launch?.phase === 'flying' ? { ...status, mood: 'investigating' } : status} mode={mode} onMode={setMode} />
 

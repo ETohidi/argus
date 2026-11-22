@@ -35,7 +35,7 @@ export const STATUS_COLOR: Record<CountryStatus, string> = {
 
 export const STATUS_LABEL: Record<CountryStatus, string> = {
   ok: 'As expected',
-  watch: 'Unusual, watching',
+  watch: 'Unusual · checking',
   incident: 'Needs attention',
   explained: 'Planned change',
   waiting: 'Data still arriving',

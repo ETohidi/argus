@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Backend } from '../lib/api'
+import { STATUS_COLOR } from '../lib/theme'
 import { DEMO_SCENES, type DemoScene, type InjectType, type WorldState } from '../lib/types'
 
 export const SCENE_LABEL: Record<DemoScene, string> = {
@@ -12,6 +13,14 @@ export const SCENE_LABEL: Record<DemoScene, string> = {
   new_metric: 'Add a new metric',
   tracking_break: 'Tracking break in the UK',
 }
+
+// What the globe colours mean (kept off the main screen).
+const LEGEND: [string, string][] = [
+  ['fine', STATUS_COLOR.ok],
+  ['planned', STATUS_COLOR.explained],
+  ['checking', STATUS_COLOR.watch],
+  ['problem', STATUS_COLOR.incident],
+]
 
 const INJECTS: { type: InjectType; label: string }[] = [
   { type: 'promo', label: 'Promo' },
@@ -105,6 +114,14 @@ export default function ScenarioMenu(p: Props) {
                 Watching {a.watched_series} numbers · {a.investigations} investigation{a.investigations === 1 ? '' : 's'} · {a.l3_runs} account-level check{a.l3_runs === 1 ? '' : 's'}
               </div>
             )}
+            <div className="mt-3 flex items-center gap-3 text-[12px]">
+              {LEGEND.map(([label, color]) => (
+                <span key={label} className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+                  {label}
+                </span>
+              ))}
+            </div>
             <div className="mt-2 text-[12px] text-fg-2/70">Earth imagery: NASA Visible Earth</div>
           </div>
         </div>

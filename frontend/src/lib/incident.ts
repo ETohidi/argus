@@ -68,7 +68,11 @@ export function statusSentence(state: WorldState): StatusSentence {
   if (watch.length) return { text: watch.length === 1 ? `${watch[0].name} looks unusual · watching` : `${watch.length} countries look unusual · watching`, tone: 'issue', mood: 'investigating' }
   const waiting = state.countries.filter((c) => c.status === 'waiting')
   if (waiting.length) return { text: `Data still arriving from ${waiting.map((c) => c.name).join(', ')}`, tone: 'neutral', mood: 'investigating' }
+  const verified = state.incidents.find((i) => i.status === 'verified')
+  if (verified) return { text: `Fix verified in ${name(verified.country)}`, tone: 'neutral', mood: 'calm' }
+  const resolved = state.incidents.find((i) => i.status === 'resolved' && i.detected_at != null && state.clock.t - i.detected_at <= 48)
   const explained = state.countries.filter((c) => c.status === 'explained')
+  if (resolved && !explained.length) return { text: `${name(resolved.country)} is back to normal`, tone: 'neutral', mood: 'calm' }
   if (explained.length === 1) {
     const ev = state.explained.find((e) => e.country === explained[0].iso)
     return { text: ev ? explainedLine(ev, explained[0].name) : `${explained[0].name}: planned change, no alarm`, tone: 'neutral', mood: 'calm' }

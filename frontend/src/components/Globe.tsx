@@ -31,6 +31,7 @@ type Props = {
   utcHour?: number // drives the day/night shading
   launch?: LaunchView | null
   notes?: Record<string, string> // per-country tooltip line, e.g. "Germany +31% · planned promo, no alarm"
+  change?: Record<string, number> // explained change in % per country (sets the grey-violet intensity)
   onSelect: (iso: string | null) => void
 }
 
@@ -61,14 +62,17 @@ function matchExpr(colors: Record<string, string>, fallback: string): any {
 
 // Health-mode fill opacity. Healthy markets: intensity by revenue share (US strongest), kept faint.
 // During an incident every other market dims and the affected one carries `pulse`.
-function opacityExpr(countries: CountryState[], pulse: number): unknown {
+// Colour carries the state: mint = normal (intensity by revenue), grey-violet = explained change (intensity by the size
+// of the move, never pink), soft pink breathing = unusual / watching, strong steady pink = problem.
+function opacityExpr(countries: CountryState[], breathe: number, change: Record<string, number> = {}): unknown {
   const maxRev = Math.max(1, ...countries.map((c) => c.kpis.revenue))
   const anyIncident = countries.some((c) => c.status === 'incident')
   const entries = countries.map((c) => {
     let o: number
-    if (c.status === 'incident') o = pulse
-    else if (c.status === 'watch') o = 0.85
-    else if (c.status === 'explained' || c.status === 'waiting') o = 0.55
+    if (c.status === 'incident') o = 0.95
+    else if (c.status === 'watch') o = 0.5 + 0.25 * breathe
+    else if (c.status === 'explained') o = 0.38 + 0.3 * Math.min(1, Math.abs(change[c.iso] ?? 20) / 40)
+    else if (c.status === 'waiting') o = 0.55
     else o = 0.14 + 0.46 * Math.sqrt(c.kpis.revenue / maxRev)
     if (anyIncident && c.status !== 'incident') o *= 0.4
     return [c.iso, Math.round(o * 100) / 100]
@@ -123,7 +127,7 @@ function shimmer(head: number, fade: number): any {
 
 const MARKER_STATUSES: CountryStatus[] = ['incident', 'watch']
 
-export default function Globe({ countries, mode, selectedIso, insetRight = 0, utcHour, launch = null, notes = {}, onSelect }: Props) {
+export default function Globe({ countries, mode, selectedIso, insetRight = 0, utcHour, launch = null, notes = {}, change = {}, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const loadedRef = useRef(false)
@@ -154,6 +158,8 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
   launchRef.current = launch
   const notesRef = useRef(notes)
   notesRef.current = notes
+  const changeRef = useRef(change)
+  changeRef.current = change
   countriesRef.current = countries
   modeRef.current = mode
   selectedRef.current = selectedIso
@@ -191,9 +197,9 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
         map.jumpTo({ center: [c.lng + dt * 0.0035, c.lat] })
       }
       // Pulse the affected country (≈15 fps is plenty for a slow breathe).
-      if (loadedRef.current && now - lastPulse > 66 && countriesRef.current.some((c) => c.status === 'incident') && modeRef.current === 'health' && !launchRef.current) {
+      if (loadedRef.current && now - lastPulse > 66 && countriesRef.current.some((c) => c.status === 'watch') && modeRef.current === 'health' && !launchRef.current) {
         lastPulse = now
-        map.setPaintProperty('watched', 'fill-opacity', opacityExpr(countriesRef.current, 0.7 + 0.25 * Math.sin(now / 420)) as any)
+        map.setPaintProperty('watched', 'fill-opacity', opacityExpr(countriesRef.current, 0.5 + 0.5 * Math.sin(now / 520), changeRef.current) as any)
       }
       if (now - lastHide > 120) {
         lastHide = now
@@ -357,12 +363,14 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
       }
       canvas.style.cursor = 'pointer'
       const line =
-        modeRef.current === 'health'
+        modeRef.current === 'health' && c.status === 'ok'
+          ? ''
+          : modeRef.current === 'health'
           ? notesRef.current[c.iso]
             ? `<span style="color:${AURORA.fg2}">● ${notesRef.current[c.iso].startsWith(c.name) ? notesRef.current[c.iso].slice(c.name.length).trim() : notesRef.current[c.iso]}</span>`
             : `<span style="color:${STATUS_COLOR[c.status]}">● ${STATUS_LABEL[c.status]}</span>`
           : `Opportunity: <b>+${usd(c.potential_usd_day)}</b> a day if offers matched local tastes`
-      popup.setLngLat(e.lngLat).setHTML(`<div class="font-semibold">${c.name}</div><div>${line}</div>`).addTo(map)
+      popup.setLngLat(e.lngLat).setHTML(`<div class="font-semibold">${c.name}</div>${line ? `<div>${line}</div>` : ''}`).addTo(map)
     })
     // The globe moves under a still pointer (auto-rotation, fly-to), so a stale hover is cleared on movement too.
     map.on('movestart', clearHover)
@@ -388,7 +396,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
     const map = mapRef.current
     if (!map || !loadedRef.current) return
     map.setPaintProperty('watched', 'fill-color', matchExpr(fillColors(countriesRef.current, modeRef.current), BASE_LAND))
-    map.setPaintProperty('watched', 'fill-opacity', launchRef.current ? 0.15 : ((modeRef.current === 'health' ? opacityExpr(countriesRef.current, 0.95) : 0.85) as any))
+    map.setPaintProperty('watched', 'fill-opacity', launchRef.current ? 0.15 : ((modeRef.current === 'health' ? opacityExpr(countriesRef.current, 0.5, changeRef.current) : 0.85) as any))
     syncMarkers()
   }
 
@@ -421,7 +429,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
     }
   }
 
-  useEffect(paint, [countries, mode])
+  useEffect(paint, [countries, mode, JSON.stringify(change)])
 
   // Day/night: recompute the night overlay when the simulated hour changes.
   useEffect(() => {
@@ -491,7 +499,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
       if (!launch) {
         map.setPaintProperty('launch-fill', 'fill-opacity', 0)
         arcs.setData({ type: 'FeatureCollection', features: [] })
-        map.setPaintProperty('watched', 'fill-opacity', (modeRef.current === 'health' ? opacityExpr(countriesRef.current, 0.95) : 0.85) as any)
+        map.setPaintProperty('watched', 'fill-opacity', (modeRef.current === 'health' ? opacityExpr(countriesRef.current, 0.5, changeRef.current) : 0.85) as any)
         move({ center: [map.getCenter().lng, HOME_VIEW.center[1]], zoom: HOME_VIEW.zoom, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: 1600, easing: easeOutCubic, essential: true })
         return
       }
