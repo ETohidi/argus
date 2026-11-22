@@ -12,6 +12,7 @@ type Props = {
   approving?: boolean
   onApprove?: (fixId: string) => void
   onEvidence: (tab: 'why' | 'who' | 'whatif') => void
+  presenter?: boolean // demo: one big headline, secondary lines hidden
   pressing?: boolean // demo: the primary button is visibly pressed before the fixes open
   onReplay?: () => void // "How did Argus find this?" replay
   onClose: () => void
@@ -24,7 +25,7 @@ function amountOf(s: string): string {
 }
 
 // L2 / manager: one decision, in plain words. No charts here; the evidence is one click away.
-export default function IssueCard({ summary, detail, countryName, foundLine, checkedLine, onEvidence, onReplay, pressing, onClose }: Props) {
+export default function IssueCard({ summary, detail, countryName, foundLine, checkedLine, onEvidence, onReplay, pressing, presenter, onClose }: Props) {
   const card = summary.card ?? detail?.card
   const status = summary.status
   const decided = status !== 'open' && status !== 'persisting'
@@ -42,10 +43,10 @@ export default function IssueCard({ summary, detail, countryName, foundLine, che
         <div>
           <span className={`inline-block rounded-full px-2.5 py-0.5 text-[14px] ${chip}`}>{label}</span>
           <h2 className="mt-2 text-[24px] font-semibold leading-tight text-fg">{summary.short_title ?? detail?.short_title ?? shortTitle(card?.title ?? summary.title ?? '')}</h2>
-          {(summary.title_detail ?? detail?.title_detail) && <p className="mt-1.5 text-[14px] leading-snug text-fg-2">{summary.title_detail ?? detail?.title_detail}</p>}
-          {foundLine && <p className="mt-1 text-[14px] leading-snug text-fg-2">{foundLine}</p>}
-          {checkedLine && <p className="mt-1 text-[14px] leading-snug text-fg-2">{checkedLine}</p>}
-          {onReplay && detail && (
+          {!presenter && (summary.title_detail ?? detail?.title_detail) && <p className="mt-1.5 text-[14px] leading-snug text-fg-2">{summary.title_detail ?? detail?.title_detail}</p>}
+          {!presenter && foundLine && <p className="mt-1 text-[14px] leading-snug text-fg-2">{foundLine}</p>}
+          {!presenter && checkedLine && <p className="mt-1 text-[14px] leading-snug text-fg-2">{checkedLine}</p>}
+          {!presenter && onReplay && detail && (
             <button onClick={onReplay} className="mt-2 inline-flex items-center gap-2 rounded-full bg-accent/15 px-3 py-1 text-[14px] text-accent ring-1 ring-accent/30 hover:bg-accent/25">
               How did Argus find this? <span aria-hidden>▶</span>
             </button>
@@ -70,7 +71,7 @@ export default function IssueCard({ summary, detail, countryName, foundLine, che
           )}
           <div className="mt-3 space-y-1 text-[16px] leading-snug">
             <p className="text-fg">{line1}</p>
-            <p className="text-fg-2">{line2}</p>
+            {!presenter && <p className="text-fg-2">{line2}</p>}
           </div>
         </>
       ) : (

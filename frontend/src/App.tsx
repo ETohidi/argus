@@ -30,13 +30,14 @@ const markReplaySeen = () => {
 }
 
 // One subtitle per story step (bottom centre, above the timeline).
+// One big headline per story step (at most ~6 words); the presenter tells the rest.
 const SUBTITLES = [
-  '20 markets. Argus watches every number, every hour.',
-  "Germany jumps, but it's a planned promo. Expected, so no alarm.",
-  '3 a.m.: Canada looks like growth. At 6, Argus raises it by itself, with proof.',
-  'Argus tested 4 fixes a week ahead. One click; next day it checks itself.',
-  'A new number: Argus places it, checks it on the data, and watches it.',
-  'Before you spend: what if we launch in Argentina?',
+  'Argus watches 20 markets, every hour',
+  'Planned promo: expected, no alarm',
+  'Canada: fake growth, caught at 06:00',
+  'Four futures tested. One click.',
+  'A new metric, placed and watched',
+  'What if we launch in Argentina?',
 ]
 
 type Level = 'earth' | 'country' | 'segment' | 'users'
@@ -265,11 +266,12 @@ export default function App() {
     }
   }
 
-  const demo = (scene: DemoScene, opts: { lapseMs?: number; typeIn?: boolean } = {}) =>
+  const demo = (scene: DemoScene, opts: { lapseMs?: number; typeIn?: boolean; lookAt?: string } = {}) =>
     run(async () => {
       launchRun.current++
       setLaunch(null)
-      setLookIso(null)
+      setLookIso(opts.lookAt ?? null)
+      if (scene !== 'approve' && scene !== 'verify') setPending(null)
       if (scene === 'start') expectReset.current = true
       const r = await api.demo(scene, !!opts.lapseMs)
       // The issue's fresh detail is fetched while the time-lapse plays, so the card is up to date when it reappears.
@@ -324,6 +326,7 @@ export default function App() {
     })
 
   const approve = async (fixId: string) => {
+    if (pending.current?.kind === 'approve') return approveAndVerify()
     if (!cardId) return
     setApproving(true)
     try {
@@ -398,8 +401,37 @@ export default function App() {
   }, [cardId, detail?.id])
 
   // "Play the demo": each step tells its story with a subtitle and its own small choreography.
+  // Presenter-paced waiting points: step 3 waits on the card (next → plays the replay); step 4 waits on the four
+  // futures (Approve, Next or → approves, then the 24 h time-lapse and the verified card).
+  const pending = useRef<{ kind: 'replay'; id: string } | { kind: 'approve' } | null>(null)
+  const [pendingKind, setPendingKind] = useState<'replay' | 'approve' | null>(null)
+  const setPending = (p: typeof pending.current) => {
+    pending.current = p
+    setPendingKind(p?.kind ?? null)
+  }
+  async function approveAndVerify() {
+    setPending(null)
+    storyBusy.current = true
+    setStoryRunning(true)
+    try {
+      setEvidence(null)
+      await demo('approve')
+      await sleep(900)
+      await demo('verify', { lapseMs: 4000 })
+    } finally {
+      storyBusy.current = false
+      setStoryRunning(false)
+    }
+  }
   async function runStory(i: number) {
     if (storyBusy.current) return
+    const p = pending.current
+    if (p?.kind === 'replay') {
+      setPending(null)
+      setReplayId(p.id)
+      return
+    }
+    if (p?.kind === 'approve') return approveAndVerify()
     storyBusy.current = true
     setStoryRunning(true)
     setSubtitleAt(i)
@@ -412,24 +444,18 @@ export default function App() {
         const iso = r?.state.explained[0]?.country ?? 'DE'
         selectCountry(iso)
       } else if (i === 2) {
-        markReplaySeen() // the story plays the replay itself, after the card
-        const r = await demo('bot_farm', { lapseMs: 4000 })
-        if (r?.incident_id) {
-          await sleep(1500)
-          setReplayId(r.incident_id)
-        }
+        markReplaySeen() // the presenter starts the replay with the next click
+        setCountryIso(null) // leave Germany: the time-lapse plays over North America
+        const r = await demo('bot_farm', { lapseMs: 4000, lookAt: 'CA' })
+        if (r?.incident_id) setPending({ kind: 'replay', id: r.incident_id })
       } else if (i === 3) {
         if (cardIdRef.current) {
           setPressing(true) // the card's "See fixes & approve ›" is pressed, visibly
           await sleep(900)
           setPressing(false)
           setEvidence({ tab: 'whatif', play: true }) // the four futures, best one glowing
-          await sleep(3000)
-          setEvidence(null)
-        }
-        await demo('approve')
-        await sleep(900)
-        await demo('verify', { lapseMs: 4000 })
+          setPending({ kind: 'approve' }) // wait for the presenter's click to approve
+        } else await approveAndVerify()
       } else if (i === 4) await demo('new_metric', { typeIn: true })
       else if (i === 5) {
         flash(STORY[5])
@@ -456,15 +482,17 @@ export default function App() {
   // Switching Risks ↔ Growth closes any open issue card or evidence.
   const changeMode = (m: GlobeMode) => {
     if (cardId) closeCard()
+    if (launch) closeLaunch()
     setEvidence(null)
     setMode(m)
   }
 
-  const keys = useRef({ demo, closeTop: () => {}, openEvidence: () => {} })
+  const keys = useRef<{ demo: typeof demo; closeTop: () => void; openEvidence: () => void; storyNext?: () => void }>({ demo, closeTop: () => {}, openEvidence: () => {} })
   keys.current = {
     demo,
     closeTop: () => (launch ? closeLaunch() : evidence ? setEvidence(null) : graphView ? setGraphView(null) : countryIso ? setCountryIso(null) : cardId ? closeCard() : undefined),
     openEvidence: () => cardId && setEvidence({ tab: 'why' }),
+    storyNext: storyAt >= 0 && !storyRunning ? () => runStory(pending.current ? storyAt : (storyAt + 1) % STORY.length) : undefined,
   }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -475,6 +503,9 @@ export default function App() {
       if (Number.isInteger(n) && n >= 1 && n <= DEMO_SCENES.length) {
         e.preventDefault()
         keys.current.demo(DEMO_SCENES[n - 1])
+      } else if (e.key === 'ArrowRight' && keys.current.storyNext) {
+        e.preventDefault()
+        keys.current.storyNext()
       } else if (e.key === ' ') {
         e.preventDefault()
         setPlaying((p) => !p)
@@ -601,7 +632,7 @@ export default function App() {
       <div className="pointer-events-none absolute bottom-8 right-8 top-24 z-20 flex flex-col items-end gap-4 overflow-y-auto">
         <ErrorBoundary name="panel">
         {launch?.phase === 'shown' && lf && launchCardReady ? (
-          <WhatIfCard f={lf} onClose={closeLaunch} />
+          <WhatIfCard f={lf} onClose={closeLaunch} presenter={storyAt >= 0} />
         ) : null}
         {country ? (
           <CountrySheet
@@ -610,6 +641,7 @@ export default function App() {
             incident={state?.incidents.find((i) => i.country === country.iso && i.status !== 'resolved')}
             potential={potential}
             growth={mode === 'potential'}
+            presenter={storyAt >= 0}
             explainedAt={state?.explained.find((e) => e.country === country.iso)?.t}
             segments={segmentsOpen}
             onSegments={setSegmentsOpen}
@@ -638,6 +670,7 @@ export default function App() {
             onEvidence={(tab) => setEvidence({ tab })}
             onReplay={() => setReplayId(card.id)}
             pressing={pressing}
+            presenter={storyAt >= 0}
             checkedLine={(() => {
               const a = state?.attention
               if (a?.segments_total == null) return undefined
@@ -669,7 +702,7 @@ export default function App() {
       <ErrorBoundary name="subtitle" quiet>
       {subtitleAt != null && storyAt >= 0 && subtitleShown && !sideOpen && !evidence && !graphView && !replayId && (
         <div className="pointer-events-none absolute inset-x-0 bottom-[68px] z-[44] flex justify-center px-8">
-          <div key={subtitleAt} className="frost fade-up whitespace-nowrap rounded-full px-6 py-2.5 text-[24px] text-fg ring-1 ring-line/40">
+          <div key={subtitleAt} className="frost fade-up whitespace-nowrap rounded-full px-7 py-3 text-[28px] font-semibold text-fg ring-1 ring-line/40">
             {SUBTITLES[subtitleAt]}
           </div>
         </div>
@@ -692,6 +725,7 @@ export default function App() {
         launchName={LAUNCH.name}
         onLaunch={whatIfLaunch}
         storyAt={storyAt}
+        pendingLabel={pendingKind === 'replay' ? 'Show how ▶' : pendingKind === 'approve' ? 'Approve ▶' : undefined}
         onStory={runStory}
       />
       </ErrorBoundary>

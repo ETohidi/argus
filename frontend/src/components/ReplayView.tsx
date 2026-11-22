@@ -15,7 +15,8 @@ import NormalZoneChart from './charts/NormalZoneChart'
 type Step = { key: string; level: string; sentence: string; ms: number }
 const VERDICT_ROLE: Record<string, NodeRole> = { fine: 'normal', affected: 'symptom', cause: 'broke' }
 const WALK_MS = 380
-const STEP_MS = 3500 // per replay step; Space pauses / resumes
+const STEP_MS = 3500 // minimum time a step is meant to be on screen
+const IDLE_MS = 12000 // presenter-paced: advance by itself only after this long without input
 const STORY = ['new_accounts', 'active_users', 'starts', 'completions', 'revenue', 'rewards', 'margin']
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 const plain = (id: string) => METRIC_PLAIN[id] ?? id
@@ -46,7 +47,8 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
   const [step, setStep] = useState(0)
   const [walkAt, setWalkAt] = useState(0)
   const [without, setWithout] = useState(false)
-  const [paused, setPaused] = useState(false)
+  const [paused] = useState(false) // kept for the walk interval; the replay is presenter-paced now
+  const [lastInput, setLastInput] = useState(0)
   const still = reducedMotion()
   const pausedRef = useRef(false)
   pausedRef.current = paused
@@ -86,27 +88,39 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
   ]
   const cur = steps[Math.min(step, steps.length - 1)]
 
-  // Advance through the steps; Esc skips to the end (the issue card).
+  // Presenter-paced: click, → or Space for the next level, ← for the previous one, Esc to close.
+  // Only after 12 s without any input does it move on by itself.
+  const go = (d: number) => {
+    setLastInput(Date.now())
+    if (step + d >= steps.length) onClose()
+    else setStep(Math.max(0, step + d))
+  }
+  const goRef = useRef(go)
+  goRef.current = go
   useEffect(() => {
-    const esc = (e: KeyboardEvent) => {
+    const keys = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopImmediatePropagation()
         onClose()
-      } else if (e.key === ' ') {
+      } else if (e.key === ' ' || e.key === 'ArrowRight' || e.key === 'Enter') {
         e.preventDefault()
         e.stopImmediatePropagation()
-        setPaused((p) => !p)
+        goRef.current(1)
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        goRef.current(-1)
       }
     }
-    window.addEventListener('keydown', esc, true)
-    return () => window.removeEventListener('keydown', esc, true)
+    window.addEventListener('keydown', keys, true)
+    return () => window.removeEventListener('keydown', keys, true)
   }, [onClose])
   useEffect(() => {
     if (still || paused) return
-    const t = window.setTimeout(() => (step + 1 < steps.length ? setStep(step + 1) : onClose()), cur.ms)
+    const t = window.setTimeout(() => goRef.current(1), Math.max(IDLE_MS, cur.ms))
     return () => window.clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, still, paused, steps.length])
+  }, [step, still, paused, steps.length, lastInput])
   // Graph walk: one node every 450 ms. Proof: the "without them" line switches on after a beat.
   useEffect(() => {
     setWalkAt(0)
@@ -125,15 +139,12 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
   if (still) return <StaticList steps={steps} onClose={onClose} />
 
   return (
-    <div className="fade-in fixed inset-0 z-50 flex flex-col bg-bg/95 backdrop-blur-sm" role="dialog" aria-label="How Argus found this">
+    <div className="fade-in fixed inset-0 z-50 flex flex-col bg-bg/95 backdrop-blur-sm" role="dialog" aria-label="How Argus found this" onClick={(e) => !(e.target as HTMLElement).closest('button') && go(1)}>
       <div className="flex items-center justify-between px-10 pt-8 text-[14px] text-fg-2">
         <span>How Argus found this</span>
         <span className="flex gap-5">
-          <button onClick={() => setPaused((p) => !p)} className="hover:text-fg">
-            {paused ? 'Resume · Space' : 'Pause · Space'}
-          </button>
           <button onClick={onClose} className="hover:text-fg">
-            Skip · Esc
+            Close · Esc
           </button>
         </span>
       </div>
@@ -173,11 +184,17 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
         )}
       </div>
 
+      <div className="pb-3 text-center text-[16px] text-fg-2">
+        <span className="rounded-full bg-line/70 px-3 py-1 text-fg">→</span> next <span className="ml-3 text-fg-2">← back</span>
+      </div>
       <div className="flex justify-center gap-2.5 pb-10">
         {steps.map((st, i) => (
           <button
             key={st.key}
-            onClick={() => setStep(i)}
+            onClick={() => {
+              setLastInput(Date.now())
+              setStep(i)
+            }}
             aria-label={`Step ${i + 1}`}
             className={`h-2 rounded-full transition-all ${i === step ? 'w-8 bg-fg' : i < step ? 'w-2 bg-fg-2' : 'w-2 bg-line'}`}
           />

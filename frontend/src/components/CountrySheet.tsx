@@ -33,6 +33,7 @@ type Props = {
   potential: PotentialResponse | null
   explainedAt?: number // when the planned event was first seen (fallback for the chart marker)
   growth?: boolean // Growth mode: the growth card instead of the risk view
+  presenter?: boolean // demo: secondary numbers hidden
   segments: boolean // the segment grid is open (the rail's "Segment" level)
   onSegments: (open: boolean) => void
   onWhy: (incidentId: string) => void
@@ -46,7 +47,7 @@ export default function CountrySheet(p: Props) {
 
 // Risks: the main point first (verdict, three numbers vs usual, a sparkline with the expected band); what is moving
 // only when something is unusual; "Segments ›" opens the grid, a pink cell opens "Users ›".
-function RiskView({ country, detail, incident, explainedAt, segments, onSegments, onWhy, onUsers, onClose }: Props) {
+function RiskView({ country, detail, incident, explainedAt, segments, presenter, onSegments, onWhy, onUsers, onClose }: Props) {
   const sum = detail?.summary
   const status = sum?.status ?? country.status
   const color = STATUS_COLOR[status]
@@ -63,7 +64,7 @@ function RiskView({ country, detail, incident, explainedAt, segments, onSegments
         <div className="mt-2 h-5 w-48 animate-pulse rounded bg-line/50" />
       )}
 
-      <dl className="mt-4 space-y-1.5 text-[16px]">
+      <dl className={`mt-4 space-y-1.5 text-[16px] ${presenter ? 'hidden' : ''}`}>
         {sum
           ? sum.numbers.slice(0, 3).map((n) => (
               <div key={n.label} className="flex items-baseline justify-between gap-4">

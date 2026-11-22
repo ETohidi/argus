@@ -35,6 +35,7 @@ type Props = {
   launchName: string
   onLaunch: () => void
   storyAt: number // story step last run (0–5), -1 before the first
+  pendingLabel?: string // the step waits for the presenter: what Next does now (e.g. "Show how ▶")
   onOpenChange?: (open: boolean) => void // the level rail hides while the panel is expanded
   onStory: (i: number) => void
 }
@@ -73,7 +74,7 @@ export default function ScenarioMenu(p: Props) {
   // Running a story step collapses the panel to a small pill so the globe stays clear for the video.
   const runStep = (i: number) => {
     setOpen(false)
-    p.onStory(i)
+    p.onStory(p.pendingLabel ? p.storyAt : i) // a waiting step continues instead of advancing
   }
   const next = p.storyAt + 1 < STORY.length ? p.storyAt + 1 : 0
   return (
@@ -104,7 +105,7 @@ export default function ScenarioMenu(p: Props) {
             disabled={p.busy}
             className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-ok py-3 text-[16px] font-semibold text-bg hover:brightness-110 disabled:opacity-50"
           >
-            {p.busy ? 'Running…' : next === 0 && p.storyAt >= 0 ? 'Start over' : p.storyAt < 0 ? 'Start ▶' : 'Next ▶'}
+            {p.busy ? 'Running…' : p.pendingLabel ?? (next === 0 && p.storyAt >= 0 ? 'Start over' : p.storyAt < 0 ? 'Start ▶' : 'Next ▶')}
           </button>
 
           <button onClick={() => setMore((m) => !m)} className="mt-4 text-fg-2 hover:text-fg" aria-expanded={more}>
@@ -139,7 +140,7 @@ export default function ScenarioMenu(p: Props) {
             {p.storyAt + 1}/{STORY.length}
           </button>
           <button onClick={() => runStep(next)} disabled={p.busy} className="border-l border-line px-4 py-2 font-semibold text-ok hover:bg-ok/10 disabled:opacity-50">
-            {p.busy ? 'Running…' : next === 0 ? 'Start over' : 'Next ▶'}
+            {p.busy ? 'Running…' : p.pendingLabel ?? (next === 0 ? 'Start over' : 'Next ▶')}
           </button>
         </div>
       ) : (

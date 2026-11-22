@@ -12,7 +12,7 @@ const RISK = {
 } as const
 
 // "What if we launch in …?": one calm card in plain words. Read-only: nothing in the live world changes.
-export default function WhatIfCard({ f, onClose }: { f: LaunchForecast; onClose: () => void }) {
+export default function WhatIfCard({ f, onClose, presenter }: { f: LaunchForecast; onClose: () => void; presenter?: boolean }) {
   const [plays, setPlays] = useState(0)
   const weeks = f.margin_per_day_weekly_usd ?? []
   // "Launching in Argentina: about $25 margin per 1,000 users a day" → title, big number, unit.
@@ -50,7 +50,7 @@ export default function WhatIfCard({ f, onClose }: { f: LaunchForecast; onClose:
         <p className="mt-5 text-[16px] text-fg">{rest}</p>
       )}
 
-      {f.total_line && <div className="mt-2 text-[16px] text-fg">{f.total_line}</div>}
+      {!presenter && f.total_line && <div className="mt-2 text-[16px] text-fg">{f.total_line}</div>}
 
       <dl className="mt-6 space-y-3 text-[16px]">
         <div>
