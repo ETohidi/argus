@@ -74,7 +74,7 @@ export function statusSentence(state: WorldState): StatusSentence {
     return { text: ev ? explainedLine(ev, explained[0].name) : `${explained[0].name}: planned change, no alarm`, tone: 'neutral', mood: 'calm' }
   }
   if (explained.length) return { text: `${explained.length} planned changes, as expected`, tone: 'neutral', mood: 'calm' }
-  return { text: `All ${state.countries.length} countries as expected`, tone: 'ok', mood: 'calm' }
+  return { text: `All ${state.countries.length} markets as expected`, tone: 'ok', mood: 'calm' }
 }
 
 // "Fake-account cluster in Canada (Android)" → "Fake accounts in Canada"; "Tracking break in United Kingdom (iOS, …)"

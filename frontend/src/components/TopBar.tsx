@@ -16,7 +16,10 @@ export default function TopBar({ clock, status, mode, onMode }: Props) {
       <div className="pointer-events-auto flex items-center gap-3">
         <ArgusEye mood={status.mood} />
         <span className="text-[16px] font-semibold tracking-[0.3em] text-fg">ARGUS</span>
-        <span className="num text-[13px] text-fg-2">{clock}</span>
+        <span className="num cursor-default text-[13px] text-fg-2" title="Simulated time: the marketplace runs hour by hour">
+          {clock}
+          <span className="text-fg-2/45"> · sim</span>
+        </span>
       </div>
 
       <div key={status.text} className="fade-in pointer-events-auto flex items-center gap-2.5 text-[16px] text-fg">

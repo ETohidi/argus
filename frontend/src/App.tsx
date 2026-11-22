@@ -445,7 +445,6 @@ export default function App() {
         onLaunch={whatIfLaunch}
       />
 
-      <div className="pointer-events-none absolute bottom-1.5 right-8 z-10 text-[13px] text-fg-2">Earth imagery: NASA Visible Earth</div>
 
       {crumb && (
         <div key={crumb.key} className={`crumb pointer-events-none absolute left-8 top-[76px] z-20 flex items-center gap-1.5 text-[13px] text-fg-2${crumb.out ? ' crumb--out' : ''}`} aria-hidden>

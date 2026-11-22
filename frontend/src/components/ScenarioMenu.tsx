@@ -105,6 +105,7 @@ export default function ScenarioMenu(p: Props) {
                 Watching {a.watched_series} numbers · {a.investigations} investigation{a.investigations === 1 ? '' : 's'} · {a.l3_runs} account-level check{a.l3_runs === 1 ? '' : 's'}
               </div>
             )}
+            <div className="mt-2 text-[12px] text-fg-2/70">Earth imagery: NASA Visible Earth</div>
           </div>
         </div>
       )}
