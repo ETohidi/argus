@@ -34,6 +34,7 @@ type Props = {
   explainedAt?: number // when the planned event was first seen (fallback for the chart marker)
   growth?: boolean // Growth mode: the growth card instead of the risk view
   presenter?: boolean // demo: secondary numbers hidden
+  explainedText?: string // "Completed offers +10% vs a normal Monday · planned promo"
   segments: boolean // the segment grid is open (the rail's "Segment" level)
   onSegments: (open: boolean) => void
   onWhy: (incidentId: string) => void
@@ -47,18 +48,22 @@ export default function CountrySheet(p: Props) {
 
 // Risks: the main point first (verdict, three numbers vs usual, a sparkline with the expected band); what is moving
 // only when something is unusual; "Segments ›" opens the grid, a pink cell opens "Users ›".
-function RiskView({ country, detail, incident, explainedAt, segments, presenter, onSegments, onWhy, onUsers, onClose }: Props) {
+function RiskView({ country, detail, incident, explainedAt, explainedText, segments, presenter, onSegments, onWhy, onUsers, onClose }: Props) {
   const sum = detail?.summary
   const status = sum?.status ?? country.status
   const color = STATUS_COLOR[status]
-  const series: SeriesPoint[] = (sum?.series.points ?? []).map((pt) => ({ t: pt.t, label: pt.label, actual: pt.value, expected: pt.usual, lo: pt.lo, hi: pt.hi }))
+  // A dashed "normal day" line only where it differs from the usual band (a planned event): shows the jump.
+  const explainedChart = status === 'explained' && !!sum?.series.points.length && sum.series.points.every((pt) => pt.normal != null)
+  const shownPoints = explainedChart ? sum!.series.points.slice(-8) : (sum?.series.points ?? [])
+  const normalLine = explainedChart ? shownPoints.map((pt) => pt.normal!) : undefined
+  const series: SeriesPoint[] = shownPoints.map((pt) => ({ t: pt.t, label: pt.label, actual: pt.value, expected: pt.usual, lo: pt.lo, hi: pt.hi }))
   const markers = sum?.series.events ?? (status === 'explained' && explainedAt != null ? [{ t: explainedAt, label: 'Planned promo' }] : [])
   return (
     <section className="fade-up pointer-events-auto max-h-[calc(100vh-7.5rem)] w-[400px] overflow-y-auto rounded-3xl bg-panel/95 p-6 ring-1 ring-line/50 backdrop-blur">
       <Header name={country.name} color={color} onClose={onClose} />
       {sum ? (
         <p className="mt-1.5 text-[16px] leading-snug" style={{ color: status === 'incident' ? '#FF8FB7' : status === 'ok' ? '#9A9CC4' : '#F1F0FF' }}>
-          {status === 'incident' && incident?.short_title ? incident.short_title : sum.verdict}
+          {status === 'incident' && incident?.short_title ? incident.short_title : status === 'explained' && (sum.series.change_label ?? explainedText) ? (sum.series.change_label ?? explainedText) : sum.verdict}
         </p>
       ) : (
         <div className="mt-2 h-5 w-48 animate-pulse rounded bg-line/50" />
@@ -77,8 +82,8 @@ function RiskView({ country, detail, incident, explainedAt, segments, presenter,
 
       {series.length > 1 && (
         <figure className="mt-4">
-          <div className="mb-1 text-[14px] text-fg-2">{sum?.series.metric ?? 'Margin per hour'}, last 24 h</div>
-          <NormalZoneChart series={series} width={352} height={92} showStart={false} markers={markers} />
+          <div className="mb-1 text-[14px] text-fg-2">{sum?.series.metric ?? 'Margin per hour'}, last {explainedChart ? 8 : 24} h</div>
+          <NormalZoneChart series={series} width={352} height={normalLine ? 130 : 92} showStart={false} markers={markers} normal={normalLine} />
         </figure>
       )}
 

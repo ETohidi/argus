@@ -308,6 +308,7 @@ export default function App() {
           const node = r.metric?.node as { id?: string; expr?: string } | null | undefined
           const outcome = r.metric ? toOutcome(r.metric as never, '', []) : null
           setGraphView({ highlight: node?.id ? [node.id] : [], outcome, typeIn: opts.typeIn && !reducedMotion() })
+          api.graph().then(setMetricGraph).catch(() => {})
           break
         }
         default: // bot_farm, approve, verify, tracking_break: the issue card
@@ -434,6 +435,7 @@ export default function App() {
     if (p?.kind === 'approve') return approveAndVerify()
     storyBusy.current = true
     setStoryRunning(true)
+    setStoryAt(i)
     setSubtitleAt(i)
     setSubtitleShown(true)
     try {
@@ -589,7 +591,7 @@ export default function App() {
   const nameOf = (iso: string) => state?.countries.find((c) => c.iso === iso)?.name ?? iso
   const growthNotes = Object.fromEntries(pots.map((p) => [p.iso, growthLine(p, nameOf(p.iso))]))
   // Planned events: one neutral line per country, for the globe tooltip (and the status sentence).
-  const notes = Object.fromEntries((state?.explained ?? []).map((e) => [e.country, explainedLine(e, nameOf(e.country))]))
+  const notes = Object.fromEntries((state?.explained ?? []).map((e) => [e.country, explainedLine(e, nameOf(e.country), state?.clock.day_of_week)]))
   // The path at the top-left (persistent breadcrumb), shown below Earth level; each part zooms back to its level.
   const pathIso = countryIso ?? card?.country ?? null
   const pathDetail = card && detail?.id === card.id ? detail : null
@@ -643,6 +645,7 @@ export default function App() {
             growth={mode === 'potential'}
             presenter={storyAt >= 0}
             explainedAt={state?.explained.find((e) => e.country === country.iso)?.t}
+            explainedText={(() => { const e = state?.explained.find((x) => x.country === country.iso); return e ? explainedLine(e, null, state?.clock.day_of_week) : undefined })()}
             segments={segmentsOpen}
             onSegments={setSegmentsOpen}
             onWhy={(id) => {
@@ -733,7 +736,7 @@ export default function App() {
 
       <ErrorBoundary name="path" quiet>
       {pathParts.length > 0 && (
-        <nav aria-label="Where you are" className={`frost pointer-events-auto absolute left-8 z-[45] flex ${mode === 'potential' ? 'top-[140px]' : 'top-[92px]'} items-center gap-1.5 rounded-full px-4 py-1.5 text-[16px]`}>
+        <nav aria-label="Where you are" className={`frost pointer-events-auto absolute left-8 z-[45] flex ${mode === 'potential' ? 'top-[176px]' : 'top-[92px]'} items-center gap-1.5 rounded-full px-4 py-1.5 text-[16px]`}>
           {pathParts.map((p, i) => {
             const last = i === pathParts.length - 1
             return (

@@ -70,12 +70,12 @@ export function statusSentence(state: WorldState): StatusSentence {
   if (waiting.length) return { text: `Data still arriving from ${waiting.map((c) => c.name).join(', ')}`, tone: 'neutral', mood: 'investigating' }
   const verified = state.incidents.find((i) => i.status === 'verified')
   if (verified) return { text: `Fix verified in ${name(verified.country)}`, tone: 'neutral', mood: 'calm' }
-  const resolved = state.incidents.find((i) => i.status === 'resolved' && i.detected_at != null && state.clock.t - i.detected_at <= 48)
+  const resolved = state.incidents.find((i) => i.status === 'resolved' && hoursAgo(i.resolved_at ?? i.detected_at, state.clock) <= 24)
   const explained = state.countries.filter((c) => c.status === 'explained')
-  if (resolved && !explained.length) return { text: `${name(resolved.country)} is back to normal`, tone: 'neutral', mood: 'calm' }
+  if (resolved) return { text: `${name(resolved.country)} back to normal`, tone: 'neutral', mood: 'calm' }
   if (explained.length === 1) {
     const ev = state.explained.find((e) => e.country === explained[0].iso)
-    return { text: ev ? explainedLine(ev, explained[0].name) : `${explained[0].name}: planned change, no alarm`, tone: 'neutral', mood: 'calm' }
+    return { text: ev ? explainedLine(ev, explained[0].name, state.clock.day_of_week) : `${explained[0].name}: planned change, no alarm`, tone: 'neutral', mood: 'calm' }
   }
   if (explained.length) return { text: `${explained.length} planned changes, as expected`, tone: 'neutral', mood: 'calm' }
   return { text: `All ${state.countries.length} markets as expected`, tone: 'ok', mood: 'calm' }
@@ -134,12 +134,20 @@ export function foundLine(found: string | undefined, detectedAt: number | undefi
 }
 
 // "Germany +31% · planned promo, no alarm": the backend's line when present.
-export function explainedLine(e: ExplainedChange, name: string) {
-  if (e.line) return e.line
-  const pct = e.change_pct != null ? ` ${e.change_pct > 0 ? '+' : '−'}${Math.abs(Math.round(e.change_pct))}%` : ''
-  const noun = /promo|boost|sale|campaign/i.test(e.event) ? 'planned promo' : `planned ${eventName(e.event).toLowerCase()}`
-  return `${name}${pct} · ${noun}, no alarm`
+// "Completed offers +10% vs a normal Monday · planned promo" (with the country in front for the status line).
+const KPI_WORDS: Record<string, string> = { completions: 'completed offers', revenue: 'revenue', rewards: 'rewards paid', new_accounts: 'new sign-ups', margin: 'margin', impressions: 'offer views', starts: 'offer starts' }
+export function explainedLine(e: ExplainedChange, name: string | null, weekday?: string) {
+  const pct = e.change_pct != null ? `${e.change_pct > 0 ? '+' : '−'}${Math.abs(Math.round(e.change_pct))}%` : ''
+  const noun = /promo|boost|sale|campaign/i.test(e.event) ? 'planned promo' : /late|delay|missing/i.test(e.event) ? 'late data' : `planned ${eventName(e.event).toLowerCase()}`
+  const kpi = e.kpi ? (KPI_WORDS[e.kpi] ?? e.kpi.replace(/_/g, ' ')) : null
+  if (kpi && pct) {
+    const what = `${kpi} ${pct} vs a normal ${weekdayName(weekday)} · ${noun}`
+    return name ? `${name}: ${what}` : what.charAt(0).toUpperCase() + what.slice(1)
+  }
+  if (e.line) return name ? e.line : e.line.replace(/^[^+−\-]*?(?=[+−\-]\d)/, '')
+  return `${name ? `${name} ` : ''}${pct} · ${noun}, no alarm`.trim()
 }
+const weekdayName = (d?: string) => ({ Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' })[d ?? ''] ?? 'day'
 
 // Growth wording, plain: what users like vs what they mostly see, and what showing more of it is worth.
 // The backend's line when present; otherwise composed from the same fields.
@@ -153,4 +161,15 @@ export function growthLine(p: PotentialResponse['countries'][number], name: stri
   const seen = p.mostly_seen?.filter((c) => !p.top_categories.includes(c)) ?? []
   const like = p.top_categories.length ? `users like ${listOf(p.top_categories)}` : 'users would welcome a different mix'
   return `${name}: ${like}${seen.length ? `, but mostly see ${seen.map(offersOf).join(' and ')}` : ''}. Showing more of what they like: about +${usd(p.potential_usd_day)} a day.`
+}
+
+// Hours since a simulated time given as an hour number (t) or a label like "Tue 08:00".
+function hoursAgo(at: number | string | null | undefined, clock: WorldState['clock']): number {
+  if (at == null) return Infinity
+  if (typeof at === 'number') return clock.t - at
+  const m = at.match(/([A-Z][a-z]{2})\s+(\d{2}):\d{2}/)
+  if (!m || clock.day_of_week == null || clock.utc_hour == null) return Infinity
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const dd = (days.indexOf(clock.day_of_week) - days.indexOf(m[1]) + 7) % 7
+  return dd * 24 + (clock.utc_hour - Number(m[2]))
 }

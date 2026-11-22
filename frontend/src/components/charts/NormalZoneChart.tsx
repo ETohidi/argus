@@ -12,6 +12,7 @@ type Props = {
   height?: number
   fontSize?: number
   showStart?: boolean // label the first hour on the axis
+  normal?: number[] // a dashed "normal day" line (what a day without the planned event looks like)
   bandLabel?: string | false // the grey band's label, shown once inside the chart
   markers?: { t: number; label: string }[] // known events (e.g. a planned promo), drawn as quiet grey ticks
 }
@@ -20,7 +21,7 @@ const ease = (x: number) => 1 - Math.pow(1 - x, 3)
 
 // Grey band = what the twin expected for each hour (lo..hi); line = what happened,
 // white inside the band and orange outside it (exact, via an SVG mask of the band).
-export default function NormalZoneChart({ series, leftAt, values, width: W = 356, height: H = 120, fontSize = 14, showStart = true, bandLabel = 'Grey = what Argus expected', markers = [] }: Props) {
+export default function NormalZoneChart({ series, leftAt, values, width: W = 356, height: H = 120, fontSize = 14, showStart = true, normal, bandLabel = 'Grey = what Argus expected', markers = [] }: Props) {
   const id = useId().replace(/:/g, '')
   const { ref: svgRef, px } = useSvgFont<SVGSVGElement>(W)
   const fs = px(fontSize)
@@ -45,7 +46,7 @@ export default function NormalZoneChart({ series, leftAt, values, width: W = 356
 
   if (series.length < 2) return null
   const M = { l: 2, r: 2, t: leftAt || markers.length || (bandLabel && showStart) ? fs + 10 : 6, b: fs + 10 }
-  const all = [...series.flatMap((p) => [p.lo, p.hi, p.actual]), ...target]
+  const all = [...series.flatMap((p) => [p.lo, p.hi, p.actual]), ...target, ...(normal ?? [])]
   let lo = Math.min(...all)
   let hi = Math.max(...all)
   const pad = (hi - lo) * 0.08 || 1
@@ -70,6 +71,15 @@ export default function NormalZoneChart({ series, leftAt, values, width: W = 356
       </defs>
       <path d={band} fill="#7B7FA8" opacity={0.22} />
       <path d={monotonePath(series.map((p, i) => [x(i), y(p.expected)]))} fill="none" stroke="#7B7FA8" strokeOpacity={0.35} strokeWidth={1} strokeDasharray="3 4" />
+      {normal && normal.length === series.length && (
+        <g>
+          <path d={bandPath(shown.map((v, i) => [x(i), y(v)] as Pt), normal.map((v, i) => [x(i), y(v)] as Pt))} fill="#8B7CFF" opacity={0.22} />
+          <path d={monotonePath(normal.map((v, i) => [x(i), y(v)]))} fill="none" stroke="#B4A9FF" strokeWidth={2} strokeDasharray="5 4" />
+          <text x={x(Math.round(n * 0.45))} y={Math.min(H - M.b - 4, y(normal[Math.round(n * 0.45)]) + fs + 4)} fontSize={fs} fill="#B4A9FF" textAnchor="middle">
+            normal day
+          </text>
+        </g>
+      )}
       <path d={line} fill="none" stroke="#F1F0FF" strokeWidth={2} strokeLinecap="round" />
       <path d={line} fill="none" stroke="#FF4D8D" strokeWidth={2.4} strokeLinecap="round" mask={`url(#out-${id})`} />
       {li >= 0 && (

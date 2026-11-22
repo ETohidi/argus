@@ -53,6 +53,7 @@ export interface IncidentSummary {
   status_label?: string // "Open" | "Still going" | "Fix applied" | "Fix verified" | "Resolved"
   card?: IssueCardText
   detected_at?: number
+  resolved_at?: number | string | null // the backend sends a label, e.g. "Tue 08:00"
   found_line?: string // "Found by Argus at 06:00, nobody asked · advertisers would react in ~22 h"
   short_title?: string // ≤ ~6 plain words, the card title
   title_detail?: string | null // the rest of the full title, e.g. "Casual-game and strategy-game offers on iOS"
@@ -63,6 +64,7 @@ export interface ExplainedChange {
   country: string
   event: string
   change_pct?: number // KPI move explained by the planned event
+  kpi?: string // which KPI moved (e.g. completions)
   line?: string // "Germany +31% · planned promo, no alarm"
   naive_z: number
   twin_z: number
@@ -182,7 +184,7 @@ export interface CountryDetail {
     status: CountryStatus
     verdict: string
     numbers: { label: string; value: number; usual: number; unit: string; line: string }[]
-    series: { metric: string; unit: string; points: { t: number; label: string; value: number; usual: number; lo: number; hi: number }[]; events?: { t: number; label: string }[] }
+    series: { metric: string; unit: string; kpi?: string; change_label?: string; points: { t: number; label: string; value: number; usual: number; lo: number; hi: number; normal?: number }[]; events?: { t: number; label: string }[] }
     moving: { line: string; platform: string; category: string | null; kpi: string; ratio: number }[]
     unusual?: { line: string; platform: string; categories: string[] | null; kpi: string; ratio: number; z: number; view: 'who' | 'why' }[] // all unusual segments, ranked
     segments_total?: number

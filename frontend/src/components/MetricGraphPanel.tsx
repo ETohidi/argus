@@ -113,7 +113,7 @@ export default function MetricGraphPanel({ graph, highlight, outcome: initial, o
   const lit = pointTo ? [pointTo] : addedId ? [addedId] : highlight
 
   return (
-    <div className="fade-in absolute inset-0 z-40 overflow-y-auto bg-bg/85 backdrop-blur-md">
+    <div className="fade-in absolute inset-x-0 bottom-0 top-[88px] z-40 overflow-y-auto bg-bg/85 backdrop-blur-md">
       <div className="mx-auto max-w-[1000px] px-10 pb-16 pt-8">
         <button onClick={onClose} className="text-[14px] text-fg-2 hover:text-fg">
           ← Back to the Earth
@@ -121,7 +121,7 @@ export default function MetricGraphPanel({ graph, highlight, outcome: initial, o
         <div className="mt-6 flex items-end justify-between">
           <div>
             <h1 className="text-[24px] font-semibold text-fg">How the numbers connect</h1>
-            <div className="text-[14px] text-fg-2">{graph ? `${graph.nodes.length} metrics, watched in every country` : 'Loading…'}</div>
+            <div className="text-[14px] text-fg-2">{graph ? `${graph.nodes.length} metrics${graph.exogenous.length ? ' + planned events' : ''}, watched in every country` : 'Loading…'}</div>
           </div>
           {!formOpen && (
             <button onClick={() => setFormOpen(true)} className="rounded-full px-4 py-2 text-[14px] text-fg ring-1 ring-line hover:ring-accent">
