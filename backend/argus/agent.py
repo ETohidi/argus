@@ -86,6 +86,23 @@ class RealityView:
 
 
 GROWTH_NOUN = ["casual games", "strategy games", "fintech apps", "streaming apps", "shopping cashback", "surveys"]
+SHORT_CAT = ["casual", "strategy", "fintech", "streaming", "shopping", "surveys"]
+UNUSUAL_WORD = {"new_accounts": "sign-ups", "revenue": "revenue", "completions": "completed offers",
+                "rewards": "rewards", "quality_per_completion": "valuable users per completed offer"}
+
+
+def _and(xs: list[str], word: str = "and") -> str:
+    return xs[0] if len(xs) == 1 else ", ".join(xs[:-1]) + f" {word} " + xs[-1]
+
+
+def _ratio_text(r: float) -> str:
+    """1.58 -> '1.6× usual'; 0.14 -> '−86% vs usual'; 1.2 -> '+20% vs usual'."""
+    if r >= 1.5:
+        return f"{r:.1f}× usual"
+    pct = round((r - 1) * 100)
+    return f"{'+' if pct >= 0 else '−'}{abs(pct)}% vs usual"
+
+
 SHORT_COUNTRY = {"GB": "the UK", "US": "the US", "NL": "the Netherlands", "PH": "the Philippines"}
 OFFER_NOUN = ["casual-game", "strategy-game", "fintech", "streaming", "shopping-cashback", "survey"]
 
@@ -1730,18 +1747,21 @@ class Agent:
                               "new_accounts_expected_h": round(float(n_f / WINDOW), 1)})
             for k in range(cfg.K):
                 kz = {"new_accounts": nz}
+                kr = {"new_accounts": round(float(n_o / max(n_f, 1e-9)), 3)}
                 for key, m in (("completions", "completions"), ("revenue", "revenue"), ("rewards", "rewards")):
                     o = sum(r[key][c, p, k] for r in rows)
                     f = sum(x[key][c, p, k] for x in fcs)
+                    kr[key] = round(float(o / max(f, 1e-9)), 3)
                     sig = np.sqrt(sum(tw.sig[mm][c, p, k] ** 2 for mm in ("impressions", "starts", "completions"))
                                   + tw.sig_ret[c, p] ** 2 + (tw.sig[m][c, p, k] ** 2 if m != "completions" else 0))
                     kz[key] = round(float((o / max(f, 1e-9) - 1) / (sig / np.sqrt(WINDOW))), 1)
                 qo = sum(r["quality"][c, p, k] for r in rows) / max(sum(r["completions"][c, p, k] for r in rows), 1e-9)
                 qf = sum(x["quality"][c, p, k] for x in fcs) / max(sum(x["completions"][c, p, k] for x in fcs), 1e-9)
                 kz["quality_per_completion"] = round(float((qo / qf - 1) / (tw.sig["quality"][c, p, k] / np.sqrt(WINDOW))), 1)
+                kr["quality_per_completion"] = round(float(qo / max(qf, 1e-9)), 3)
                 dm = sum(r["revenue"][c, p, k] - r["rewards"][c, p, k] for r in rows) - \
                     sum(x["revenue"][c, p, k] - x["rewards"][c, p, k] for x in fcs)
-                segs.append({"platform": cfg.PLATFORMS[p], "category": cfg.CATEGORIES[k], "kpi_z": kz,
+                segs.append({"platform": cfg.PLATFORMS[p], "category": cfg.CATEGORIES[k], "kpi_z": kz, "kpi_ratio": kr,
                              "deviation_usd_h": round(float(dm / WINDOW), 2)})
         return segs, platforms
 
@@ -1800,11 +1820,13 @@ class Agent:
                 continue
             seen.add(key)
             where = plat + (f" · {cat.lower()}" if cat else "")
-            move = f"{ratio:.1f}× usual" if ratio >= 1.5 else f"{(ratio - 1):+.0%} vs usual"
+            move = _ratio_text(ratio)
             moving.append({"line": f"{where}: {word[kpi]} {move}", "platform": plat, "category": cat, "kpi": kpi,
                            "ratio": round(float(ratio), 2)})
             if len(moving) == 2:
                 break
+        # ok countries: [] (single-segment blips below the alert rule stay in segments[], not in the words)
+        unusual = self._unusual(c, segs, platforms) if status != "ok" else []
         # one plain sentence
         if status == "incident":
             inc = [i for i in self.incidents if i["c"] == c and i["status"] in ("open", "persisting")][-1]
@@ -1820,9 +1842,44 @@ class Agent:
         else:
             verdict = "All fine"
             moving = []
-        return {"status": status, "verdict": verdict, "numbers": numbers,
+        return {"status": status, "verdict": verdict, "numbers": numbers, "unusual": unusual,
+                "segments_total": cfg.P * cfg.K,
                 "series": {"metric": "Margin per hour", "unit": "USD/h", "points": pts,
                            "events": self._calendar_marks(c, pts[0]["t"], pts[-1]["t"])}, "moving": moving}
+
+    def _unusual(self, c: int, segs: list[dict], platforms: list[dict]) -> list[dict]:
+        """Every unusual segment (twin z, calendar-aware, |z| >= ALERT_Z) in plain words, categories that move the same
+        way merged into one line, ranked by money at stake (|margin deviation| USD/h)."""
+        fraud_p = {i["platform"] for i in self.incidents
+                   if i["c"] == c and i["kind"] in ("fraud", "organic", "user") and i["status"] in ("open", "persisting")}
+        out = []
+        for pl in platforms:                                  # sign-ups are platform-level: "all offers"
+            z = pl["new_accounts_z"]
+            if abs(z) >= ALERT_Z:
+                ratio = pl["new_accounts_h"] / max(pl["new_accounts_expected_h"], 1e-9)
+                money = sum(abs(sg["deviation_usd_h"]) for sg in segs if sg["platform"] == pl["platform"])
+                out.append({"platform": pl["platform"], "categories": None, "kpi": "new_accounts",
+                            "ratio": round(float(ratio), 2), "z": z, "view": "who", "money_usd_h": round(money, 1)})
+        for plat in cfg.PLATFORMS:
+            for kpi in ("revenue", "completions", "rewards", "quality_per_completion"):
+                for sign in (1, -1):
+                    grp = [sg for sg in segs if sg["platform"] == plat and sign * sg["kpi_z"][kpi] >= ALERT_Z]
+                    if not grp:
+                        continue
+                    ratio = float(np.exp(np.mean([np.log(max(sg["kpi_ratio"][kpi], 1e-6)) for sg in grp])))
+                    z = max((sg["kpi_z"][kpi] for sg in grp), key=abs)
+                    view = "who" if plat in fraud_p else "why"
+                    cats = [sg["category"] for sg in grp]
+                    out.append({"platform": plat, "categories": None if len(cats) == cfg.K else cats, "kpi": kpi,
+                                "ratio": round(ratio, 2), "z": z, "view": view,
+                                "money_usd_h": round(sum(abs(sg["deviation_usd_h"]) for sg in grp), 1)})
+        out.sort(key=lambda u: (-u["money_usd_h"], -abs(u["z"])))
+        for u in out:
+            cats = u["categories"]
+            where = ("all offers" if cats is None else cats[0].lower() if len(cats) == 1
+                     else _and([SHORT_CAT[cfg.CATEGORIES.index(x)] for x in cats], "&"))
+            u["line"] = f"{u['platform']} · {where}: {UNUSUAL_WORD[u['kpi']]} {_ratio_text(u['ratio'])}"
+        return out
 
     def _calendar_marks(self, c: int, t0: int, t1: int) -> list[dict]:
         """Planned events of country c that start or end inside [t0, t1], for small chart markers."""

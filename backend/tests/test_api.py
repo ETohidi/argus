@@ -297,3 +297,22 @@ def test_attention_counts_for_level_rail():
     assert a["users_total"] > 1_000_000
     a = client.post("/api/demo/tracking_break", headers=h).json()["state"]["attention"]
     assert a["segments_opened"] == 2 and a["users_checked"] == 600     # farm: 1 segment + 600 users; tracking: 1 segment
+
+
+def test_country_unusual_words_and_ratios():
+    h = {"X-Session": "unusual-test"}
+    client.post("/api/demo/tracking_break", headers=h)
+    gb = client.get("/api/country/GB", headers=h).json()
+    s = gb["summary"]
+    assert s["segments_total"] == 12 and s["unusual"]
+    u = s["unusual"][0]
+    assert u["line"] == "iOS · casual & strategy: revenue −86% vs usual" or u["line"].startswith("iOS · casual & strategy: revenue −")
+    assert u["categories"] == ["Casual games", "Strategy games"] and u["view"] == "why" and u["ratio"] < 0.3
+    seg = next(x for x in gb["segments"] if x["platform"] == "iOS" and x["category"] == "Casual games")
+    assert set(seg["kpi_ratio"]) == set(seg["kpi_z"]) and seg["kpi_ratio"]["revenue"] < 0.3
+    assert client.get("/api/country/US", headers=h).json()["summary"]["unusual"] == []
+    h2 = {"X-Session": "unusual-test-2"}
+    client.post("/api/demo/bot_farm", headers=h2)
+    ca = client.get("/api/country/CA", headers=h2).json()["summary"]["unusual"]
+    assert ca[0]["kpi"] == "new_accounts" and ca[0]["categories"] is None and ca[0]["view"] == "who"
+    assert ca[0]["line"].startswith("Android · all offers: sign-ups ")

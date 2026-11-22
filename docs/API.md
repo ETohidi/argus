@@ -253,6 +253,14 @@ L2 heatmap.
                    "new_accounts_h": 95.5, "new_accounts_expected_h": 64.8 } ] }
 ```
 
+`segments[]` also carries `kpi_ratio`: observed / usual for the same KPIs as `kpi_z` (3 h window). Sign-ups are
+platform-level, like their z.
+```jsonc
+{ "platform": "iOS", "category": "Casual games", "kpi_z": { ... },
+  "kpi_ratio": { "new_accounts": 0.982, "completions": 0.863, "revenue": 0.139, "rewards": 0.899, "quality_per_completion": 0.944 },
+  "deviation_usd_h": -251.3 }
+```
+
 `summary` (added for the simplified country view; same response, extra key):
 ```jsonc
 "summary": {
@@ -270,11 +278,25 @@ L2 heatmap.
                                                    // calendar events of this country starting/ending inside the 24 h
                                                    // (kind "start" | "end", end label "Planned promo ends"); [] if none
                                                    // last 24 h; lo/hi = usual ±2σ (single hour, twin backtest error)
+  "segments_total": 12,                            // platforms × categories in this country: "All 12 segments as expected"
+  "unusual": [                                     // ALL unusual segments, most money at stake first; [] for "ok" countries
+    { "line": "iOS · casual & strategy: revenue −86% vs usual", "platform": "iOS",
+      "categories": ["Casual games", "Strategy games"],      // null = all offers (sign-ups are platform-level)
+      "kpi": "revenue", "ratio": 0.14, "z": -11.4,
+      "view": "why",                               // "who" = user-side cause (sign-ups, or the platform of an open
+                                                   // fake-account / new-user issue), "why" otherwise
+      "money_usd_h": 503.2 } ],                    // |margin deviation| of those segments, USD/h (rank key)
   "moving": [                                      // ≤ 2, empty when status is "ok" or nothing has |z| ≥ 4
     { "line": "Android: sign-ups 1.6× usual", "platform": "Android", "category": null, "kpi": "new_accounts", "ratio": 1.58 },
     { "line": "iOS · casual games: revenue -86% vs usual", "platform": "iOS", "category": "Casual games", "kpi": "revenue", "ratio": 0.14 } ]
 }
 ```
+How `unusual` is built:
+- **Evidence:** the same as `moving` (|z| ≥ 4, calendar-aware), but nothing is capped.
+- **Merging:** categories on one platform whose same number moves the same way become one line. The ratio is their
+  geometric mean and z is the strongest one.
+- **Example lines:** the bot farm gives "Android · all offers: sign-ups 1.6× usual" with view "who".
+
 How `moving` is built:
 - **Evidence:** the same as the heatmap, i.e. the twin's calendar-aware z per segment. A planned promo therefore doesn't
   show up here.
