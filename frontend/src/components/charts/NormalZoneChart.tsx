@@ -44,7 +44,7 @@ export default function NormalZoneChart({ series, leftAt, values, width: W = 356
   }, [target.join(',')])
 
   if (series.length < 2) return null
-  const M = { l: 2, r: 2, t: leftAt || markers.length || bandLabel ? fs + 10 : 6, b: fs + 10 }
+  const M = { l: 2, r: 2, t: leftAt || markers.length || (bandLabel && showStart) ? fs + 10 : 6, b: fs + 10 }
   const all = [...series.flatMap((p) => [p.lo, p.hi, p.actual]), ...target]
   let lo = Math.min(...all)
   let hi = Math.max(...all)
@@ -94,7 +94,7 @@ export default function NormalZoneChart({ series, leftAt, values, width: W = 356
         )
       })}
       {bandLabel && (
-        <text x={x(0) + 2} y={fs} fontSize={fs} fill="#9A9CC4">
+        <text x={x(0) + 2} y={showStart ? fs : H - 3} fontSize={fs} fill="#9A9CC4">
           {bandLabel}
         </text>
       )}

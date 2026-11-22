@@ -139,6 +139,7 @@ type Props = {
   edgeMode?: 'story' | 'types'
   pending?: string[] // not checked yet (replay): drawn faint, no verdict word
   pulse?: string // node that pulses (the cause, once found)
+  minText?: number // smallest on-screen text size in px (default 14)
 }
 
 // Only the root is "the cause"; other off-pattern steps (broken mechanisms, symptoms) read as "affected".
@@ -146,14 +147,14 @@ export function defaultRole(n: GraphNode): NodeRole {
   return n.state === 'root' ? 'broke' : n.state === 'broken' || n.state === 'symptom' ? 'symptom' : 'normal'
 }
 
-export default function CausalGraph({ nodes, edges, roles = {}, showWords = true, dims: dimsIn, edgeMode = 'story', pending = [], pulse }: Props) {
+export default function CausalGraph({ nodes, edges, roles = {}, showWords = true, dims: dimsIn, edgeMode = 'story', pending = [], pulse, minText = 14 }: Props) {
   const dims = { ...DEFAULT_DIMS, ...dimsIn }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const { byId, chains, height } = useMemo(() => layout(nodes, edges, dims), [nodes, edges, dims.W, dims.nodeW, dims.nodeH, dims.row])
   const roleOf = (id: string): NodeRole => roles[id] ?? (byId.get(id)?.node ? defaultRole(byId.get(id)!.node!) : 'normal')
   const hot = (e: GraphEdge) => roleOf(e.source) !== 'normal' && roleOf(e.target) !== 'normal' && roleOf(e.target) !== 'new'
   const { W, nodeW, nodeH } = dims
-  const { ref: svgRef, px } = useSvgFont<SVGSVGElement>(W)
+  const { ref: svgRef, px } = useSvgFont<SVGSVGElement>(W, minText)
 
   return (
     <svg ref={svgRef} viewBox={`0 0 ${W} ${height}`} className="w-full" style={{ height: 'auto' }} role="img" aria-label="How the business numbers drive each other">
@@ -213,7 +214,7 @@ export default function CausalGraph({ nodes, edges, roles = {}, showWords = true
           const lines = wrap(n.label.replace(/\s*\(.*\)$/, ''))
           const waiting = pending.includes(n.id)
           // Text positions follow the on-screen font size (never below 14 px), so name and verdict never overlap.
-          const fsz = px(14)
+          const fsz = px(minText)
           const lh = fsz * 1.1
           const withWord = showWords && !waiting
           const block = lines.length * lh + (withWord ? fsz * 1.1 : 0)

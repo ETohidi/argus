@@ -222,7 +222,7 @@ function Grid({ detail: d, cells, country }: { detail: IncidentDetail; cells?: {
 }
 
 // The causal graph, walked from margin backwards: each node gets its verdict in turn; the cause pulses.
-export function Walk({ d, walk, at }: { d: IncidentDetail; walk: { node: string; verdict: string }[]; at: number }) {
+export function Walk({ d, walk, at, big }: { d: IncidentDetail; walk: { node: string; verdict: string }[]; at: number; big?: boolean }) {
   const ids = new Set(walk.map((w) => w.node))
   const nodes = d.graph.nodes.filter((n) => ids.has(n.id)).map((n) => ({ ...n, label: plain(n.id) }))
   const edges: GraphEdge[] = d.graph.edges.filter((e) => ids.has(e.source) && ids.has(e.target))
@@ -230,8 +230,8 @@ export function Walk({ d, walk, at }: { d: IncidentDetail; walk: { node: string;
   const roles = Object.fromEntries(done.map((w) => [w.node, VERDICT_ROLE[w.verdict] ?? 'normal']))
   const cause = done.find((w) => w.verdict === 'cause')?.node
   return (
-    <div className="w-full max-w-[600px]">
-      <CausalGraph nodes={nodes} edges={edges} roles={roles} pending={walk.slice(at).map((w) => w.node)} pulse={cause} dims={{ W: 460, nodeW: 156, nodeH: 54, row: 66 }} />
+    <div className={big ? "w-full" : "w-full max-w-[600px]"}>
+      <CausalGraph nodes={nodes} edges={edges} roles={roles} pending={walk.slice(at).map((w) => w.node)} pulse={cause} dims={big ? { W: 560, nodeW: 200, nodeH: 62, row: 76 } : { W: 460, nodeW: 156, nodeH: 54, row: 66 }} minText={big ? 15 : 14} />
     </div>
   )
 }

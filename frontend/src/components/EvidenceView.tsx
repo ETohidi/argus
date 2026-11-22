@@ -136,7 +136,7 @@ export default function EvidenceView({ detail: d, title, initialTab = 'why', tim
             <div className="h-[420px] animate-pulse rounded-2xl bg-panel/60" />
           ) : tab === 'why' ? (
             <div className="space-y-6">
-              <div className="grid grid-cols-[1fr_1.1fr] items-start gap-6">
+              <div className="grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] items-start gap-6">
                 <WhyWalk d={d} />
                 <Proof d={d} part="chart" />
               </div>
@@ -174,7 +174,7 @@ function WhyWalk({ d }: { d: IncidentDetail }) {
   }, [walk])
   return (
     <Frame>
-      {all ? <StoryGraph d={d} /> : <div className="mx-auto max-w-[460px]"><Walk d={d} walk={walk} at={at} /></div>}
+      {all ? <StoryGraph d={d} /> : <Walk d={d} walk={walk} at={at} big />}
       <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-[14px] text-fg-2">
         <span className="flex items-center gap-2"><span className="h-3 w-5 rounded bg-problem" /> cause</span>
         <span className="flex items-center gap-2"><span className="h-3 w-5 rounded border border-dashed border-problem" /> affected</span>
@@ -262,7 +262,7 @@ function StoryGraph({ d }: { d: IncidentDetail }) {
 }
 
 function Frame({ children, narrow }: { children: ReactNode; narrow?: boolean }) {
-  return <div className={`mx-auto rounded-2xl bg-panel/60 p-8 ring-1 ring-line ${narrow ? 'max-w-[720px]' : ''}`}>{children}</div>
+  return <div className={`mx-auto w-full rounded-2xl bg-panel/60 p-8 ring-1 ring-line ${narrow ? 'max-w-[720px]' : ''}`}>{children}</div>
 }
 
 function Empty({ text }: { text: string }) {
@@ -300,7 +300,7 @@ function Proof({ d, part }: { d: IncidentDetail; part?: 'chart' | 'list' }) {
           <div className="mt-6">
             <NormalZoneChart series={series} leftAt={d.left_zone_at} values={without ? cfValues : undefined} width={520} height={300} fontSize={14} showStart={false} />
           </div>
-          <div className="mt-3 flex items-baseline justify-between gap-6 text-[14px] text-fg-2">
+          <div className="mt-3 flex flex-col gap-1 text-[14px] text-fg-2">
             <span>{metricLabel(d.series_meta)}</span>
             <span className={`text-[16px] transition-opacity duration-300 ${without ? 'text-ok opacity-100' : 'opacity-0'}`}>
               {Math.round(share * 100)}% of the change disappears{share >= 0.8 ? ' — cause proven' : ''}
