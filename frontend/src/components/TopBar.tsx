@@ -13,6 +13,12 @@ type Props = {
 export default function TopBar({ status, mode, onMode, growth }: Props) {
   return (
     <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center gap-8 px-8 py-6">
+      {/* Soft scrim behind the top-left header so text stays readable over bright city lights; no hard edge. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-0 top-0 -z-10 h-[200px] w-[1000px] max-w-full"
+        style={{ background: 'radial-gradient(ellipse 100% 100% at 0% 0%, rgba(5,6,13,0.78) 0%, rgba(5,6,13,0.5) 38%, rgba(5,6,13,0.18) 65%, rgba(5,6,13,0) 85%)' }}
+      />
       <div className="pointer-events-auto flex items-center gap-3">
         <ArgusEye mood={status.mood} height={40} />
         <span className="text-[16px] font-semibold tracking-[0.3em] text-fg">ARGUS</span>
