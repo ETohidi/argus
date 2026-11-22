@@ -23,6 +23,13 @@ DEFAULT_PATH = PKG.parent / ".cache" / "precomputed.pkl"
 SEED = 42
 LAUNCH = [("AR", SEED)]
 _started = False
+_done = threading.Event()        # set once the background warm-up finished (loaded or computed)
+
+
+def wait_ready(timeout: float = 30.0) -> None:
+    """If a warm-up is running, wait for it: loading the cache is far cheaper than recomputing it in a request."""
+    if _started:
+        _done.wait(timeout)
 
 
 def cache_path() -> Path:
@@ -101,7 +108,10 @@ def warm_in_background() -> None:
 
     def run() -> None:
         t = time.time()
-        how = warm()
+        try:
+            how = warm()
+        finally:
+            _done.set()
         print(f"argus precompute: {how} in {time.time() - t:.1f} s", file=sys.stderr, flush=True)
 
     threading.Thread(target=run, name="argus-warm", daemon=True).start()

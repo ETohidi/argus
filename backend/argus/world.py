@@ -70,6 +70,9 @@ class World:
     def reset(self, seed: int | None = None) -> None:
         """New world. The default seed is a cheap copy of a precomputed template (identical across sessions)."""
         seed = getattr(self, "seed", 42) if seed is None else seed
+        if seed == 42 and seed not in _TEMPLATES:
+            from .precompute import wait_ready
+            wait_ready()
         tpl = _TEMPLATES.get(seed)
         if tpl is None and seed == 42:
             tpl = template_world(seed)
@@ -142,6 +145,9 @@ class World:
         if scene not in SCENES:
             raise KeyError(scene)
         if scene == "start":
+            if (42, "start") not in _TEMPLATES:
+                from .precompute import wait_ready
+                wait_ready()
             if (42, "start") in _TEMPLATES or 42 in _TEMPLATES:
                 self._copy_from(template_world(42, "start"))      # identical for every session: copy, don't recompute
                 return {"scene": scene, "state": self.agent.state()}

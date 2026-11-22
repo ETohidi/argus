@@ -324,6 +324,9 @@ def launch(iso: str = "AR", seed: int = 42, incidents: list[dict] | None = None,
         raise ValueError("users must be between 1,000 and 50,000,000 daily users")
     key = (iso, seed)
     if key not in _LAUNCH:
+        from .precompute import wait_ready
+        wait_ready()
+    if key not in _LAUNCH:
         with _LOCK:                     # one computation per key, even if a warm-up thread is already on it
             if key not in _LAUNCH:
                 _LAUNCH[key] = _launch(iso, seed)
