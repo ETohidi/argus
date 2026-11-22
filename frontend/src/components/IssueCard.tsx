@@ -117,7 +117,7 @@ function Outcome({ detail, countryName, statusLine, recovered }: { detail: Incid
     return (
       <div className="mt-6">
         <div className="text-[24px] font-semibold leading-snug text-ok">
-          {countryName} is green.
+          {countryName} is back to normal.
           <br />
           The prediction came true.
         </div>

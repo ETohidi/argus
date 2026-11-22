@@ -25,11 +25,11 @@ export default function TopBar({ status, mode, onMode, growth }: Props) {
             <span className="num text-[24px] font-semibold leading-none text-ok">{growth.value}</span>
             <span className="text-[16px] text-fg">a day untapped</span>
           </div>
-          <div className="absolute left-0 top-full mt-1.5 flex items-center gap-4 whitespace-nowrap text-[13px]">
+          <div className="absolute left-0 top-full mt-1.5 flex flex-col items-start gap-2.5 whitespace-nowrap text-[13px]">
             <span className="cursor-default text-fg-2" title={growth.tooltip}>
               {growth.caption}
             </span>
-            <button onClick={growth.onLaunch} className="-my-1 rounded-full px-2.5 py-1 text-accent ring-1 ring-accent/40 hover:bg-accent/15">
+            <button onClick={growth.onLaunch} className="rounded-full px-2.5 py-1 text-accent ring-1 ring-accent/40 hover:bg-accent/15">
               {growth.launchLabel} →
             </button>
           </div>

@@ -236,7 +236,16 @@ function Outcome({ outcome, stage, onChoose, onShow }: { outcome: MetricOutcome 
           </li>
         ) : null,
       )}
-      {stage > 2 && outcome.note && <li className="fade-up pl-5 text-[13px] leading-relaxed text-fg-2">{outcome.note}</li>}
+      {stage > 2 && outcome.note && (
+        <li className="fade-up pl-5 text-[13px] text-fg-2">
+          <details>
+            <summary className="cursor-pointer list-none hover:text-fg" title={outcome.note}>
+              Added because you asked · watching in {outcome.countries} markets <span aria-hidden>▸</span>
+            </summary>
+            <p className="mt-1.5 leading-relaxed">{outcome.note}</p>
+          </details>
+        </li>
+      )}
     </ol>
   )
 }

@@ -84,6 +84,27 @@ async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown):
   return mockHandle(method, path, body) as T
 }
 
+// Live-only request (no sample-data fallback), retried once after a short wait. The what-if launch has no offline
+// version, so a brief backend blip (e.g. a restart) must not route it into the sample data and silently drop it.
+async function liveRequest<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(`/api${path}`, {
+        method,
+        headers: { 'Content-Type': 'application/json', 'X-Session': SESSION },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new ApiError(res.status, data?.detail ?? res.statusText)
+      setBackend('live')
+      return data as T
+    } catch (err) {
+      if (err instanceof ApiError || attempt >= 1) throw err
+      await new Promise((r) => setTimeout(r, 1500))
+    }
+  }
+}
+
 export const api = {
   state: () => request<WorldState>('GET', '/state'),
   incidents: () => request<IncidentSummary[]>('GET', '/incidents'),
@@ -91,7 +112,7 @@ export const api = {
   country: (iso: string) => request<CountryDetail>('GET', `/country/${iso}`),
   potential: () => request<PotentialResponse>('GET', '/potential'),
   graph: () => request<MetricGraph>('GET', '/graph'),
-  whatIfLaunch: (country = 'AR') => request<LaunchForecast>('POST', '/what_if/launch', { country }),
+  whatIfLaunch: (country = 'AR') => liveRequest<LaunchForecast>('POST', '/what_if/launch', { country }),
   graphTree: () => request<{ roots: string[]; rows: GraphTreeRow[] }>('GET', '/graph/tree'),
   timeline: () => request<{ events: TimelineEvent[] }>('GET', '/timeline'),
   step: (hours: number) => request<WorldState>('POST', '/step', { hours }),

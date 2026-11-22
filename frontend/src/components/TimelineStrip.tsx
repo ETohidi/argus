@@ -51,13 +51,7 @@ export default function TimelineStrip({ events, now, hours = 72, clock, countryN
         <div key={t} className="absolute top-[14px] h-3 w-px bg-line" style={{ left: `${pos(t)}%` }} />
       ))}
       <div className="pointer-events-auto absolute right-0 top-7 cursor-default whitespace-nowrap text-[13px] text-fg-2" title="Simulated time: the marketplace runs hour by hour">
-        {clock ? (
-          <>
-            <span className="num text-fg">{clock}</span> <span className="text-fg-2/70">· simulated</span>
-          </>
-        ) : (
-          'now'
-        )}
+        {clock ? <span className="num">{clock}</span> : 'now'}
       </div>
       <div className="absolute left-0 top-7 text-[13px] text-fg-2">72 h ago</div>
       {placed.map(({ e, left, offset }, i) => (

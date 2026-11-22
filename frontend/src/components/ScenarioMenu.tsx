@@ -48,7 +48,7 @@ type Props = {
 }
 
 // The demo as six story steps, one short line each.
-const STORY = [
+export const STORY = [
   'A calm night',
   'A planned promo: no alarm',
   'Fake accounts in Canada',
@@ -77,10 +77,15 @@ export default function ScenarioMenu(p: Props) {
     fn()
     setOpen(false)
   }
+  // Running a story step collapses the panel to a small pill so the globe stays clear for the video.
+  const runStep = (i: number) => {
+    setOpen(false)
+    p.onStory(i)
+  }
   const a = p.state?.attention
   const next = p.storyAt + 1 < STORY.length ? p.storyAt + 1 : 0
   return (
-    <div ref={ref} className="absolute bottom-6 left-8 z-30">
+    <div ref={ref} className="absolute bottom-6 left-8 z-[45]">
       {open && (
         <div className="fade-up absolute bottom-12 left-0 max-h-[calc(100vh-9rem)] w-[320px] overflow-y-auto rounded-2xl bg-panel/95 p-5 text-[13px] text-fg shadow-2xl ring-1 ring-line/50">
           <div className="mb-3 text-fg-2">Play the demo</div>
@@ -90,7 +95,7 @@ export default function ScenarioMenu(p: Props) {
               return (
                 <li key={line}>
                   <button
-                    onClick={() => p.onStory(i)}
+                    onClick={() => runStep(i)}
                     disabled={p.busy}
                     className={`flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left disabled:opacity-40 ${current ? 'bg-line/70 text-fg' : i < p.storyAt ? 'text-fg-2 hover:bg-line/50' : 'text-fg hover:bg-line/50'}`}
                     aria-current={current ? 'step' : undefined}
@@ -103,7 +108,7 @@ export default function ScenarioMenu(p: Props) {
             })}
           </ol>
           <button
-            onClick={() => p.onStory(next)}
+            onClick={() => runStep(next)}
             disabled={p.busy}
             className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-ok py-3 text-[16px] font-semibold text-bg hover:brightness-110 disabled:opacity-50"
           >
@@ -174,12 +179,23 @@ export default function ScenarioMenu(p: Props) {
           )}
         </div>
       )}
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className={`rounded-full px-4 py-2 text-[13px] ring-1 transition ${open ? 'text-fg ring-fg-2' : 'text-fg-2 ring-line hover:text-fg'}`}
-      >
-        Play the demo
-      </button>
+      {p.storyAt >= 0 && !open ? (
+        <div className="flex items-center overflow-hidden rounded-full bg-panel/90 text-[13px] ring-1 ring-line backdrop-blur">
+          <button onClick={() => setOpen(true)} className="num px-4 py-2 text-fg-2 hover:text-fg" title={STORY[p.storyAt]}>
+            {p.storyAt + 1}/{STORY.length}
+          </button>
+          <button onClick={() => runStep(next)} disabled={p.busy} className="border-l border-line px-4 py-2 font-semibold text-ok hover:bg-ok/10 disabled:opacity-50">
+            {p.busy ? 'Running…' : next === 0 ? 'Start over' : 'Next ▶'}
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className={`rounded-full px-4 py-2 text-[13px] ring-1 transition ${open ? 'text-fg ring-fg-2' : 'text-fg-2 ring-line hover:text-fg'}`}
+        >
+          Play the demo
+        </button>
+      )}
     </div>
   )
 }

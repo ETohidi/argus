@@ -33,6 +33,7 @@ type Props = {
   notes?: Record<string, string> // per-country tooltip line, e.g. "Germany +31% · planned promo, no alarm"
   attention?: Record<string, number> // 0..1 per country: money at stake × confidence
   growthNotes?: Record<string, string> // Growth mode tooltip: what users like vs see, and what it's worth
+  paused?: boolean // something covers the globe (replay, evidence, metric view): no idle spin
   onSelect: (iso: string | null) => void
 }
 
@@ -134,7 +135,7 @@ function shimmer(head: number, fade: number): any {
 
 const MARKER_STATUSES: CountryStatus[] = ['incident', 'watch']
 
-export default function Globe({ countries, mode, selectedIso, insetRight = 0, utcHour, launch = null, notes = {}, growthNotes = {}, attention = {}, onSelect }: Props) {
+export default function Globe({ countries, mode, selectedIso, insetRight = 0, utcHour, launch = null, notes = {}, growthNotes = {}, attention = {}, paused = false, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const loadedRef = useRef(false)
@@ -146,6 +147,8 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
   const hourRef = useRef(utcHour ?? 12)
   const earthRef = useRef<EarthImagery | null>(null)
   const launchRef = useRef(launch)
+  const pausedRef = useRef(paused)
+  pausedRef.current = paused
   const centersRef = useRef(new Map<string, [number, number]>()) // visual centre by ISO-2 code and by name
   // Polar caps: MapLibre fills both with the background colour. Use the colour of the pole facing the camera, blended
   // across the equator (where both caps sit edge-on at the limb), so neither pole shows a dark disc at any angle.
@@ -198,12 +201,19 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
     let lastPulse = 0
     let lastHide = 0
     const note = () => (lastInteraction = performance.now())
+    // Idle spin: resumes ~4 s after the last pointer activity on the globe when nothing is open and no fly-in runs,
+    // easing its speed up over ~1 s. Hover, drag or click stop it again. Reduced motion: no auto-spin.
+    let rampStart: number | null = null
     const spin = (now: number) => {
       const dt = Math.min(now - prev, 100)
       prev = now
-      if (!selectedRef.current && !launchRef.current && now - lastInteraction > 12_000 && !map.isMoving()) {
+      const idle = !reducedMotion() && !selectedRef.current && !launchRef.current && !pausedRef.current && now - lastInteraction > 4000 && !map.isMoving()
+      if (!idle) rampStart = null
+      else {
+        rampStart ??= now
+        const k = Math.min(1, (now - rampStart) / 1000)
         const c = map.getCenter()
-        map.jumpTo({ center: [c.lng + dt * 0.0035, c.lat] })
+        map.jumpTo({ center: [c.lng + dt * 0.0035 * k * k * (3 - 2 * k), c.lat] })
       }
       // Pulse the affected country (≈15 fps is plenty for a slow breathe).
       if (loadedRef.current && now - lastPulse > 66 && countriesRef.current.some((c) => c.status === 'watch') && modeRef.current === 'health' && !launchRef.current) {
@@ -228,6 +238,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
     }
     const canvas = map.getCanvas()
     canvas.addEventListener('pointerdown', note)
+    canvas.addEventListener('pointermove', note)
     canvas.addEventListener('wheel', note, { passive: true })
     frame = requestAnimationFrame(spin)
 
@@ -402,6 +413,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
       cancelAnimationFrame(frame)
       canvas.removeEventListener('pointerdown', note)
       canvas.removeEventListener('wheel', note)
+      canvas.removeEventListener('pointermove', note)
       canvas.removeEventListener('mouseleave', clearHover)
       map.remove()
       mapRef.current = null

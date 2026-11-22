@@ -4,7 +4,7 @@ import EvidenceView, { type EvidenceTab } from './components/EvidenceView'
 import Globe, { type GlobeMode, type LaunchView } from './components/Globe'
 import IssueCard from './components/IssueCard'
 import MetricGraphPanel from './components/MetricGraphPanel'
-import ScenarioMenu, { SCENE_LABEL } from './components/ScenarioMenu'
+import ScenarioMenu, { SCENE_LABEL, STORY } from './components/ScenarioMenu'
 import TimelineStrip from './components/TimelineStrip'
 import TopBar from './components/TopBar'
 import WhatIfCard from './components/WhatIfCard'
@@ -248,7 +248,7 @@ export default function App() {
             setCardId(r.incident_id)
           }
       }
-      flash(SCENE_LABEL[scene])
+      flash(SCENE_STORY[scene] != null ? STORY[SCENE_STORY[scene]!] : SCENE_LABEL[scene])
     })
 
   const approve = async (fixId: string) => {
@@ -350,7 +350,10 @@ export default function App() {
       await new Promise((r) => window.setTimeout(r, 2500))
       await demo('verify')
     } else if (i === 4) await demo('new_metric')
-    else if (i === 5) await whatIfLaunch()
+    else if (i === 5) {
+      flash(STORY[5])
+      await whatIfLaunch()
+    }
   }
 
   const keys = useRef({ demo, closeTop: () => {}, openEvidence: () => {} })
@@ -438,7 +441,7 @@ export default function App() {
 
   return (
     <div className="relative h-full overflow-hidden bg-bg">
-      {state && <Globe countries={state.countries} mode={mode} selectedIso={launch ? null : focusIso} launch={launchView} notes={notes} growthNotes={growthNotes} attention={attention} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
+      {state && <Globe countries={state.countries} mode={mode} selectedIso={launch ? null : focusIso} launch={launchView} notes={notes} growthNotes={growthNotes} paused={!!(replayId || evidence || graphView)} attention={attention} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
 
       <TopBar status={launch?.phase === 'flying' ? { ...status, mood: 'investigating' } : status} mode={mode} onMode={setMode} growth={growthSummary ? { ...growthSummary, launchLabel: `New market: ${LAUNCH.name}`, onLaunch: whatIfLaunch } : undefined} />
 
@@ -483,16 +486,6 @@ export default function App() {
         ) : null}
       </div>
 
-      {state && !(state.incidents.some((i) => i.status !== 'resolved') || timeline.some((e) => e.t >= state.clock.t - 72)) && (
-        // Calm: no timeline, just the simulated clock where the timeline's "now" end would be.
-        <div
-          className="pointer-events-auto absolute bottom-6 z-20 cursor-default text-[13px] text-fg-2 transition-[right] duration-300 ease-out"
-          style={{ right: sideOpen ? 480 : 40, bottom: 'calc(1.5rem + 2px)' }}
-          title="Simulated time: the marketplace runs hour by hour"
-        >
-          <span className="num text-fg">{shortClock(state.clock)}</span> <span className="text-fg-2/70">· simulated</span>
-        </div>
-      )}
       {state && (state.incidents.some((i) => i.status !== 'resolved') || timeline.some((e) => e.t >= state.clock.t - 72)) && (
         <div className="pointer-events-none absolute bottom-6 left-48 z-20 transition-[right] duration-300 ease-out" style={{ right: sideOpen ? 480 : 40 }}>
           <TimelineStrip

@@ -70,7 +70,7 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
   const fraud = /fake/i.test(d.short_title ?? d.title)
   const tracking = /confirm/i.test(d.short_title ?? d.title) // advertisers stopped confirming offers
   const steps: Step[] = [
-    { key: 'l1', level: 'Level 1 · the whole business', sentence: fit(r.l1?.sentence, `${metricWord} left the usual range${leftAt ? ` at ${timeOf(leftAt.label)}` : ''}.`), ms: 2800 },
+    { key: 'l1', level: 'Level 1 · countries', sentence: fit(r.l1?.sentence, `${metricWord} left the usual range${leftAt ? ` at ${timeOf(leftAt.label)}` : ''}.`), ms: 2800 },
     { key: 'l2', level: `Level 2 · inside ${countryName}`, sentence: fit(r.l2?.sentence, `It's ${/^(United|Netherlands|Philippines)/.test(countryName) ? 'the ' : ''}${countryName}, ${platform}.`), ms: 2300 },
     { key: 'walk', level: 'Level 2 · how the numbers connect', sentence: `Walking back from margin… ${causeWord} ${/s$/.test(causeWord) ? 'are' : 'is'} the cause.`, ms: 600 + walk.length * WALK_MS + 1000 },
     ...(d.l3 && s
