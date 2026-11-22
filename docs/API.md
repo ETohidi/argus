@@ -272,8 +272,10 @@ platform-level, like their z.
     { "label": "Margin", "value": 2964.2, "usual": 2810.5, "unit": "USD/h", "line": "$3.0k an hour · usual $2.8k" },
     { "label": "New sign-ups", "value": 214, "usual": 176, "unit": "per hour", "line": "214 an hour · usual 176" },
     { "label": "Completed offers", "value": 1475, "usual": 1435, "unit": "per hour", "line": "1,475 an hour · usual 1,435" } ],
-  "series": { "metric": "Margin per hour", "unit": "USD/h",
-              "points": [ { "t": 341, "label": "Mon 06:00", "value": 2426.3, "usual": 2360.0, "lo": 1984.7, "hi": 2735.3 } ],
+  "series": { "metric": "Margin per hour", "kpi": "margin", "unit": "USD/h",
+              "change_label": null,                // explained only, e.g. "Completed offers +10% vs a normal Monday"
+              "points": [ { "t": 341, "label": "Mon 06:00", "value": 2426.3, "usual": 2360.0, "lo": 1984.7, "hi": 2735.3,
+                            "normal": 2360.0 } ],
               "events": [ { "t": 336, "label": "Planned promo", "kind": "start", "time_label": "Mon 02:00" } ] },
                                                    // calendar events of this country starting/ending inside the 24 h
                                                    // (kind "start" | "end", end label "Planned promo ends"); [] if none
@@ -291,6 +293,18 @@ platform-level, like their z.
     { "line": "iOS · casual games: revenue -86% vs usual", "platform": "iOS", "category": "Casual games", "kpi": "revenue", "ratio": 0.14 } ]
 }
 ```
+`series` details:
+- **Which number:** margin for every status except "explained". For an explained country it is the number that moved,
+  the same one as the verdict's percentage. Example: the DE promo gives metric "Completed offers per hour", kpi
+  "completions", unit "per hour". kpi is one of new_accounts, completions, revenue, rewards, margin,
+  quality_per_completion (unit "share").
+- **`usual`:** the twin's expectation, which knows the planned event. It rises with the promo, so `value` stays inside
+  lo/hi.
+- **`normal`:** a normal day, meaning the same weekday and hour with no planned event. It is the naive baseline the
+  event is compared against. Outside an event, `normal` equals `usual`. Draw value against normal to show the jump.
+- **`change_label`:** the verdict's percentage, worded against the weekday of the current clock. It is null unless
+  the status is "explained".
+
 How `unusual` is built:
 - **Evidence:** the same as `moving` (|z| ≥ 4, calendar-aware), but nothing is capped.
 - **Merging:** categories on one platform whose same number moves the same way become one line. The ratio is their

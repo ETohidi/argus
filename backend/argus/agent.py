@@ -42,6 +42,13 @@ KPI_LABEL = {"new_accounts": "new accounts", "completions": "completions", "reve
 MECH_LABEL = {"new_accounts": "New accounts", "active_users": "Active users", "impressions": "Offer impressions",
               "starts": "Offer starts", "completions": "Completions", "revenue": "Advertiser revenue",
               "rewards": "User rewards", "quality": "Valuable users"}
+KPI_KEY_OF_LABEL = {v: k for k, v in KPI_LABEL.items()}
+SERIES_METRIC = {"new_accounts": ("New sign-ups per hour", "per hour", "New sign-ups"),
+                 "completions": ("Completed offers per hour", "per hour", "Completed offers"),
+                 "revenue": ("Revenue per hour", "USD/h", "Revenue"),
+                 "rewards": ("Rewards paid per hour", "USD/h", "Rewards paid"),
+                 "margin": ("Margin per hour", "USD/h", "Margin"),
+                 "quality_per_completion": ("Valuable users per completed offer", "share", "Valuable users")}
 FIX_INFO = {
     "none": ("Do nothing", "Keep monitoring; no change to the marketplace."),
     "block_cluster": ("Block the fake accounts", "Suspend the flagged accounts and their device fingerprints in {country} "
@@ -112,6 +119,7 @@ def _country_phrase(name: str) -> str:
 
 
 DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+DOW_FULL = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 
 def hour_label(t: int) -> str:
@@ -1785,14 +1793,28 @@ class Agent:
             {"label": "Completed offers", "value": round(float(o[1])), "usual": round(float(f[1])), "unit": "per hour",
              "line": f"{o[1]:,.0f} an hour · usual {f[1]:,.0f}"},
         ]
-        # margin per hour, last 24 h, with the usual band (single-hour ±2σ from the twin's backtest error)
+        # chart: margin per hour over the last 24 h with the usual band (single-hour ±2σ from the twin's backtest
+        # error); for an explained country the KPI that moved instead. `normal` = a normal day (same weekday and hour,
+        # no planned event): the naive baseline an explained event is compared against.
+        ex = ([e for e in self.explained if e["country"] == cfg.COUNTRIES[c].iso] if status == "explained" else [])
+        ki = 4
+        if ex and ex[-1].get("kpi") in KPI_KEY_OF_LABEL:
+            ki = KPIS.index(KPI_KEY_OF_LABEL[ex[-1]["kpi"]])
         pts = []
         for x in range(max(min(tw.rows), t - 23), t + 1):
             g = ((x + cfg.COUNTRIES[c].tz) % 24) // (24 // 4)
-            sig = float(tw.l1_sigma[c, g, 4]) * np.sqrt(WINDOW)
-            exp = float(tw._l1(tw.forecast(x))[c, 4])
-            pts.append({"t": x, "label": hour_label(x), "value": round(float(tw._l1(tw.rows[x])[c, 4]), 1),
-                        "usual": round(exp, 1), "lo": round(float(exp * (1 - 2 * sig)), 1), "hi": round(float(exp * (1 + 2 * sig)), 1)})
+            sig = float(tw.l1_sigma[c, g, ki]) * np.sqrt(WINDOW)
+            exp = float(tw._kpi_values(tw._l1(tw.forecast(x)))[c, ki])
+            nor = float(tw._kpi_values(tw._l1(tw.forecast(x, calendar=False)))[c, ki])
+            val = float(tw._kpi_values(tw._l1(tw.rows[x]))[c, ki])
+            nd = 3 if ki == 5 else 1
+            pts.append({"t": x, "label": hour_label(x), "value": round(val, nd), "usual": round(exp, nd),
+                        "lo": round(float(exp * (1 - 2 * sig)), nd), "hi": round(float(exp * (1 + 2 * sig)), nd),
+                        "normal": round(nor, nd)})
+        metric, unit, short = SERIES_METRIC[KPIS[ki]]
+        change_label = None
+        if ex and "change_pct" in ex[-1]:
+            change_label = f"{short} {ex[-1]['change_pct']:+d}% vs a normal {DOW_FULL[(t + 1) // 24 % 7]}"
         # what is moving: the heatmap's evidence (twin z, calendar-aware), at most 2 segments with |z| >= ALERT_Z
         cand = []
         for pl in platforms:
@@ -1844,7 +1866,7 @@ class Agent:
             moving = []
         return {"status": status, "verdict": verdict, "numbers": numbers, "unusual": unusual,
                 "segments_total": cfg.P * cfg.K,
-                "series": {"metric": "Margin per hour", "unit": "USD/h", "points": pts,
+                "series": {"metric": metric, "kpi": KPIS[ki], "unit": unit, "change_label": change_label, "points": pts,
                            "events": self._calendar_marks(c, pts[0]["t"], pts[-1]["t"])}, "moving": moving}
 
     def _unusual(self, c: int, segs: list[dict], platforms: list[dict]) -> list[dict]:

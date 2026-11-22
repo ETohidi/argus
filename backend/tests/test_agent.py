@@ -290,3 +290,21 @@ def test_country_series_marks_planned_promo():
     ev = w.agent.country_detail(cfg.ISO_INDEX["DE"])["summary"]["series"]["events"]
     assert ev and ev[0]["label"] == "Planned promo" and ev[0]["kind"] == "start"
     assert w.agent.country_detail(cfg.ISO_INDEX["US"])["summary"]["series"]["events"] == []
+
+
+def test_explained_country_series_shows_the_moved_kpi_against_a_normal_day():
+    from argus import config as cfg
+    from argus.world import World
+
+    w = World(seed=42)
+    w.demo("promo")
+    s = w.agent.country_detail(cfg.ISO_INDEX["DE"])["summary"]
+    se = s["series"]
+    assert s["status"] == "explained" and se["kpi"] == "completions" and se["metric"] == "Completed offers per hour"
+    pct = s["verdict"].split("%")[0]
+    assert se["change_label"] == f"Completed offers {pct}% vs a normal Monday"
+    last = se["points"][-1]
+    assert last["value"] > last["normal"] * 1.05 and last["usual"] > last["normal"]       # the jump vs a normal day
+    assert se["points"][0]["normal"] == se["points"][0]["usual"]                           # before the promo
+    us = w.agent.country_detail(cfg.ISO_INDEX["US"])["summary"]["series"]
+    assert us["kpi"] == "margin" and us["change_label"] is None and all("normal" in p for p in us["points"])
