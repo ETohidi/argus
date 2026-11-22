@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import { METRIC_PLAIN } from '../lib/metrics'
 import { PLATFORM_LABEL } from '../lib/theme'
@@ -15,6 +15,7 @@ import NormalZoneChart from './charts/NormalZoneChart'
 type Step = { key: string; level: string; sentence: string; ms: number }
 const VERDICT_ROLE: Record<string, NodeRole> = { fine: 'normal', affected: 'symptom', cause: 'broke' }
 const WALK_MS = 380
+const STEP_MS = 3500 // per replay step; Space pauses / resumes
 const STORY = ['new_accounts', 'active_users', 'starts', 'completions', 'revenue', 'rewards', 'margin']
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 const plain = (id: string) => METRIC_PLAIN[id] ?? id
@@ -45,7 +46,10 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
   const [step, setStep] = useState(0)
   const [walkAt, setWalkAt] = useState(0)
   const [without, setWithout] = useState(false)
+  const [paused, setPaused] = useState(false)
   const still = reducedMotion()
+  const pausedRef = useRef(false)
+  pausedRef.current = paused
 
   useEffect(() => {
     if (!r.l2?.cells) api.country(d.country).then(setCountry).catch(() => {})
@@ -70,14 +74,14 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
   const fraud = /fake/i.test(d.short_title ?? d.title)
   const tracking = /confirm/i.test(d.short_title ?? d.title) // advertisers stopped confirming offers
   const steps: Step[] = [
-    { key: 'l1', level: 'Level 1 · countries', sentence: fit(r.l1?.sentence, `${metricWord} left the usual range${leftAt ? ` at ${timeOf(leftAt.label)}` : ''}.`), ms: 2800 },
-    { key: 'l2', level: `Level 2 · inside ${countryName}`, sentence: fit(r.l2?.sentence, `It's ${/^(United|Netherlands|Philippines)/.test(countryName) ? 'the ' : ''}${countryName}, ${platform}.`), ms: 2300 },
-    { key: 'walk', level: 'Level 2 · how the numbers connect', sentence: `Walking back from margin… ${causeWord} ${/s$/.test(causeWord) ? 'are' : 'is'} the cause.`, ms: 600 + walk.length * WALK_MS + 1000 },
+    { key: 'l1', level: 'Level 1 · countries', sentence: fit(r.l1?.sentence, `${metricWord} left the usual range${leftAt ? ` at ${timeOf(leftAt.label)}` : ''}.`), ms: STEP_MS },
+    { key: 'l2', level: `Level 2 · inside ${countryName}`, sentence: fit(r.l2?.sentence, `It's ${/^(United|Netherlands|Philippines)/.test(countryName) ? 'the ' : ''}${countryName}, ${platform}.`), ms: STEP_MS },
+    { key: 'walk', level: 'Level 2 · how the numbers connect', sentence: `Walking back from margin… ${causeWord} ${/s$/.test(causeWord) ? 'are' : 'is'} the cause.`, ms: Math.max(STEP_MS, 600 + walk.length * WALK_MS + 900) },
     ...(d.l3 && s
-      ? [{ key: 'l3', level: 'Level 3 · the users', sentence: fit(r.l3?.sentence, `${s.n_flagged} of ${s.n_users} users look fake, on ${shared || s.top_devices.length} shared devices.`), ms: 3000 }]
+      ? [{ key: 'l3', level: 'Level 3 · the users', sentence: fit(r.l3?.sentence, `${s.n_flagged} of ${s.n_users} users look fake, on ${shared || s.top_devices.length} shared devices.`), ms: STEP_MS }]
       : []),
     ...(d.counterfactual && share != null
-      ? [{ key: 'proof', level: 'Proof', sentence: fit(r.proof?.sentence, `${fraud ? 'Without the fake accounts' : tracking ? 'With normal confirmations' : 'Without the cause'}, ${Math.round(share * 100)}% of the change disappears.`), ms: 3000 }]
+      ? [{ key: 'proof', level: 'Proof', sentence: fit(r.proof?.sentence, `${fraud ? 'Without the fake accounts' : tracking ? 'With normal confirmations' : 'Without the cause'}, ${Math.round(share * 100)}% of the change disappears.`), ms: STEP_MS }]
       : []),
   ]
   const cur = steps[Math.min(step, steps.length - 1)]
@@ -88,23 +92,27 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
       if (e.key === 'Escape') {
         e.stopImmediatePropagation()
         onClose()
+      } else if (e.key === ' ') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        setPaused((p) => !p)
       }
     }
     window.addEventListener('keydown', esc, true)
     return () => window.removeEventListener('keydown', esc, true)
   }, [onClose])
   useEffect(() => {
-    if (still) return
+    if (still || paused) return
     const t = window.setTimeout(() => (step + 1 < steps.length ? setStep(step + 1) : onClose()), cur.ms)
     return () => window.clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, still, steps.length])
+  }, [step, still, paused, steps.length])
   // Graph walk: one node every 450 ms. Proof: the "without them" line switches on after a beat.
   useEffect(() => {
     setWalkAt(0)
     setWithout(false)
     if (cur.key === 'walk') {
-      const id = window.setInterval(() => setWalkAt((n) => Math.min(walk.length, n + 1)), WALK_MS)
+      const id = window.setInterval(() => !pausedRef.current && setWalkAt((n) => Math.min(walk.length, n + 1)), WALK_MS)
       return () => window.clearInterval(id)
     }
     if (cur.key === 'proof') {
@@ -120,9 +128,14 @@ export default function ReplayView({ detail: d, countryName, onClose }: { detail
     <div className="fade-in fixed inset-0 z-50 flex flex-col bg-bg/95 backdrop-blur-sm" role="dialog" aria-label="How Argus found this">
       <div className="flex items-center justify-between px-10 pt-8 text-[13px] text-fg-2">
         <span>How Argus found this</span>
-        <button onClick={onClose} className="hover:text-fg">
-          Skip · Esc
-        </button>
+        <span className="flex gap-5">
+          <button onClick={() => setPaused((p) => !p)} className="hover:text-fg">
+            {paused ? 'Resume · Space' : 'Pause · Space'}
+          </button>
+          <button onClick={onClose} className="hover:text-fg">
+            Skip · Esc
+          </button>
+        </span>
       </div>
       <div key={cur.key} className="fade-up mx-auto mt-6 max-w-[960px] px-10 text-center">
         <div className="text-[13px] uppercase tracking-[0.18em] text-accent">{cur.level}</div>

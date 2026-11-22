@@ -64,7 +64,7 @@ export default function WhichFixChart({ fixes, recommended, applied, width: W = 
           return (
             <g key={f.id}>
               <path d={bandPath(pts(p90), pts(p10))} fill={c} opacity={best ? 0.16 : isBaseline(f) ? 0.12 : 0.035} />
-              <path d={monotonePath(pts(p50))} fill="none" stroke={c} strokeWidth={best ? 3.5 : isBaseline(f) ? 2 : 1.5} strokeLinecap="round" opacity={best || isBaseline(f) ? 1 : 0.8} />
+              <path d={monotonePath(pts(p50))} fill="none" stroke={c} strokeWidth={best ? 3.5 : isBaseline(f) ? 2 : 1.5} strokeLinecap="round" opacity={best || isBaseline(f) ? 1 : 0.8} className={best && !applied ? 'fix-glow' : undefined} />
             </g>
           )
         })}

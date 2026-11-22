@@ -46,19 +46,7 @@ export default function WhatIfCard({ f, onClose }: { f: LaunchForecast; onClose:
         <p className="mt-5 text-[16px] text-fg">{rest}</p>
       )}
 
-      {/* Likely range (p10–p90) with the middle estimate. */}
-      <div className="mt-4">
-        <div className="relative h-2 rounded-full bg-line/70">
-          <div className="absolute inset-y-0 rounded-full bg-ok/35" style={{ left: x(p10), width: `calc(${x(p90)} - ${x(p10)})` }} />
-          <div className="absolute -inset-y-1 w-[3px] -translate-x-1/2 rounded-full bg-ok" style={{ left: x(p50) }} />
-        </div>
-        <div className="relative mt-1.5 h-4 text-[13px] text-fg-2">
-          <span className="num absolute -translate-x-1/2" style={{ left: x(p10) }}>{dollars(p10)}</span>
-          <span className="num absolute -translate-x-1/2" style={{ left: x(p90) }}>{dollars(p90)}</span>
-        </div>
-        <div className="mt-1 text-[13px] text-fg-2">{f.range_line.replace(/\s*\(p10.p90\)/i, '')}</div>
-        {f.total_line && <div className="mt-2 text-[13px] text-fg">{f.total_line}</div>}
-      </div>
+      {f.total_line && <div className="mt-2 text-[13px] text-fg">{f.total_line}</div>}
 
       <dl className="mt-6 space-y-3 text-[13px]">
         <div>
@@ -67,17 +55,6 @@ export default function WhatIfCard({ f, onClose }: { f: LaunchForecast; onClose:
             {f.best_offer_mix.slice(0, 3).map((o) => (
               <span key={o.category} className="rounded-full bg-line/80 px-2.5 py-1 text-fg">{o.category}</span>
             ))}
-          </dd>
-        </div>
-        <div className="flex items-baseline gap-2">
-          <dt className="shrink-0 text-fg-2">Best reward:</dt>
-          <dd className="text-fg">
-            <span className="num">{Math.round(r.reward_share * 100)}%</span> of the offer value to the user
-            {r.current_share !== r.reward_share && (
-              <span className="text-fg-2">
-                {' '}(usual {Math.round(r.current_share * 100)}%{uplift && uplift > 0 ? `, +$${uplift.toFixed(2)} per 1,000 users a day` : ''})
-              </span>
-            )}
           </dd>
         </div>
         <div className="flex items-baseline gap-2">
@@ -90,11 +67,37 @@ export default function WhatIfCard({ f, onClose }: { f: LaunchForecast; onClose:
         </div>
       </dl>
 
-      <div className="mt-6 border-t border-line pt-4 text-[13px] [&_div]:[text-wrap:balance]">
-        <div className="text-fg-2">{f.learned_line}</div>
-        <div className="mt-1 text-ok">{f.backtest_line}</div>
-        {backtestMore && <div className="mt-0.5 text-fg-2">{cap(backtestMore)}</div>}
-      </div>
+      {/* The money, best offers and fraud risk first; everything else on request. */}
+      <details className="mt-5 text-[13px]">
+        <summary className="cursor-pointer list-none text-fg-2 hover:text-fg">More ▸</summary>
+        <div className="mt-3">
+          <div className="relative h-2 rounded-full bg-line/70">
+            <div className="absolute inset-y-0 rounded-full bg-ok/35" style={{ left: x(p10), width: `calc(${x(p90)} - ${x(p10)})` }} />
+            <div className="absolute -inset-y-1 w-[3px] -translate-x-1/2 rounded-full bg-ok" style={{ left: x(p50) }} />
+          </div>
+          <div className="relative mt-1.5 h-4 text-fg-2">
+            <span className="num absolute -translate-x-1/2" style={{ left: x(p10) }}>{dollars(p10)}</span>
+            <span className="num absolute -translate-x-1/2" style={{ left: x(p90) }}>{dollars(p90)}</span>
+          </div>
+          <div className="mt-1 text-fg-2">{f.range_line.replace(/\s*\(p10.p90\)/i, '')}</div>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="shrink-0 text-fg-2">Best reward:</span>
+            <span className="text-fg">
+              <span className="num">{Math.round(r.reward_share * 100)}%</span> of the offer value to the user
+              {r.current_share !== r.reward_share && (
+                <span className="text-fg-2">
+                  {' '}(usual {Math.round(r.current_share * 100)}%{uplift && uplift > 0 ? `, +$${uplift.toFixed(2)} per 1,000 users a day` : ''})
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="mt-4 border-t border-line pt-3 [&_div]:[text-wrap:balance]">
+            <div className="text-fg-2">{f.learned_line}</div>
+            <div className="mt-1 text-ok">{f.backtest_line}</div>
+            {backtestMore && <div className="mt-0.5 text-fg-2">{cap(backtestMore)}</div>}
+          </div>
+        </div>
+      </details>
     </section>
   )
 }

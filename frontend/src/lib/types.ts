@@ -245,6 +245,14 @@ export interface DemoResponse {
   state: WorldState
   incident_id?: string
   metric?: MetricResponse // new_metric scene: the metric it added
+  frames?: DemoFrame[] // ?frames=1: one per simulated hour the scene advanced through (time-lapse)
+}
+
+export interface DemoFrame {
+  t: number
+  clock: WorldState['clock']
+  countries: (Partial<CountryState> & { iso: string })[]
+  incidents?: (Partial<IncidentSummary> & { id: string })[]
 }
 
 export const DEMO_SCENES = [

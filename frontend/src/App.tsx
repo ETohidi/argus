@@ -15,9 +15,29 @@ import { explainedLine, foundLine, growthLine, needsDecision, shortTitle, status
 import { PLATFORM_LABEL } from './lib/theme'
 import { toOutcome, type MetricOutcome } from './lib/metrics'
 import { DEMO_SCENES } from './lib/types'
-import type { LaunchForecast, CountryDetail, DemoScene, IncidentDetail, InjectType, MetricGraph, PotentialResponse, TimelineEvent, WorldState } from './lib/types'
+import type { LaunchForecast, CountryDetail, DemoFrame, DemoScene, IncidentSummary, IncidentDetail, InjectType, MetricGraph, PotentialResponse, TimelineEvent, WorldState } from './lib/types'
 
 // Default targets for the inject actions (the demo script), overridden by the selected country.
+const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms))
+const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+const markReplaySeen = () => {
+  try {
+    sessionStorage.setItem('argus-replay-seen', '1')
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+// One subtitle per story step (bottom centre, above the timeline).
+const SUBTITLES = [
+  '20 markets. Argus watches every number, every hour.',
+  "Germany jumps, but it's a planned promo. Expected, so no alarm.",
+  '3 a.m.: Canada looks like growth. At 6, Argus raises it by itself, with proof.',
+  'Argus tested 4 fixes a week ahead. One click; next day it checks itself.',
+  'A new number: Argus places it, checks it on the data, and watches it.',
+  'Before you spend: what if we launch in Argentina?',
+]
+
 // The one market the what-if can launch (POST /api/what_if/launch); its place on the globe before the forecast arrives.
 const LAUNCH = { iso: 'AR', name: 'Argentina', lng: -63.6, lat: -38.4 }
 
@@ -48,7 +68,7 @@ export default function App() {
   const [approving, setApproving] = useState(false)
   // L3 overlays.
   const [evidence, setEvidence] = useState<{ tab: EvidenceTab } | null>(null)
-  const [graphView, setGraphView] = useState<{ highlight: string[]; outcome?: MetricOutcome | null; openForm?: boolean } | null>(null)
+  const [graphView, setGraphView] = useState<{ highlight: string[]; outcome?: MetricOutcome | null; openForm?: boolean; typeIn?: boolean } | null>(null)
   const [metricGraph, setMetricGraph] = useState<MetricGraph | null>(null)
   // Country side sheet.
   const [countryIso, setCountryIso] = useState<string | null>(null)
@@ -58,8 +78,14 @@ export default function App() {
   // What-if launch: 'flying' (dark country, eye investigating) → 'shown' (colour, arcs, card). Read-only.
   const [launch, setLaunch] = useState<{ phase: 'flying' | 'shown'; forecast: LaunchForecast | null } | null>(null)
   const launchRun = useRef(0)
-  // "Play the demo": the story step last run (0–5), or -1 before the first.
+  // Step 6: the card waits until the learning arcs have played (~1.6 s); at once with reduced motion.
+  const [launchCardReady, setLaunchCardReady] = useState(false)
+  // "Play the demo": the story step last run (0–5), or -1 before the first; its subtitle; whether a step is running.
   const [storyAt, setStoryAt] = useState(-1)
+  const [subtitleAt, setSubtitleAt] = useState<number | null>(null)
+  const [storyRunning, setStoryRunning] = useState(false)
+  const storyBusy = useRef(false)
+  const cardIdRef = useRef<string | null>(null)
   // "Watch Argus think" replay; plays by itself the first time an issue opens in this browser session.
   const [replayId, setReplayId] = useState<string | null>(null)
   // Camera-only focus (no country sheet): the demo's planned-promo step looks at Germany.
@@ -211,13 +237,36 @@ export default function App() {
     })
 
   // Each demo scene leaves the screen on the view that tells its part of the story.
-  const demo = (scene: DemoScene) =>
+  // Time-lapse: repaint the globe, clock and eye hour by hour from the scene's frames (~ms in total).
+  const playFrames = async (frames: DemoFrame[] | undefined, ms: number) => {
+    if (!frames?.length || reducedMotion()) return
+    for (const f of frames) {
+      setState((s) =>
+        s
+          ? {
+              ...s,
+              clock: f.clock ?? s.clock,
+              countries: s.countries.map((c) => ({ ...c, ...(f.countries.find((x) => x.iso === c.iso) ?? {}) })),
+              incidents: f.incidents ? f.incidents.map((fi) => ({ ...(s.incidents.find((x) => x.id === fi.id) ?? {}), ...fi }) as IncidentSummary) : s.incidents,
+            }
+          : s,
+      )
+      await sleep(ms / frames.length)
+    }
+  }
+
+  const demo = (scene: DemoScene, opts: { lapseMs?: number; typeIn?: boolean } = {}) =>
     run(async () => {
       launchRun.current++
       setLaunch(null)
       setLookIso(null)
       if (scene === 'start') expectReset.current = true
-      const r = await api.demo(scene)
+      const r = await api.demo(scene, !!opts.lapseMs)
+      if (opts.lapseMs) {
+        setCardId(null)
+        setEvidence(null)
+        await playFrames(r.frames, opts.lapseMs)
+      }
       const storyIndex = SCENE_STORY[scene]
       if (storyIndex != null) setStoryAt(storyIndex)
       applyState(r.state)
@@ -244,7 +293,7 @@ export default function App() {
           // Play what Argus did by itself with the metric the scene just added.
           const node = r.metric?.node as { id?: string; expr?: string } | null | undefined
           const outcome = r.metric ? toOutcome(r.metric as never, '', []) : null
-          setGraphView({ highlight: node?.id ? [node.id] : [], outcome })
+          setGraphView({ highlight: node?.id ? [node.id] : [], outcome, typeIn: opts.typeIn && !reducedMotion() })
           break
         }
         default: // bot_farm, approve, verify, tracking_break: the issue card
@@ -254,6 +303,7 @@ export default function App() {
           }
       }
       flash(SCENE_STORY[scene] != null ? STORY[SCENE_STORY[scene]!] : SCENE_LABEL[scene])
+      return r
     })
 
   const approve = async (fixId: string) => {
@@ -348,20 +398,51 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardId, detail?.id])
 
+  // "Play the demo": each step tells its story with a subtitle and its own small choreography.
   async function runStory(i: number) {
-    if (i === 0) await demo('start')
-    else if (i === 1) await demo('promo')
-    else if (i === 2) await demo('bot_farm')
-    else if (i === 3) {
-      await demo('approve')
-      await new Promise((r) => window.setTimeout(r, 2500))
-      await demo('verify')
-    } else if (i === 4) await demo('new_metric')
-    else if (i === 5) {
-      flash(STORY[5])
-      await whatIfLaunch()
+    if (storyBusy.current) return
+    storyBusy.current = true
+    setStoryRunning(true)
+    setSubtitleAt(i)
+    try {
+      if (i === 0) await demo('start')
+      else if (i === 1) {
+        const r = await demo('promo')
+        await sleep(1900) // after the fly-in, open Germany: its chart shows the line inside the band, with the marker
+        const iso = r?.state.explained[0]?.country ?? 'DE'
+        selectCountry(iso)
+      } else if (i === 2) {
+        markReplaySeen() // the story plays the replay itself, after the card
+        const r = await demo('bot_farm', { lapseMs: 4000 })
+        if (r?.incident_id) {
+          await sleep(1500)
+          setReplayId(r.incident_id)
+        }
+      } else if (i === 3) {
+        if (cardIdRef.current) {
+          setEvidence({ tab: 'fixes' }) // the four futures, best one glowing
+          await sleep(3000)
+          setEvidence(null)
+        }
+        await demo('approve')
+        await sleep(900)
+        await demo('verify', { lapseMs: 4000 })
+      } else if (i === 4) await demo('new_metric', { typeIn: true })
+      else if (i === 5) {
+        flash(STORY[5])
+        await whatIfLaunch()
+      }
+    } finally {
+      storyBusy.current = false
+      setStoryRunning(false)
     }
   }
+
+  useEffect(() => {
+    if (launch?.phase !== 'shown') return setLaunchCardReady(false)
+    const t = window.setTimeout(() => setLaunchCardReady(true), reducedMotion() ? 0 : 1700)
+    return () => window.clearTimeout(t)
+  }, [launch?.phase])
 
   const keys = useRef({ demo, closeTop: () => {}, openEvidence: () => {} })
   keys.current = {
@@ -388,6 +469,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  cardIdRef.current = cardId
   const card = state?.incidents.find((i) => i.id === cardId)
   const country = state?.countries.find((c) => c.iso === countryIso) ?? null
   const cardCountry = state?.countries.find((c) => c.iso === card?.country)
@@ -454,7 +536,7 @@ export default function App() {
 
       {/* Right column: an explained change as a quiet note, then the issue card or the country sheet. */}
       <div className="pointer-events-none absolute bottom-8 right-8 top-24 z-20 flex flex-col items-end gap-4 overflow-y-auto">
-        {launch?.phase === 'shown' && lf ? (
+        {launch?.phase === 'shown' && lf && launchCardReady ? (
           <WhatIfCard f={lf} onClose={closeLaunch} />
         ) : launch ? null : explained && !country && !card && explainedLine(explained, nameOf(explained.country)) !== status.text && (
           <div className="fade-in pointer-events-auto max-w-[420px] text-right text-[13px] leading-relaxed text-fg-2">
@@ -505,11 +587,19 @@ export default function App() {
         </div>
       )}
 
+      {subtitleAt != null && storyAt >= 0 && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-[68px] z-[44] flex justify-center px-8">
+          <div key={subtitleAt} className="fade-up whitespace-nowrap rounded-full bg-bg/70 px-5 py-2 text-[16px] text-fg ring-1 ring-line/40 backdrop-blur">
+            {SUBTITLES[subtitleAt]}
+          </div>
+        </div>
+      )}
+
       <ScenarioMenu
         state={state}
         backend={backend}
         playing={playing}
-        busy={busy}
+        busy={busy || storyRunning}
         lastScene={lastScene}
         injectTarget={country?.name ?? 'the demo markets'}
         onPlay={() => setPlaying((p) => !p)}
@@ -561,6 +651,7 @@ export default function App() {
           highlight={graphView.highlight}
           outcome={graphView.outcome}
           openForm={graphView.openForm}
+          typeIn={graphView.typeIn}
           onAdded={() => {
             api.graph().then(setMetricGraph).catch(() => {})
             api.state().then(applyState).catch(() => {})

@@ -311,3 +311,41 @@ svg text {
     animation: none;
   }
 }
+
+/* A newly added metric flies into its place in the graph; its edges draw in (.draw). */
+.cg-new {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: cg-new 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes cg-new {
+  from {
+    transform: translate(120px, -90px) scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+/* Demo: the best of the four futures glows. */
+.fix-glow {
+  animation: fix-glow 1.2s ease-in-out infinite alternate;
+}
+@keyframes fix-glow {
+  from {
+    filter: drop-shadow(0 0 0 rgba(60, 242, 196, 0));
+  }
+  to {
+    filter: drop-shadow(0 0 8px rgba(60, 242, 196, 0.9));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cg-new,
+  .fix-glow {
+    animation: none;
+  }
+}

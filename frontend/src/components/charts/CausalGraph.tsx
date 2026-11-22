@@ -212,7 +212,8 @@ export default function CausalGraph({ nodes, edges, roles = {}, showWords = true
           const waiting = pending.includes(n.id)
           const textTop = showWords && !waiting ? (lines.length === 2 ? 17 : 22) : lines.length === 2 ? 22 : 31
           return (
-            <g key={p.id} transform={`translate(${p.x - nodeW / 2},${p.y - nodeH / 2})`} className="fade-in" style={{ animationDelay: `${i * 40}ms`, opacity: waiting ? 0.28 : 1, transition: 'opacity 0.4s ease' }}>
+            <g key={p.id} transform={`translate(${p.x - nodeW / 2},${p.y - nodeH / 2})`} style={{ opacity: waiting ? 0.28 : 1, transition: 'opacity 0.4s ease' }}>
+              <g className={role === 'new' ? 'cg-new' : 'fade-in'} style={{ animationDelay: role === 'new' ? '0ms' : `${i * 40}ms` }}>
               {pulse === n.id && <rect width={nodeW} height={nodeH} rx={10} fill="none" stroke={PINK} strokeWidth={2} className="cg-pulse" />}
               <rect width={nodeW} height={nodeH} rx={10} fill={waiting ? 'transparent' : st.fill} stroke={waiting ? '#3A3F6B' : st.stroke} strokeWidth={role === 'normal' || waiting ? 1 : 1.6} strokeDasharray={waiting ? undefined : st.dash} style={{ transition: 'fill 0.35s ease, stroke 0.35s ease' }} />
               {lines.map((line, k) => (
@@ -225,6 +226,7 @@ export default function CausalGraph({ nodes, edges, roles = {}, showWords = true
                   {ROLE_WORD[role]}
                 </text>
               )}
+              </g>
             </g>
           )
         })}

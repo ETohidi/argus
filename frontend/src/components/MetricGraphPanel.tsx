@@ -14,17 +14,41 @@ type Props = {
   highlight: string[]
   outcome?: MetricOutcome | null // from the "add a metric" demo scene
   openForm?: boolean
+  typeIn?: boolean // demo: type the scene's name and formula character by character, then show what Argus did
   onAdded: (id: string) => void
   onClose: () => void
 }
 
-export default function MetricGraphPanel({ graph, highlight, outcome: initial, openForm, onAdded, onClose }: Props) {
+export default function MetricGraphPanel({ graph, highlight, outcome: initial, openForm, typeIn, onAdded, onClose }: Props) {
   const [formOpen, setFormOpen] = useState(!!openForm || !!initial)
-  const [name, setName] = useState(initial?.kind === 'added' ? initial.id : '')
-  const [formula, setFormula] = useState(initial?.kind === 'added' ? initial.typed : '')
+  const typing = !!typeIn && initial?.kind === 'added'
+  const [name, setName] = useState(initial?.kind === 'added' && !typing ? initial.id : '')
+  const [formula, setFormula] = useState(initial?.kind === 'added' && !typing ? initial.typed : '')
   const [busy, setBusy] = useState(false)
-  const [outcome, setOutcome] = useState<MetricOutcome | null>(initial ?? null)
-  const [stage, setStage] = useState(initial?.kind === 'added' ? 0 : -1) // number of steps shown (0..3)
+  const [outcome, setOutcome] = useState<MetricOutcome | null>(typing ? null : (initial ?? null))
+  const [stage, setStage] = useState(initial?.kind === 'added' && !typing ? 0 : -1) // number of steps shown (0..3)
+
+  // Demo: type the name, then the formula, a character at a time; then "Add" and what Argus did by itself.
+  useEffect(() => {
+    if (!typing || initial?.kind !== 'added') return
+    const n = initial.id
+    const f = initial.typed
+    const timers: number[] = []
+    let at = 300
+    for (let k = 1; k <= n.length; k++) timers.push(window.setTimeout(() => setName(n.slice(0, k)), (at += 55)))
+    at += 250
+    for (let k = 1; k <= f.length; k++) timers.push(window.setTimeout(() => setFormula(f.slice(0, k)), (at += 70)))
+    timers.push(window.setTimeout(() => setBusy(true), (at += 350)))
+    timers.push(
+      window.setTimeout(() => {
+        setBusy(false)
+        setOutcome(initial)
+        setStage(0)
+      }, (at += 600)),
+    )
+    return () => timers.forEach(window.clearTimeout)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typing])
   const [pointTo, setPointTo] = useState<string | null>(null)
 
   useEffect(() => {
@@ -44,10 +68,11 @@ export default function MetricGraphPanel({ graph, highlight, outcome: initial, o
       const fallback = window.setTimeout(() => setStage((s) => Math.max(s, 1)), 1500)
       return () => window.clearTimeout(fallback)
     }
+    // The node flies in with "Found its place"; then the checks tick one after another.
     const timers = [
       window.setTimeout(() => setStage((s) => Math.max(s, 1)), 150),
-      window.setTimeout(() => setStage((s) => Math.max(s, 2)), 1100),
-      window.setTimeout(() => setStage(3), 2100),
+      window.setTimeout(() => setStage((s) => Math.max(s, 2)), 1500),
+      window.setTimeout(() => setStage(3), 2700),
     ]
     return () => timers.forEach(window.clearTimeout)
   }, [outcome, inGraph])

@@ -123,5 +123,5 @@ export const api = {
   // `formula` is optional: the backend also accepts "name = formula" in `name`, or the formula in `description`.
   addMetric: (name: string, description: string, formula?: string) =>
     request<MetricResponse>('POST', '/metrics', { name, description: description || formula || '', ...(formula ? { formula } : {}) }),
-  demo: (scene: DemoScene) => request<DemoResponse>('POST', `/demo/${scene}`),
+  demo: (scene: DemoScene, frames = false) => request<DemoResponse>('POST', `/demo/${scene}${frames ? '?frames=1' : ''}`),
 }
