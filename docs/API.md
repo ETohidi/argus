@@ -53,6 +53,7 @@ Globe state.
       "first_seen": "Mon 04:00",       // first hour out of the normal zone (or detection time)
       "last_seen": "Mon 09:00",        // last hour the alert condition held
       "resolved_at": null,             // time label once resolved
+      "resolved_t": null,              // same moment as a numeric hour t (like detected_at)
       "alerts_merged": 3,              // later alerts for the same problem folded into this issue (never reported twice)
       "recurrence_of": null,           // id of an earlier resolved issue with the same country/platform/root cause
       "downstream": [                  // predicted consequences attached to this issue (not reported separately)

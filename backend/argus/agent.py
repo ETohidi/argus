@@ -1424,6 +1424,7 @@ class Agent:
                 "first_seen": left["label"] if left else hour_label(inc["detected_at"]),
                 "last_seen": hour_label(inc["last_seen_at"]),
                 "resolved_at": hour_label(inc["resolved_at"]) if inc.get("resolved_at") is not None else None,
+                "resolved_t": inc.get("resolved_at"),                    # numeric hour, like detected_at
                 "alerts_merged": inc["alerts_merged"], "recurrence_of": inc.get("recurrence_of"),
                 "downstream": inc.get("downstream", [])}
 
