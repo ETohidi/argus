@@ -4,9 +4,13 @@ export type EyeMood = 'calm' | 'problem' | 'investigating'
 
 const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-// Argus' eye next to the wordmark: almond outline, round iris, pupil. Pure SVG + CSS, driven by the status sentence.
-// Calm: mint, a slow blink every 6–8 s. Problem: pink, looking toward the issue card (right). Investigating: the iris
-// ring turns slowly. Back to calm (resolved): mint with one blink. Reduced motion: colour only.
+// "Levels of focus": an almond outline with three dashed rings around the pupil, for Argus' levels
+// (business → segments → users). Pure SVG + CSS, driven by the same state as the status sentence.
+// Calm: the rings turn slowly, a blink every 6–8 s. Investigating: the rings turn ~3× faster and the pupil narrows.
+// Problem: outline and pupil pink, the eye widens a little and looks toward the issue card (right).
+// Back to calm (resolved): mint with one blink. Reduced motion: colour only.
+const ALMOND = 'M2 13 Q22 -3.5 42 13 Q22 29.5 2 13 Z'
+
 export default function ArgusEye({ mood }: { mood: EyeMood }) {
   const clip = useId()
   const [blink, setBlink] = useState(false)
@@ -33,31 +37,33 @@ export default function ArgusEye({ mood }: { mood: EyeMood }) {
     prev.current = mood
   }, [mood, still])
 
-  const color = mood === 'problem' ? 'var(--color-problem)' : 'var(--color-ok)'
-  const look = mood === 'problem' && !still ? 'translate(2.6px, 0.6px)' : 'translate(0, 0)'
+  const problem = mood === 'problem'
+  const accent = problem ? 'var(--color-problem)' : 'var(--color-ok)'
+  const look = problem && !still ? 'translate(2.4px, 0.4px)' : 'translate(0, 0)'
   return (
     <svg
-      className={`argus-eye${blink ? ' argus-eye--blink' : ''}${mood === 'investigating' ? ' argus-eye--scan' : ''}`}
-      viewBox="0 0 36 22"
-      width={36}
-      height={22}
+      className={`argus-eye argus-eye--${mood}${blink ? ' argus-eye--blink' : ''}`}
+      viewBox="0 0 44 26"
+      width={44}
+      height={26}
       role="img"
-      aria-label={mood === 'problem' ? 'Argus: needs attention' : mood === 'investigating' ? 'Argus: checking' : 'Argus: all calm'}
+      aria-label={problem ? 'Argus: needs attention' : mood === 'investigating' ? 'Argus: looking closer' : 'Argus: all calm'}
     >
       <defs>
         <clipPath id={clip}>
-          <path d="M2 11 Q18 -2.5 34 11 Q18 24.5 2 11 Z" />
+          <path d={ALMOND} />
         </clipPath>
       </defs>
       <g className="argus-eye__lid">
         <g clipPath={`url(#${clip})`}>
           <g className="argus-eye__iris" style={{ transform: look }}>
-            <circle cx="18" cy="11" r="5.4" style={{ fill: color }} opacity="0.22" />
-            <circle className="argus-eye__ring" cx="18" cy="11" r="5.4" fill="none" strokeWidth="1.5" style={{ stroke: color }} />
-            <circle cx="18" cy="11" r="2.1" style={{ fill: color }} />
+            <circle className="argus-eye__ring argus-eye__ring--outer" cx="22" cy="13" r="8.2" fill="none" stroke="var(--color-ok)" strokeWidth="1.5" strokeDasharray="14 3" />
+            <circle className="argus-eye__ring argus-eye__ring--middle" cx="22" cy="13" r="5.7" fill="none" stroke="#8B7CFF" strokeWidth="1.4" strokeDasharray="9 2.5" />
+            <circle className="argus-eye__ring argus-eye__ring--inner" cx="22" cy="13" r="3.4" fill="none" stroke="var(--color-ok)" strokeWidth="1.3" strokeDasharray="5 2" />
+            <circle className="argus-eye__pupil" cx="22" cy="13" r="1.5" style={{ fill: accent }} />
           </g>
         </g>
-        <path d="M2 11 Q18 -2.5 34 11 Q18 24.5 2 11 Z" fill="none" stroke="var(--color-fg-2)" strokeOpacity="0.7" strokeWidth="1.3" strokeLinejoin="round" />
+        <path className="argus-eye__outline" d={ALMOND} fill="none" strokeWidth="1.4" strokeLinejoin="round" style={{ stroke: problem ? accent : 'var(--color-fg-2)' }} />
       </g>
     </svg>
   )

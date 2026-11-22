@@ -190,48 +190,74 @@ svg text {
   display: none;
 }
 
-/* Argus' eye (TopBar). */
+/* Argus' eye (TopBar): levels of focus. */
 .argus-eye {
   display: block;
   overflow: visible;
+  --spin: 1; /* 1 = calm; investigating turns ~3× faster */
+}
+.argus-eye--investigating {
+  --spin: 0.33;
 }
 .argus-eye__lid {
   transform-box: view-box;
-  transform-origin: 50% 50%;
-  transition: transform 0.09s ease-in;
+  transform-origin: 22px 13px;
+  transition: transform 0.25s ease;
+}
+.argus-eye--problem .argus-eye__lid {
+  transform: scale(1.04, 1.14); /* widens slightly */
 }
 .argus-eye--blink .argus-eye__lid {
   transform: scaleY(0.08);
+  transition: transform 0.09s ease-in;
 }
 .argus-eye__iris {
   transition: transform 0.7s cubic-bezier(0.3, 0.7, 0.2, 1);
 }
-.argus-eye__iris circle {
-  transition: fill 0.6s ease, stroke 0.6s ease;
-}
 .argus-eye__ring {
   transform-box: view-box;
-  transform-origin: 18px 11px;
+  transform-origin: 22px 13px;
+  animation: eye-turn linear infinite;
 }
-.argus-eye--scan .argus-eye__ring {
-  stroke-dasharray: 7 3.3;
-  animation: eye-scan 6s linear infinite;
+.argus-eye__ring--outer {
+  animation-duration: calc(18s * var(--spin));
 }
-@keyframes eye-scan {
+.argus-eye__ring--middle {
+  animation-duration: calc(12s * var(--spin));
+  animation-direction: reverse;
+}
+.argus-eye__ring--inner {
+  animation-duration: calc(8s * var(--spin));
+}
+.argus-eye__pupil {
+  transform-box: view-box;
+  transform-origin: 22px 13px;
+  transition: transform 0.5s ease, fill 0.6s ease;
+}
+.argus-eye--investigating .argus-eye__pupil {
+  transform: scale(0.55); /* narrows while zooming in through the levels */
+}
+.argus-eye__outline {
+  transition: stroke 0.6s ease;
+}
+@keyframes eye-turn {
   to {
     transform: rotate(360deg);
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .argus-eye__ring {
+    animation: none;
+  }
   .argus-eye__lid,
-  .argus-eye__iris {
+  .argus-eye__iris,
+  .argus-eye__pupil {
     transition: none;
   }
-  .argus-eye--blink .argus-eye__lid {
+  .argus-eye--blink .argus-eye__lid,
+  .argus-eye--problem .argus-eye__lid,
+  .argus-eye--investigating .argus-eye__pupil {
     transform: none;
-  }
-  .argus-eye--scan .argus-eye__ring {
-    animation: none;
   }
 }
 
