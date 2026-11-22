@@ -41,6 +41,11 @@ Globe state.
       "impact_usd_h": 134.0,      // current deviation in USD/h
       "risk_7d_usd": 114042,      // 7-day margin lost by doing nothing vs the recommended fix (p50, twin)
       "reaction_h": 27,           // hours until advertisers react (chargebacks), from the do-nothing route's events; 0 = losses accrue now; null = n/a
+      "short_title": "Fake accounts on Android in Canada",   // card title, ≤ ~6 words (tracking break:
+                                       // "Advertisers stopped confirming offers in the UK")
+      "title_detail": null,            // rest of the full title as a detail line, e.g. "Casual-game and strategy-game
+                                       // offers on iOS"; null when short_title says it all. `title` stays the full sentence.
+                                       // Both also in /api/incidents and the incident detail.
       "found_line": "Found by Argus at 06:00, nobody asked · advertisers would react in ~28 h",
                                        // detection hour (end of hour, HH:00) + reaction_h; reaction_h 0 → "· losses are
                                        // happening now"; reaction_h null → no second part. Also in /api/incidents and detail.
@@ -102,6 +107,7 @@ After approval `what_to_do` becomes "Done: <fix> applied."
 {
   "id": "inc-1", "title": "...", "status": "open", "severity": "high", "impact_usd_h": 134.0, "risk_7d_usd": 114042, "reaction_h": 21,
   "found_line": "Found by Argus at 06:00, nobody asked · advertisers would react in ~21 h",
+  "short_title": "Fake accounts on Android in Canada", "title_detail": null,
   "country": "CA", "platform": "android", "category": "fintech", "detected_at": 352,
   "trail": [ { "t": 352, "level": "L1", "action": "...", "finding": "..." } ],   // level: "L1" | "L2" | "L3"
   "graph": {

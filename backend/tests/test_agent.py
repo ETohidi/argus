@@ -240,3 +240,17 @@ def test_growth_lines_plain_words():
     assert Agent._growth_line("Japan", [1], [1, 2], 500).startswith("Japan: users like strategy games and already see some")
     for line in lines:
         assert not any(bad in line.lower() for bad in ("match", "taste", "feed", "potential"))
+
+
+def test_short_title_and_detail():
+    from argus.world import World
+
+    w = World(seed=42)
+    w.demo("tracking_break")
+    inc = {i["country"]: i for i in w.agent.state()["incidents"]}
+    assert inc["CA"]["short_title"] == "Fake accounts on Android in Canada" and inc["CA"]["title_detail"] is None
+    assert inc["GB"]["short_title"] == "Advertisers stopped confirming offers in the UK"
+    assert inc["GB"]["title_detail"] == "Casual-game and strategy-game offers on iOS"
+    assert all(len(i["short_title"].split()) <= 7 for i in inc.values())
+    d = w.agent.incident_detail(w.agent.incidents[-1])
+    assert d["short_title"] == inc["GB"]["short_title"] and d["title"].startswith("Advertisers stopped confirming casual-game")

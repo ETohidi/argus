@@ -86,6 +86,7 @@ class RealityView:
 
 
 GROWTH_NOUN = ["casual games", "strategy games", "fintech apps", "streaming apps", "shopping cashback", "surveys"]
+SHORT_COUNTRY = {"GB": "the UK", "US": "the US", "NL": "the Netherlands", "PH": "the Philippines"}
 OFFER_NOUN = ["casual-game", "strategy-game", "fintech", "streaming", "shopping-cashback", "survey"]
 
 
@@ -814,6 +815,21 @@ class Agent:
             "organic": f"Many new real users on {inc['platform']} in {name}",
         }.get(inc["kind"], f"Unusual {KPI_LABEL[inc['kpi']]} in {name}")
 
+    @staticmethod
+    def short_title(inc: dict) -> tuple[str, str | None]:
+        """Card title (~6 words) and the rest of the full title as a detail line (None when nothing is left)."""
+        c = cfg.COUNTRIES[inc["c"]]
+        where = SHORT_COUNTRY.get(c.iso, c.name)
+        plat = inc["platform"]
+        if inc["kind"] == "fraud":
+            return f"Fake accounts on {plat} in {where}", None
+        if inc["kind"] == "tracking":
+            cats = " and ".join(OFFER_NOUN[k] for k in inc["fix_categories"][:2])
+            return f"Advertisers stopped confirming offers in {where}", f"{cats[0].upper() + cats[1:]} offers on {plat}"
+        if inc["kind"] == "organic":
+            return f"Many new real users in {where}", f"On {plat}"
+        return f"Unusual {KPI_LABEL[inc['kpi']]} in {where}", None
+
     def _reports(self, inc: dict) -> dict:
         name = cfg.COUNTRIES[inc["c"]].name
         top = inc["hypotheses"][0]
@@ -1235,6 +1251,7 @@ class Agent:
         out.update(self._state_fields(inc))
         out["card"] = self.card(inc)
         out["found_line"] = self.found_line(inc)
+        out["short_title"], out["title_detail"] = self.short_title(inc)
         return out
 
     @staticmethod
@@ -1456,6 +1473,7 @@ class Agent:
         out.update(self._state_fields(inc))
         out["found_line"] = self.found_line(inc)
         out["reports"] = self.reports_for(inc)
+        out["short_title"], out["title_detail"] = self.short_title(inc)
         out["card"] = self.card(inc)
         ser = self.series(inc)
         out["series"] = ser["points"]
