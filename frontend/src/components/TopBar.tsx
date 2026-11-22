@@ -7,10 +7,11 @@ type Props = {
   status: StatusSentence
   mode: GlobeMode
   onMode: (m: GlobeMode) => void
+  growth?: { text: string; launchLabel: string; onLaunch: () => void } // Growth mode: one summary line and the new-market link
 }
 
 // Home bar (L1): logo, clock, one status sentence and the mode toggle. Nothing else.
-export default function TopBar({ clock, status, mode, onMode }: Props) {
+export default function TopBar({ clock, status, mode, onMode, growth }: Props) {
   return (
     <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center gap-8 px-8 py-6">
       <div className="pointer-events-auto flex items-center gap-3">
@@ -23,10 +24,19 @@ export default function TopBar({ clock, status, mode, onMode }: Props) {
       </div>
 
       {/* Calm needs no words: the blinking eye says it. The sentence appears only when something is happening. */}
-      {status.tone !== 'ok' && (
-        <div key={status.text} className="fade-in pointer-events-auto flex items-center gap-2.5 text-[16px] text-fg">
-          {status.text}
+      {mode === 'potential' && growth ? (
+        <div key="growth" className="fade-in pointer-events-auto relative">
+          <div className="text-[16px] text-fg">{growth.text}</div>
+          <button onClick={growth.onLaunch} className="absolute left-0 top-full mt-1 whitespace-nowrap text-[13px] text-fg-2 hover:text-fg">
+            {growth.launchLabel} →
+          </button>
         </div>
+      ) : (
+        status.tone !== 'ok' && (
+          <div key={status.text} className="fade-in pointer-events-auto flex items-center gap-2.5 text-[16px] text-fg">
+            {status.text}
+          </div>
+        )
       )}
 
       <div className="pointer-events-auto ml-auto flex items-center gap-3">
@@ -37,7 +47,7 @@ export default function TopBar({ clock, status, mode, onMode }: Props) {
               onClick={() => onMode(m)}
               className={`rounded-full px-4 py-1.5 text-[13px] transition ${mode === m ? 'bg-line/80 text-fg' : 'text-fg-2 hover:text-fg'}`}
             >
-              {m === 'health' ? 'Problems' : 'Opportunities'}
+              {m === 'health' ? 'Risks' : 'Growth'}
             </button>
           ))}
         </div>

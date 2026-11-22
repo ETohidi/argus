@@ -369,7 +369,7 @@ export default function Globe({ countries, mode, selectedIso, insetRight = 0, ut
           ? notesRef.current[c.iso]
             ? `<span style="color:${AURORA.fg2}">● ${notesRef.current[c.iso].startsWith(c.name) ? notesRef.current[c.iso].slice(c.name.length).trim() : notesRef.current[c.iso]}</span>`
             : `<span style="color:${STATUS_COLOR[c.status]}">● ${STATUS_LABEL[c.status]}</span>`
-          : `Opportunity: <b>+${usd(c.potential_usd_day)}</b> a day if offers matched local tastes`
+          : `<b>+${usd(c.potential_usd_day)}</b> a day if offers matched local tastes`
       popup.setLngLat(e.lngLat).setHTML(`<div class="font-semibold">${c.name}</div>${line ? `<div>${line}</div>` : ''}`).addTo(map)
     })
     // The globe moves under a still pointer (auto-rotation, fly-to), so a stale hover is cleared on movement too.

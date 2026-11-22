@@ -8,7 +8,7 @@ import ScenarioMenu, { SCENE_LABEL } from './components/ScenarioMenu'
 import TimelineStrip from './components/TimelineStrip'
 import TopBar from './components/TopBar'
 import WhatIfCard from './components/WhatIfCard'
-import { potentialColor } from './lib/theme'
+import { potentialColor, usd } from './lib/theme'
 import { api, onBackendChange, type Backend } from './lib/api'
 import { explainedLine, foundLine, needsDecision, shortTitle, statusSentence } from './lib/incident'
 import { PLATFORM_LABEL } from './lib/theme'
@@ -345,6 +345,12 @@ export default function App() {
   const country = state?.countries.find((c) => c.iso === countryIso) ?? null
   const cardCountry = state?.countries.find((c) => c.iso === card?.country)
   const focusIso = countryIso ?? card?.country ?? null
+  // Growth mode: one line from GET /api/potential.
+  const pots = potential?.countries ?? []
+  const biggest = pots.length ? pots.reduce((a, b) => (b.potential_usd_day > a.potential_usd_day ? b : a)) : null
+  const growthLine = biggest
+    ? `Better-matched offers: about +${usd(pots.reduce((s, c) => s + c.potential_usd_day, 0))} a day across ${pots.length} markets · biggest in ${state?.countries.find((c) => c.iso === biggest.iso)?.name ?? biggest.iso}`
+    : ''
   const nameOf = (iso: string) => state?.countries.find((c) => c.iso === iso)?.name ?? iso
   // Planned events: one neutral line per country, for the globe tooltip (and the status sentence).
   const notes = Object.fromEntries((state?.explained ?? []).map((e) => [e.country, explainedLine(e, nameOf(e.country))]))
@@ -369,7 +375,7 @@ export default function App() {
         iso: lf?.country.iso ?? LAUNCH.iso,
         lng: lf?.country.lng ?? LAUNCH.lng,
         lat: lf?.country.lat ?? LAUNCH.lat,
-        // Predicted colour on the Opportunities scale: where its daily margin would rank among the watched countries.
+        // Predicted colour on the Growth scale: where its daily margin would rank among the watched countries.
         color: potentialColor(lf ? Math.max(0.45, state.countries.filter((c) => c.kpis.margin * 24 < lf.margin_per_day_usd.p50).length / state.countries.length) : 0.5),
         sources: (lf?.learned_from ?? []).map((s) => state.countries.find((c) => c.iso === s.iso)).filter(Boolean).map((c) => [c!.lng, c!.lat] as [number, number]),
         revealed: launch.phase === 'shown',
@@ -381,7 +387,7 @@ export default function App() {
     <div className="relative h-full overflow-hidden bg-bg">
       {state && <Globe countries={state.countries} mode={mode} selectedIso={launch ? null : focusIso} launch={launchView} notes={notes} change={Object.fromEntries((state?.explained ?? []).filter((e) => e.change_pct != null).map((e) => [e.country, e.change_pct!]))} insetRight={sideOpen ? 460 : 0} utcHour={state.clock.utc_hour ?? state.clock.t % 24} onSelect={selectCountry} />}
 
-      <TopBar clock={state ? shortClock(state.clock) : 'Connecting…'} status={launch?.phase === 'flying' ? { ...status, mood: 'investigating' } : status} mode={mode} onMode={setMode} />
+      <TopBar clock={state ? shortClock(state.clock) : 'Connecting…'} status={launch?.phase === 'flying' ? { ...status, mood: 'investigating' } : status} mode={mode} onMode={setMode} growth={growthLine ? { text: growthLine, launchLabel: `New market: ${LAUNCH.name}`, onLaunch: whatIfLaunch } : undefined} />
 
       {/* Right column: an explained change as a quiet note, then the issue card or the country sheet. */}
       <div className="pointer-events-none absolute bottom-8 right-8 top-24 z-20 flex flex-col items-end gap-4 overflow-y-auto">
