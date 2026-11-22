@@ -1,6 +1,9 @@
 """A world = simulated reality + Argus (twin, agent). Scenario injection and deterministic demo scenes."""
 from __future__ import annotations
 
+import copy
+import threading
+
 from . import config as cfg
 from .agent import Agent, RealityView
 from .graph import MetricGraph
@@ -9,6 +12,8 @@ from .taste import TasteModel
 from .twin import Twin
 
 _TASTE: TasteModel | None = None
+_TEMPLATES: dict = {}    # seed -> fitted pristine world; (seed, "start") -> world after the start scene. Copied per session
+_LOCK = threading.RLock()
 SCENES = ["start", "promo", "bot_farm", "investigate", "approve", "verify", "new_metric", "tracking_break"]
 INJECT_TYPES = ("promo", "bot_farm", "tracking_break", "data_delay")
 DEMO_FARM_RAMP_H = 8
@@ -16,9 +21,28 @@ DEMO_FARM_RAMP_H = 8
 
 def taste_model() -> TasteModel:
     global _TASTE
-    if _TASTE is None:
-        _TASTE = TasteModel()
-    return _TASTE
+    with _LOCK:
+        if _TASTE is None:
+            _TASTE = TasteModel()
+        return _TASTE
+
+
+def template_world(seed: int, scene: str | None = None) -> "World":
+    """The fitted pristine world for a seed (14-day history, twin learned, agent ready), built once.
+    With scene="start": that world one hour later, as the start scene leaves it (identical for every session).
+    Only "start" is supported: later scenes depend on what the session did before."""
+    key = seed if scene is None else (seed, scene)
+    with _LOCK:
+        if key not in _TEMPLATES:
+            w = World.__new__(World)
+            if scene is None:
+                w._fresh(seed)
+            else:
+                w._copy_from(template_world(seed))
+                w.step(1)                                   # exactly what demo("start") does after the reset
+                w.scenes_done = ["start"]
+            _TEMPLATES[key] = w
+        return _TEMPLATES[key]
 
 
 def _platform(name: str | None, default: str) -> str:
@@ -44,7 +68,22 @@ class World:
         self.reset(seed)
 
     def reset(self, seed: int | None = None) -> None:
-        self.seed = self.seed if seed is None else seed
+        """New world. The default seed is a cheap copy of a precomputed template (identical across sessions)."""
+        seed = getattr(self, "seed", 42) if seed is None else seed
+        tpl = _TEMPLATES.get(seed)
+        if tpl is None and seed == 42:
+            tpl = template_world(seed)
+        if tpl is not None:
+            self._copy_from(tpl)
+            return
+        self._fresh(seed)
+
+    def _copy_from(self, tpl: "World") -> None:
+        taste = taste_model() if _TASTE is None else _TASTE
+        self.__dict__.update(copy.deepcopy(tpl, {id(taste): taste}).__dict__)
+
+    def _fresh(self, seed: int) -> None:
+        self.seed = seed
         self.reality = Reality(seed=self.seed)
         self.reality.run(cfg.HISTORY_HOURS)
         self.view = RealityView(self.reality)
@@ -103,6 +142,9 @@ class World:
         if scene not in SCENES:
             raise KeyError(scene)
         if scene == "start":
+            if (42, "start") in _TEMPLATES or 42 in _TEMPLATES:
+                self._copy_from(template_world(42, "start"))      # identical for every session: copy, don't recompute
+                return {"scene": scene, "state": self.agent.state()}
             self.reset(42)
         else:
             for prev in SCENES[: SCENES.index(scene)]:

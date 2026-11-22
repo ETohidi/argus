@@ -16,6 +16,9 @@ WORKDIR /app/backend
 COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/argus ./argus
+# Precompute what is identical for every session (fitted default world, launch forecast + backtest) so a cold start
+# on a slow CPU only unpickles it; keyed by a hash of the argus sources, ignored if stale.
+RUN ARGUS_NO_DOTENV=1 python -m argus.precompute
 COPY --from=frontend /app/frontend/dist /app/frontend/dist
 # Hugging Face Spaces runs containers as uid 1000
 RUN useradd -m -u 1000 user && chown -R user /app

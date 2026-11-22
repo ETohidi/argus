@@ -13,16 +13,17 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import config as cfg
-from . import launch, llm, meta
+from . import launch, llm, meta, precompute
 from .world import INJECT_TYPES, SCENES, World
 
 llm.load_dotenv()  # LLM_* from backend/.env if present (never committed)
+precompute.warm_in_background()  # fitted default world + launch forecast: from the build-time cache, else computed once
 
 # Memory budget (Render free tier: 512 MB RAM). Measured on Linux / Python 3.11 in the Docker image:
 # idle process ~65 MB, ~100 MB once the first world and the taste model are loaded; each further session ~16 MB
 # after the full demo script (forecast cache bounded). 18 MB/session leaves headroom: default cap 13, ~310 MB.
 MEM_BUDGET_MB = float(os.environ.get("ARGUS_MEM_BUDGET_MB", 350))
-BASE_MB = 100.0
+BASE_MB = 120.0          # + ~20 MB for the two precomputed template worlds (fresh / after the start scene)
 SESSION_MB = 18.0
 MAX_SESSIONS = int(os.environ.get("ARGUS_MAX_SESSIONS") or max(2, int((MEM_BUDGET_MB - BASE_MB) // SESSION_MB)))
 SESSION_TTL = float(os.environ.get("ARGUS_SESSION_TTL_S", 30 * 60))   # idle sessions expire after 30 min

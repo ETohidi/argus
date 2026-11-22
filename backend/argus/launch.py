@@ -17,6 +17,8 @@ so the result is deterministic per seed and cached.
 """
 from __future__ import annotations
 
+import threading
+
 import numpy as np
 
 from . import config as cfg
@@ -45,7 +47,8 @@ FARM_LOSS_DAYS = 2.0     # simulated: a farm costs ~2 days of the country's marg
 SIGMA_FLOOR = 0.05
 
 _CACHE: dict[int, dict] = {}
-_LAUNCH: dict[tuple[str, int], dict] = {}
+_LAUNCH: dict[tuple[str, int], dict] = {}     # per (country, seed): everything that does not depend on users
+_LOCK = threading.Lock()
 
 
 def _features(iso: str) -> dict:
@@ -321,7 +324,9 @@ def launch(iso: str = "AR", seed: int = 42, incidents: list[dict] | None = None,
         raise ValueError("users must be between 1,000 and 50,000,000 daily users")
     key = (iso, seed)
     if key not in _LAUNCH:
-        _LAUNCH[key] = _launch(iso, seed)
+        with _LOCK:                     # one computation per key, even if a warm-up thread is already on it
+            if key not in _LAUNCH:
+                _LAUNCH[key] = _launch(iso, seed)
     base = _LAUNCH[key]
     pr = base["_pred"]
     f = _features(iso)

@@ -3,7 +3,7 @@
 Base path: `/api`. All bodies are JSON. All endpoints accept an optional `X-Session` header; each session gets its own simulated world. Without the header the shared `default` session is used. Sessions are capped by memory (default 13, from a 350 MB budget: ~100 MB base + ~16–18 MB per session; override with `ARGUS_MAX_SESSIONS` or `ARGUS_MEM_BUDGET_MB`), the least recently used session is evicted first, and sessions idle for 30 min expire (`ARGUS_SESSION_TTL_S`).
 
 ### `GET /api/health`
-`{ "ok": true, "llm": "model id" | null, "sessions": 3, "max_sessions": 13, "session_ttl_s": 1800, "evicted": 0, "expired": 0, "rss_mb": 146.2, "mem_budget_mb": 350 }`
+`{ "ok": true, "llm": "model id" | null, "sessions": 3, "max_sessions": 12, "session_ttl_s": 1800, "evicted": 0, "expired": 0, "rss_mb": 146.2, "mem_budget_mb": 350 }`
 
 The built frontend (`frontend/dist`) is served at `/` when it exists.
 

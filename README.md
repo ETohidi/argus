@@ -172,7 +172,10 @@ add metric) drive everything.
   scale in the simulator follows the payout-share calibration, not public features. That's why the user count is an
   input or a labelled assumption. Predicting the *total* margin with the assumed user count gives a median hold-out
   error of 32% over all 20 watched countries (worst India, +232%; truth inside p10–p90 for 17 of 20).
-- **Free-tier hosting:** sessions live in memory (up to 13, idle expiry 30 min, LRU eviction); a restart resets them.
+- **Free-tier hosting:** sessions live in memory (up to 12, idle expiry 30 min, LRU eviction); a restart resets them.
+  Work that is identical for every session (the fitted default world, the start scene, the Argentina forecast and
+  its backtest) is precomputed into the Docker image (`python -m argus.precompute`), so "Fresh world" is a copy
+  (~15 ms locally) and the launch forecast a lookup (~2 ms). Render's own cold start after idling is not affected.
 - LLM-written reports are optional; without a key Argus uses deterministic templates.
 
 ## Run the backend
