@@ -88,3 +88,13 @@ export const usd = (v: number, digits = 0) => {
 export const signed = (v: number, digits = 1) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(digits)
 
 export const PLATFORM_LABEL: Record<string, string> = { ios: 'iOS', android: 'Android', iOS: 'iOS', Android: 'Android' }
+
+// Growth level 0..1 for an opportunity in $/day: log scale between the smallest and the largest market, so the biggest
+// is clearly brightest and the smallest sits near the dim base (a linear scale lets one market wash out the rest).
+export function growthLevel(v: number, values: number[]) {
+  const pos = values.filter((x) => x > 0)
+  if (!pos.length || v <= 0) return 0
+  const lo = Math.log(Math.min(...pos))
+  const hi = Math.log(Math.max(...pos))
+  return hi > lo ? Math.min(1, Math.max(0, (Math.log(v) - lo) / (hi - lo))) : 1
+}

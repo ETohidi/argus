@@ -68,7 +68,7 @@ export default function ScenarioMenu(p: Props) {
   return (
     <div ref={ref} className="absolute bottom-6 left-8 z-30">
       {open && (
-        <div className="fade-up absolute bottom-12 left-0 w-[340px] rounded-2xl bg-panel/95 p-5 text-[13px] text-fg shadow-2xl ring-1 ring-line/50">
+        <div className="fade-up absolute bottom-12 left-0 max-h-[calc(100vh-9rem)] w-[340px] overflow-y-auto rounded-2xl bg-panel/95 p-5 text-[13px] text-fg shadow-2xl ring-1 ring-line/50">
           <Group title="Time">
             <div className="flex gap-2">
               <Btn onClick={p.onPlay} hint="Space">{p.playing ? 'Pause' : 'Play'}</Btn>
@@ -83,7 +83,7 @@ export default function ScenarioMenu(p: Props) {
                   <button
                     onClick={act(() => p.onDemo(s))}
                     disabled={p.busy}
-                    className={`flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-line/70 disabled:opacity-40 ${p.lastScene === s ? 'text-ok' : ''}`}
+                    className={`flex w-full items-center gap-3 rounded-lg px-2 py-1 text-left hover:bg-line/70 disabled:opacity-40 ${p.lastScene === s ? 'text-ok' : ''}`}
                   >
                     <kbd className="num w-4 text-center text-fg-2">{i + 1}</kbd>
                     {SCENE_LABEL[s]}
@@ -138,7 +138,7 @@ export default function ScenarioMenu(p: Props) {
 
 function Group({ title, children, last }: { title: string; children: ReactNode; last?: boolean }) {
   return (
-    <div className={last ? '' : 'mb-4'}>
+    <div className={last ? '' : 'mb-3'}>
       <div className="mb-2 text-fg-2">{title}</div>
       {children}
     </div>

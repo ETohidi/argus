@@ -8,7 +8,7 @@ import ScenarioMenu, { SCENE_LABEL } from './components/ScenarioMenu'
 import TimelineStrip from './components/TimelineStrip'
 import TopBar from './components/TopBar'
 import WhatIfCard from './components/WhatIfCard'
-import { potentialColor, usd } from './lib/theme'
+import { growthLevel, potentialColor, usd } from './lib/theme'
 import { api, onBackendChange, type Backend } from './lib/api'
 import { explainedLine, foundLine, growthLine, needsDecision, shortTitle, statusSentence } from './lib/incident'
 import { PLATFORM_LABEL } from './lib/theme'
@@ -387,7 +387,7 @@ export default function App() {
         lat: lf?.country.lat ?? LAUNCH.lat,
         // Predicted colour on the Growth scale: where its daily margin would rank among the watched countries.
         // Same scale as Growth mode: where its predicted margin a day would rank among the markets' opportunities.
-        color: potentialColor(lf ? state.countries.filter((c) => c.potential_usd_day < lf.margin_per_day_usd.p50).length / Math.max(1, state.countries.length - 1) : 0.5),
+        color: potentialColor(lf ? growthLevel(lf.margin_per_day_usd.p50, state.countries.map((c) => c.potential_usd_day)) : 0.5),
         sources: (lf?.learned_from ?? []).map((s) => state.countries.find((c) => c.iso === s.iso)).filter(Boolean).map((c) => [c!.lng, c!.lat] as [number, number]),
         revealed: launch.phase === 'shown',
       }
